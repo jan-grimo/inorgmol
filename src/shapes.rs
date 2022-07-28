@@ -59,7 +59,7 @@ pub fn shape_from_name(name: Name) -> &'static Shape {
     return SHAPES[name as usize];
 }
 
-pub fn normalize(mut x: Matrix3N) -> Matrix3N {
+pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     // Remove centroid
     let centroid = x.column_mean();
     for mut c in x.column_iter_mut() {
@@ -89,6 +89,7 @@ pub fn normalize(mut x: Matrix3N) -> Matrix3N {
     x
 }
 
+/// Find a rotation that transforms the rotor into the stator
 pub fn quaternion_fit(stator: &Matrix3N, rotor: &Matrix3N) -> Quaternion {
     // Ensure centroids are removed from matrices
     assert!(stator.column_mean().norm_squared() < 1e-8);
@@ -118,8 +119,14 @@ pub fn quaternion_fit(stator: &Matrix3N, rotor: &Matrix3N) -> Quaternion {
     }
 
     let decomposition = na::SymmetricEigen::new(b);
+    let min_eigenvalue_index = decomposition.eigenvalues
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.partial_cmp(b).expect("Encountered NaN"))
+        .map(|(index, _)| index)
+        .expect("No eigenvalues present");
 
-    let q = decomposition.eigenvectors.column(0);
+    let q = decomposition.eigenvectors.column(min_eigenvalue_index);
     let quaternion = na::Quaternion::new(q[0], q[1], q[2], q[3]);
     na::UnitQuaternion::from_quaternion(quaternion)
 }
@@ -138,8 +145,23 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<f64, SimilarityErr
     }
 
     let mut permutation = Permutation::identity(n);
-    let cloud = normalize(x.clone());
-    let shape_coordinates = normalize(shape.coordinates.clone().insert_column(n, 0.0));
+    let cloud = unit_sphere_normalize(x.clone());
+    let shape_coordinates = unit_sphere_normalize(shape.coordinates.clone().insert_column(n, 0.0));
 
     Ok(0.1)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::shapes::{unit_sphere_normalize, quaternion_fit, Matrix3N, Quaternion};
+    use nalgebra::Vector3;
+
+    #[test]
+    fn test_quaternion_fit() {
+        let stator = unit_sphere_normalize(Matrix3N::new_random(6));
+        let true_quaternion = Quaternion::from_axis_angle(&Vector3::y_axis(), std::f64::consts::FRAC_PI_2);
+        let rotor = true_quaternion.to_rotation_matrix().matrix() * stator.clone();
+        let fitted_quaternion = quaternion_fit(&stator, &rotor);
+        approx::assert_relative_eq!(true_quaternion, fitted_quaternion, epsilon = 1e-6);
+    }
 }
