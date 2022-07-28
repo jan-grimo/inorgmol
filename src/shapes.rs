@@ -90,7 +90,7 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
 }
 
 /// Find a rotation that transforms the rotor into the stator
-pub fn quaternion_fit(stator: &Matrix3N, rotor: &Matrix3N) -> Quaternion {
+pub fn fit_quaternion(stator: &Matrix3N, rotor: &Matrix3N) -> Quaternion {
     // Ensure centroids are removed from matrices
     assert!(stator.column_mean().norm_squared() < 1e-8);
     assert!(rotor.column_mean().norm_squared() < 1e-8);
@@ -137,6 +137,11 @@ pub enum SimilarityError {
     PositionNumberMismatch
 }
 
+pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
+    assert_eq!(x.ncols(), p.sigma.len());
+    Matrix3N::from_fn(x.ncols(), |i, j| x[(i, p[j] as usize)])
+}
+
 pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<f64, SimilarityError> {
     let shape = shape_from_name(s);
     let n = x.ncols();
@@ -146,22 +151,41 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<f64, SimilarityErr
 
     let mut permutation = Permutation::identity(n);
     let cloud = unit_sphere_normalize(x.clone());
-    let shape_coordinates = unit_sphere_normalize(shape.coordinates.clone().insert_column(n, 0.0));
+    // TODO check if the centroid is last, i.e. it is the shortest vector after normalization
 
+    let shape_coordinates = shape.coordinates.clone().insert_column(n, 0.0);
+    let shape_coordinates = unit_sphere_normalize(shape_coordinates);
+
+    let evaluate_permutation = |p: Permutation| -> (Permutation, f64, Quaternion) {
+        let permuted_shape = apply_permutation(&shape_coordinates, &p);
+        let quaternion = fit_quaternion(&cloud, &permuted_shape);
+        let permuted_shape = quaternion.to_rotation_matrix() * permuted_shape;
+
+        let rmsd = (cloud.clone() - permuted_shape).column_iter().map(|col| col.norm_squared()).sum();
+        (p, rmsd, quaternion)
+    };
+
+    let (best_permutation, _, best_rotation) = permutation
+        .iter()
+        .map(evaluate_permutation)
+        .min_by(|(_, rmsd_a, _), (_, rmsd_b, _)| rmsd_a.partial_cmp(rmsd_b).expect("NaN in RMSDs"))
+        .expect("Not a single permutation available to try");
+
+    let permuted_shape = apply_permutation(&shape_coordinates, &best_permutation);
     Ok(0.1)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::shapes::{unit_sphere_normalize, quaternion_fit, Matrix3N, Quaternion};
+    use crate::shapes::{unit_sphere_normalize, fit_quaternion, Matrix3N, Quaternion};
     use nalgebra::Vector3;
 
     #[test]
     fn test_quaternion_fit() {
         let stator = unit_sphere_normalize(Matrix3N::new_random(6));
         let true_quaternion = Quaternion::from_axis_angle(&Vector3::y_axis(), std::f64::consts::FRAC_PI_2);
-        let rotor = true_quaternion.to_rotation_matrix().matrix() * stator.clone();
-        let fitted_quaternion = quaternion_fit(&stator, &rotor);
+        let rotor = true_quaternion.to_rotation_matrix() * stator.clone();
+        let fitted_quaternion = fit_quaternion(&stator, &rotor);
         approx::assert_relative_eq!(true_quaternion, fitted_quaternion, epsilon = 1e-6);
     }
 }
