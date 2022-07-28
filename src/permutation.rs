@@ -1,7 +1,7 @@
 use std::ops::Index;
 
 /// Slice-level permutation incrementation
-pub fn slice_next(slice: &mut [u8]) -> bool {
+pub fn slice_next<T: PartialOrd>(slice: &mut [T]) -> bool {
     let n = slice.len();
 
     let mut i = n - 1;
@@ -35,7 +35,7 @@ pub fn slice_next(slice: &mut [u8]) -> bool {
 }
 
 /// Slice-level permutation decrementation
-pub fn slice_prev(slice: &mut [u8]) -> bool {
+pub fn slice_prev<T: PartialOrd>(slice: &mut [T]) -> bool {
     let n = slice.len();
 
     let mut i = n - 1;
@@ -220,6 +220,10 @@ impl Permutation {
 
         return Ok(Permutation {sigma: self.inverse().apply(&other.sigma)?});
     }
+
+    pub fn iter(&mut self) -> PermutationIterator {
+        PermutationIterator {permutation: self, increment: false}
+    }
 }
 
 /// Implements indexing, letting Permutation behave as a container directly
@@ -228,5 +232,26 @@ impl Index<u8> for Permutation {
 
     fn index(&self, i: u8) -> &Self::Output {
         &self.sigma[i as usize]
+    }
+}
+
+pub struct PermutationIterator<'a> {
+    permutation: &'a mut Permutation,
+    increment: bool
+}
+
+// TODO figure out how to return references to permutation with the appropriate lifetime
+impl Iterator for PermutationIterator<'_> {
+    type Item = Permutation;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.increment {
+            if !self.permutation.next() {
+                return None;
+            }
+        }
+
+        self.increment = true;
+        Some(self.permutation.clone())
     }
 }
