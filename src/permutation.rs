@@ -227,14 +227,24 @@ impl Permutation {
 }
 
 /// Implements indexing, letting Permutation behave as a container directly
-impl Index<u8> for Permutation {
+impl Index<usize> for Permutation {
     type Output = u8;
 
-    fn index(&self, i: u8) -> &Self::Output {
-        &self.sigma[i as usize]
+    fn index(&self, i: usize) -> &Self::Output {
+        &self.sigma[i]
     }
 }
 
+/// Iterator adaptor for permutations
+///
+/// ```
+/// # use molassembler::permutation::Permutation;
+/// let mut permutation = Permutation::from_index(2, 0);
+/// let mut iter = permutation.iter();
+/// assert_eq!(iter.next(), Some(Permutation::from_index(2, 0)));
+/// assert_eq!(iter.next(), Some(Permutation::from_index(2, 1)));
+/// assert_eq!(iter.next(), None);
+/// ```
 pub struct PermutationIterator<'a> {
     permutation: &'a mut Permutation,
     increment: bool
