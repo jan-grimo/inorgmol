@@ -9,8 +9,9 @@ use thiserror::Error;
 
 extern crate argmin;
 use argmin::prelude::*;
-use argmin::solver::brent::Brent;
+use argmin::solver::goldensectionsearch::GoldenSectionSearch;
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Name {
     // 2
     Line,
@@ -70,7 +71,7 @@ lazy_static! {
         repr: "bent",
         coordinates: Matrix3N::from_column_slice(&[
             1.0, 0.0, 0.0,
-            -0.292372, 0.956305, 0.
+            -0.292372, 0.956305, 0.0
         ]),
         rotations: vec![Permutation {sigma: vec![1, 0]}],
         tetrahedra: vec![],
@@ -209,7 +210,8 @@ pub enum SimilarityError {
 
 pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
     assert_eq!(x.ncols(), p.sigma.len());
-    Matrix3N::from_fn(x.ncols(), |i, j| x[(i, p[j] as usize)])
+    let inverse = p.inverse();
+    Matrix3N::from_fn(x.ncols(), |i, j| x[(i, inverse[j] as usize)])
 }
 
 struct CoordinateScalingProblem<'a> {
@@ -234,7 +236,7 @@ impl ArgminOp for CoordinateScalingProblem<'_> {
     }
 }
 
-pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<f64, SimilarityError> {
+pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64), SimilarityError> {
     let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.size as usize + 1 {
@@ -243,9 +245,9 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<f64, SimilarityErr
 
     let mut permutation = Permutation::identity(n);
     let cloud = unit_sphere_normalize(x.clone());
-    // TODO check if the centroid is last, i.e. it is the shortest vector after normalization
+    // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
-    let shape_coordinates = shape.coordinates.clone().insert_column(n, 0.0);
+    let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
 
     let evaluate_permutation = |p: Permutation| -> (Permutation, f64, Quaternion) {
@@ -270,32 +272,91 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<f64, SimilarityErr
     let permuted_shape = apply_permutation(&shape_coordinates, &best_permutation);
     let rotated_shape = best_quaternion.to_rotation_matrix() * permuted_shape;
 
-    let brent = Brent::new(0.5, 1.1, 1e-6);
+    let phi_sectioning = GoldenSectionSearch::new(0.5, 1.1);
     let scaling_problem = CoordinateScalingProblem {
         cloud: &cloud,
         rotated_shape: &rotated_shape 
     };
-    let result = Executor::new(scaling_problem, brent, 1.0)
+    let result = Executor::new(scaling_problem, phi_sectioning, 1.0)
         .max_iters(100)
         .run()
         .unwrap();
 
-    println!("Result of Brent: {}", result);
+    println!("Result of Sectioning: {}", result);
 
-    Ok(result.state.best_cost)
+    let result_rmsd = result.state.best_cost;
+    let normalization: f64 = cloud.column_iter().map(|v| v.norm_squared()).sum();
+    let csm = 100.0 * result_rmsd / normalization;
+    Ok((best_permutation, csm))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::shapes::{unit_sphere_normalize, fit_quaternion, Matrix3N, Quaternion};
-    use nalgebra::Vector3;
+    use crate::shapes::*;
+    use nalgebra::{Vector3, Unit};
+
+    fn new_random_rotation() -> Quaternion {
+        let random_axis = Unit::new_normalize(Vector3::new_random());
+        let random_angle = rand::random::<f64>() * std::f64::consts::PI;
+        Quaternion::from_axis_angle(&random_axis, random_angle)
+    }
+
+    fn random_cloud(n: usize) -> Matrix3N {
+        unit_sphere_normalize(Matrix3N::new_random(n))
+    }
 
     #[test]
     fn test_quaternion_fit() {
-        let stator = unit_sphere_normalize(Matrix3N::new_random(6));
-        let true_quaternion = Quaternion::from_axis_angle(&Vector3::y_axis(), std::f64::consts::FRAC_PI_2);
+        let stator = random_cloud(6);
+        let true_quaternion = new_random_rotation();
+
         let rotor = true_quaternion.to_rotation_matrix() * stator.clone();
         let fitted_quaternion = fit_quaternion(&stator, &rotor);
         approx::assert_relative_eq!(true_quaternion, fitted_quaternion, epsilon = 1e-6);
     }
+
+    #[test]
+    fn test_apply_permutation() {
+        let n = 6;
+        // upper bound is 6! = 720, u8::MAX is 255, which will do
+        let permutation_index = rand::random::<u8>() as usize; 
+
+        let stator = random_cloud(n);
+        let permutation = Permutation::from_index(n, permutation_index);
+        let permuted = apply_permutation(&stator, &permutation);
+
+        for i in 0..n {
+            assert_eq!(stator.column(i), permuted.column(permutation[i] as usize));
+        }
+    }
+
+    #[test]
+    fn test_normalization() {
+        let cloud = random_cloud(6);
+
+        // No centroid
+        let centroid_norm = cloud.column_mean().norm();
+        assert!(centroid_norm < 1e-6);
+
+        // Longest vector is a unit vector
+        let longest_norm = cloud.column_iter().map(|v| v.norm()).max_by(|a, b| a.partial_cmp(b).expect("Encountered NaNs")).unwrap();
+        approx::assert_relative_eq!(longest_norm, 1.0);
+    }
+
+    #[test]
+    fn shapes_are_self_similar() {
+        for shape in SHAPES.iter() {
+            let cloud = shape.coordinates.clone().insert_column(shape.size as usize, 0.0);
+            let random_rotation = new_random_rotation().to_rotation_matrix();
+            let rotated_cloud = unit_sphere_normalize(random_rotation * cloud);
+
+            let (permutation, similarity) = polyhedron_similarity(&rotated_cloud, shape.name).expect("Fine"); 
+            println!("Shape {} achieved similarity {} with permutation {}", shape.repr, similarity, permutation);
+            assert!(similarity < 1e-6);
+        }
+    }
+
+    // for v in cloud.column_iter_mut() {
+    //     v += Vector3::new_random().normalize().scale(0.1);
+    // }
 }

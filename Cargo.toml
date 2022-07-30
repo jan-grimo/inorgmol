@@ -12,4 +12,5 @@ nalgebra = { version = "0.31", features = ["rand"] }
 lazy_static = "1.4.0"
 thiserror = "1.0"
 approx = "0.5"
-# itertools = "0.10"
+argmin = "0.5"
+itertools = "0.10"

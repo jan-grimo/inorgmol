@@ -1,4 +1,5 @@
 use std::ops::Index;
+use itertools::Itertools;
 
 /// Slice-level permutation incrementation
 pub fn slice_next<T: PartialOrd>(slice: &mut [T]) -> bool {
@@ -73,6 +74,12 @@ pub fn slice_prev<T: PartialOrd>(slice: &mut [T]) -> bool {
 pub struct Permutation {
     // One-line representation
     pub sigma: Vec<u8>
+}
+
+impl std::fmt::Display for Permutation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{{}}}", self.sigma.iter().format(", "))
+    }
 }
 
 impl Permutation {
