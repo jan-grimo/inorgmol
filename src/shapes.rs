@@ -160,7 +160,9 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     x
 }
 
-/// Find a rotation that transforms the rotor into the stator
+/// Find a quaternion that best transforms the stator into the rotor
+///
+/// Postcondition is rotor = quat * stator and stator = quat.inverse() * rotor
 pub fn fit_quaternion(stator: &Matrix3N, rotor: &Matrix3N) -> Quaternion {
     // Ensure centroids are removed from matrices
     assert!(stator.column_mean().norm_squared() < 1e-8);
@@ -247,13 +249,14 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64)
     let cloud = unit_sphere_normalize(x.clone());
     // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
+    // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
 
     let evaluate_permutation = |p: Permutation| -> (Permutation, f64, Quaternion) {
         let permuted_shape = apply_permutation(&shape_coordinates, &p);
         let quaternion = fit_quaternion(&cloud, &permuted_shape);
-        let permuted_shape = quaternion.to_rotation_matrix() * permuted_shape;
+        let permuted_shape = quaternion.inverse().to_rotation_matrix() * permuted_shape;
 
         let rmsd = (cloud.clone() - permuted_shape)
             .column_iter()
@@ -270,7 +273,7 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64)
         .expect("Not a single permutation available to try");
 
     let permuted_shape = apply_permutation(&shape_coordinates, &best_permutation);
-    let rotated_shape = best_quaternion.to_rotation_matrix() * permuted_shape;
+    let rotated_shape = best_quaternion.inverse().to_rotation_matrix() * permuted_shape;
 
     let phi_sectioning = GoldenSectionSearch::new(0.5, 1.1);
     let scaling_problem = CoordinateScalingProblem {
@@ -281,8 +284,6 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64)
         .max_iters(100)
         .run()
         .unwrap();
-
-    println!("Result of Sectioning: {}", result);
 
     let result_rmsd = result.state.best_cost;
     let normalization: f64 = cloud.column_iter().map(|v| v.norm_squared()).sum();
@@ -313,6 +314,9 @@ mod tests {
         let rotor = true_quaternion.to_rotation_matrix() * stator.clone();
         let fitted_quaternion = fit_quaternion(&stator, &rotor);
         approx::assert_relative_eq!(true_quaternion, fitted_quaternion, epsilon = 1e-6);
+
+        approx::assert_relative_eq!(rotor, fitted_quaternion.to_rotation_matrix() * stator.clone(), epsilon=1e-6);
+        approx::assert_relative_eq!(stator, fitted_quaternion.inverse().to_rotation_matrix() * rotor, epsilon=1e-6);
     }
 
     #[test]
