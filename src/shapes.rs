@@ -21,10 +21,10 @@ pub enum Name {
     VacantTetrahedron,
     T,
     // 4
-    // Tetrahedron,
-    // Square,
-    // Seesaw,
-    // TrigonalPyramid,
+    Tetrahedron,
+    Square,
+    Seesaw,
+    TrigonalPyramid,
     // 5
     // SquarePyramid,
     // TrigonalBipyramid,
@@ -36,6 +36,22 @@ pub enum Name {
     // Hexagon
 }
 
+impl Name {
+    fn repr(&self) -> &'static str {
+        match self {
+            Name::Line => "line",
+            Name::Bent => "bent",
+            Name::EquilateralTriangle => "triangle",
+            Name::VacantTetrahedron => "vacant tetrahedron",
+            Name::T => "T-shaped",
+            Name::Tetrahedron => "tetrahedron",
+            Name::Square => "square",
+            Name::Seesaw => "seesaw",
+            Name::TrigonalPyramid => "trigonal pyramid"
+        }
+    }
+}
+
 use crate::permutation;
 pub type Permutation = permutation::Permutation;
 
@@ -43,19 +59,21 @@ pub static ORIGIN_PLACEHOLDER: u8 = u8::MAX;
 
 pub struct Shape {
     pub name: Name,
-    pub size: u8,
-    pub repr: &'static str,
     pub coordinates: Matrix3N,
     pub rotations: Vec<Permutation>,
     pub tetrahedra: Vec<[u8; 4]>,
     pub mirror: Option<Permutation>
 }
 
+impl Shape {
+    fn size(&self) -> usize {
+        self.coordinates.ncols()
+    }
+}
+
 lazy_static! {
     pub static ref LINE: Shape = Shape {
         name: Name::Line,
-        size: 2,
-        repr: "line",
         coordinates: Matrix3N::from_column_slice(&[
              1.0, 0.0, 0.0,
             -1.0, 0.0, 0.0
@@ -67,8 +85,6 @@ lazy_static! {
 
     pub static ref BENT: Shape = Shape {
         name: Name::Bent,
-        size: 2,
-        repr: "bent",
         coordinates: Matrix3N::from_column_slice(&[
             1.0, 0.0, 0.0,
             -0.292372, 0.956305, 0.0
@@ -80,8 +96,6 @@ lazy_static! {
 
     pub static ref EQUILATERAL_TRIANGLE: Shape = Shape {
         name: Name::EquilateralTriangle,
-        size: 3,
-        repr: "equilateral triangle",
         coordinates: Matrix3N::from_column_slice(&[
             1.0, 0.0, 0.0,
             -0.5, 0.866025, 0.0,
@@ -97,8 +111,6 @@ lazy_static! {
 
     pub static ref VACANT_TETRAHEDRON: Shape = Shape {
         name: Name::VacantTetrahedron,
-        size: 3,
-        repr: "vacant tetrahedron",
         coordinates: Matrix3N::from_column_slice(&[
             0.0, -0.366501, 0.930418,
             0.805765, -0.366501, -0.465209,
@@ -111,8 +123,6 @@ lazy_static! {
 
     pub static ref TSHAPE: Shape = Shape {
         name: Name::T,
-        size: 3,
-        repr: "T-shaped",
         coordinates: Matrix3N::from_column_slice(&[
             -1.0, -0.0, -0.0,
             0.0, 1.0, 0.0,
@@ -123,7 +133,68 @@ lazy_static! {
         mirror: None
     };
 
-    pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE];
+    pub static ref TETRAHEDRON: Shape = Shape {
+        name: Name::Tetrahedron,
+        coordinates: Matrix3N::from_column_slice(&[
+            0.0, 1.0, 0.0,
+            0.0, -0.333807, 0.942641,
+            0.816351, -0.333807, -0.471321,
+            -0.816351, -0.333807, -0.471321
+        ]),
+        rotations: vec![
+            Permutation {sigma: vec![0, 3, 1, 2]},
+            Permutation {sigma: vec![2, 1, 3, 0]},
+            Permutation {sigma: vec![3, 0, 2, 1]},
+            Permutation {sigma: vec![1, 2, 0, 3]}
+        ],
+        tetrahedra: vec![[0, 1, 2, 3]],
+        mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
+    };
+
+    pub static ref SQUARE: Shape = Shape {
+        name: Name::Square,
+        coordinates: Matrix3N::from_column_slice(&[
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            -1.0, -0.0, -0.0,
+            -0.0, -1.0, -0.0
+        ]),
+        rotations: vec![
+            Permutation {sigma: vec![3, 0, 1, 2]},
+            Permutation {sigma: vec![1, 0, 3, 2]},
+            Permutation {sigma: vec![3, 2, 1, 0]},
+        ],
+        tetrahedra: vec![],
+        mirror: None
+    };
+
+    pub static ref SEESAW: Shape = Shape {
+        name: Name::Seesaw,
+        coordinates: Matrix3N::from_column_slice(&[
+            0.0, 1.0, 0.0,
+            1.0, 0.0, 0.0,
+            -0.5, 0.0, -0.866025,
+            -0.0, -1.0, -0.0
+        ]),
+        rotations: vec![Permutation {sigma: vec![3, 2, 1, 0]}],
+        tetrahedra: vec![[0, ORIGIN_PLACEHOLDER, 1, 2], [ORIGIN_PLACEHOLDER, 3, 1, 2]],
+        mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
+    };
+
+    pub static ref TRIGONALPYRAMID: Shape = Shape {
+        name: Name::TrigonalPyramid,
+        coordinates: Matrix3N::from_column_slice(&[
+            1.0, 0.0, 0.0,
+            -0.5, 0.866025, 0.0,
+            -0.5, -0.866025, 0.0,
+            0.0, 0.0, 1.0
+        ]),
+        rotations: vec![Permutation {sigma: vec![2, 0, 1, 3]}],
+        tetrahedra: vec![[0, 1, 3, 2]],
+        mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
+    };
+
+    pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID];
 }
 
 pub fn shape_from_name(name: Name) -> &'static Shape {
@@ -241,7 +312,7 @@ impl ArgminOp for CoordinateScalingProblem<'_> {
 pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64), SimilarityError> {
     let shape = shape_from_name(s);
     let n = x.ncols();
-    if n != shape.size as usize + 1 {
+    if n != shape.size() + 1 {
         return Err(SimilarityError::PositionNumberMismatch);
     }
 
@@ -350,7 +421,7 @@ mod tests {
     #[test]
     fn shapes_are_self_similar() {
         for shape in SHAPES.iter() {
-            let cloud = shape.coordinates.clone().insert_column(shape.size as usize, 0.0);
+            let cloud = shape.coordinates.clone().insert_column(shape.size(), 0.0);
             let random_rotation = new_random_rotation().to_rotation_matrix();
             let rotated_cloud = unit_sphere_normalize(random_rotation * cloud);
 
