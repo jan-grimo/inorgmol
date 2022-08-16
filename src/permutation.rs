@@ -97,7 +97,7 @@ impl Permutation {
         permutation
     }
 
-    /// Initialize the i-th permutation of size n
+    /// Initialize the i-th permutation by lexicographic order of size n
     ///
     /// ```
     /// # use molassembler::permutation::Permutation;
@@ -112,22 +112,23 @@ impl Permutation {
             factorials.push(factorials.last().unwrap() * k);
         }
 
-        let mut permutation = Permutation {sigma: Vec::with_capacity(n)};
+        let mut sigma = Vec::with_capacity(n);
+
         for k in 0..n {
             let fac = factorials[n - 1 - k];
-            permutation.sigma.push((i / fac) as u8);
+            sigma.push((i / fac) as u8);
             i %= fac;
         }
 
         for k in (1..n).rev() {
             for j in (0..k).rev() {
-                if permutation.sigma[j] <= permutation.sigma[k] {
-                    permutation.sigma[k] += 1;
+                if sigma[j] <= sigma[k] {
+                    sigma[k] += 1;
                 }
             }
         }
 
-        permutation
+        Permutation {sigma}
     }
 
     /// Find a permutation ordering a container's elements
