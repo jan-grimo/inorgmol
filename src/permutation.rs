@@ -5,6 +5,10 @@ use itertools::Itertools;
 pub fn slice_next<T: PartialOrd>(slice: &mut [T]) -> bool {
     let n = slice.len();
 
+    if n == 0 {
+        return false;
+    }
+
     let mut i = n - 1;
     let mut j;
     let mut k;
@@ -38,6 +42,10 @@ pub fn slice_next<T: PartialOrd>(slice: &mut [T]) -> bool {
 /// Slice-level permutation decrementation
 pub fn slice_prev<T: PartialOrd>(slice: &mut [T]) -> bool {
     let n = slice.len();
+
+    if n == 0 {
+        return false;
+    }
 
     let mut i = n - 1;
     let mut j;
@@ -160,6 +168,11 @@ impl Permutation {
     /// ```
     pub fn index(&self) -> usize {
         let n = self.sigma.len();
+
+        if n == 0 {
+            return 0;
+        }
+
         let mut index = 0;
         let mut position = 2;
         let mut factor = 1;
@@ -288,5 +301,27 @@ impl Iterator for PermutationIterator<'_> {
 
         self.increment = true;
         Some(self.permutation.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::permutation::*;
+
+    #[test]
+    fn small_permutations() {
+        assert_eq!(Permutation::identity(0).sigma.len(), 0);
+        assert_eq!(Permutation::from_index(0, 0).index(), 0);
+        assert_eq!(Permutation::identity(0).next(), false);
+        assert_eq!(Permutation::identity(0).prev(), false);
+
+        assert_eq!(Permutation::identity(1).sigma.len(), 1);
+        assert_eq!(Permutation::from_index(1, 0).index(), 0);
+        assert_eq!(Permutation::identity(1).next(), false);
+        assert_eq!(Permutation::identity(1).prev(), false);
+
+        assert_eq!(Permutation::identity(2).sigma.len(), 2);
+        assert_eq!(Permutation::from_index(2, 0).index(), 0);
+        assert_eq!(Permutation::from_index(2, 1).index(), 1);
     }
 }
