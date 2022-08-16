@@ -85,16 +85,19 @@ impl std::fmt::Display for Permutation {
 impl Permutation {
     /// Initialize an identity permutation of specific size
     ///
+    /// The identity permutation has index zero within the lexicographical order 
+    /// of permutations.
+    ///
     /// ```
     /// # use molassembler::permutation::Permutation;
     /// assert_eq!(Permutation::identity(3).sigma, vec![0, 1, 2])
     /// ```
     pub fn identity(n: usize) -> Permutation {
-        let mut permutation = Permutation {sigma: Vec::with_capacity(n)};
+        let mut sigma: Vec<u8> = Vec::with_capacity(n);
         for i in 0..n as u8 {
-            permutation.sigma.push(i)
+            sigma.push(i)
         }
-        permutation
+        Permutation {sigma}
     }
 
     /// Initialize the i-th permutation by lexicographic order of size n
