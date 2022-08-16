@@ -1,6 +1,9 @@
 use std::ops::Index;
 use itertools::Itertools;
 
+extern crate thiserror;
+use thiserror::Error;
+
 /// Slice-level permutation incrementation
 pub fn slice_next<T: PartialOrd>(slice: &mut [T]) -> bool {
     let n = slice.len();
@@ -88,6 +91,16 @@ impl std::fmt::Display for Permutation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{{}}}", self.sigma.iter().format(", "))
     }
+}
+
+#[derive(Error, Debug, PartialEq)]
+pub enum PermutationError {
+    #[error("Mismatched lengths between permutation and argument")]
+    LengthMismatch,
+    #[error("More than u8::MAX elements")]
+    NotRepresentable,
+    #[error("Invalid elements of one-line representation set")]
+    InvalidSetElements
 }
 
 impl Permutation {
@@ -216,14 +229,15 @@ impl Permutation {
         slice_prev(self.sigma.as_mut_slice())
     }
 
-    /// Invert the permutation
+    /// Generate the inverse permutation to the current permutation
     ///
     /// ```
-    /// # use molassembler::permutation::Permutation;
+    /// # use molassembler::permutation::{Permutation, PermutationError};
     /// # use std::result::Result;
-    /// # fn main() -> Result<(), &'static str> {
+    /// # fn main() -> Result<(), PermutationError> {
     /// let permutation = Permutation::from_index(3, 1);
     /// assert_eq!(permutation.inverse().compose(&permutation)?, Permutation::identity(3));
+    /// assert_eq!(permutation.compose(&permutation.inverse())?, Permutation::identity(3));
     /// # Ok(())
     /// # }
     /// ```
@@ -237,26 +251,22 @@ impl Permutation {
     }
 
     /// Apply the permutation to a vector
-    pub fn apply<T: Copy>(&self, other: &Vec<T>) -> Result<Vec<T>, &'static str> {
-        let other_len = other.len();
-        if other_len > self.sigma.len() {
-            return Err("Permutation too short for passed container.");
+    pub fn apply<T: Copy>(&self, other: &Vec<T>) -> Result<Vec<T>, PermutationError> {
+        let n = self.sigma.len();
+        if n != other.len() {
+            return Err(PermutationError::LengthMismatch);
         } 
 
         let mut permuted = other.clone();
-        for i in 0..other_len {
+        for i in 0..n {
             permuted[self.sigma[i] as usize] = other[i];
         }
         Ok(permuted)
     }
 
     /// Compose two permutations into a new permutation
-    pub fn compose(&self, other: &Permutation) -> Result<Permutation, &'static str> {
-        if self.sigma.len() != other.sigma.len() {
-            return Err("Mismatched permutation sizes");
-        }
-
-        return Ok(Permutation {sigma: self.inverse().apply(&other.sigma)?});
+    pub fn compose(&self, other: &Permutation) -> Result<Permutation, PermutationError> {
+        Ok(Permutation {sigma: self.inverse().apply(&other.sigma)?})
     }
 
     pub fn iter(&mut self) -> PermutationIterator {
