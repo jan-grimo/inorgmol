@@ -204,28 +204,14 @@ pub fn shape_from_name(name: Name) -> &'static Shape {
 pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     // Remove centroid
     let centroid = x.column_mean();
-    for mut c in x.column_iter_mut() {
-        c -= centroid;
+    for mut v in x.column_iter_mut() {
+        v -= centroid;
     }
 
-    // Find the longest vector
-    let longest_norm = x.column_iter().try_fold(
-        0.0,
-        |acc, x| {
-            let norm = x.norm();
-            let cmp = norm.partial_cmp(&acc)?;
-            let max = if let std::cmp::Ordering::Greater = cmp {
-                norm
-            } else {
-                acc
-            };
-            Some(max)
-        }
-    ).expect("Finding longest vector in positions encountered NaNs");
-
     // Rescale all distances so that the longest is a unit vector
-    for mut c in x.column_iter_mut() {
-        c /= longest_norm;
+    let max_norm = x.column_iter().map(|v| v.norm()).fold(0.0, |a, b| a.max(b));
+    for mut v in x.column_iter_mut() {
+        v /= max_norm;
     }
 
     x
