@@ -1,4 +1,6 @@
 use std::ops::Index;
+use core::convert::TryFrom;
+use num_traits::int::PrimInt;
 use itertools::Itertools;
 
 extern crate thiserror;
@@ -280,6 +282,56 @@ impl Index<usize> for Permutation {
 
     fn index(&self, i: usize) -> &Self::Output {
         &self.sigma[i]
+    }
+}
+
+/// Generate a Permutation from an integer vector
+///
+/// ```
+/// # use molassembler::permutation::Permutation;
+/// # use std::convert::TryFrom;
+/// let p = Permutation::try_from(vec![0, 1, 2]);
+/// assert_eq!(p, Ok(Permutation::from_index(3, 0)));
+/// let q = Permutation::try_from(vec![-1, 0, 1]);
+/// assert!(q.is_err());
+/// ```
+impl<I: PrimInt> TryFrom<Vec<I>> for Permutation {
+    type Error = PermutationError;
+
+    fn try_from(integer_sigma: Vec<I>) -> Result<Permutation, Self::Error> {
+        // Every number in 0..n must be present exactly once
+        let n = integer_sigma.len();
+        if n > u8::MAX as usize {
+            return Err(PermutationError::NotRepresentable);
+        }
+
+        // Check to ensure values match expected
+        let has_correct_set_elements = integer_sigma.iter()
+            .sorted()
+            .enumerate()
+            .all(|(i, v)| v.to_usize().filter(|w| i == *w).is_some());
+
+        if !has_correct_set_elements {
+            return Err(PermutationError::InvalidSetElements);
+        }
+
+        let sigma = integer_sigma.iter().map(|v| v.to_u8().unwrap()).collect();
+        Ok(Permutation {sigma})
+    }
+}
+
+/// Generate a Permutation from an integer slice
+/// ```
+/// # use molassembler::permutation::Permutation;
+/// # use std::convert::TryFrom;
+/// let p = Permutation::try_from([0, 2, 1]);
+/// assert_eq!(p, Ok(Permutation::from_index(3, 1)));
+/// ```
+impl<I: PrimInt, const N: usize> TryFrom<[I; N]> for Permutation {
+    type Error = PermutationError;
+
+    fn try_from(integer_slice: [I; N]) -> Result<Permutation, Self::Error> {
+        Permutation::try_from(Vec::from(integer_slice))
     }
 }
 
