@@ -37,7 +37,7 @@ pub enum Name {
 }
 
 impl Name {
-    fn repr(&self) -> &'static str {
+    pub fn repr(&self) -> &'static str {
         match self {
             Name::Line => "line",
             Name::Bent => "bent",
@@ -66,7 +66,7 @@ pub struct Shape {
 }
 
 impl Shape {
-    fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.coordinates.ncols()
     }
 }
@@ -275,7 +275,7 @@ pub fn fit_quaternion(stator: &Matrix3N, rotor: &Matrix3N) -> Quaternion {
     na::UnitQuaternion::from_quaternion(quaternion)
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum SimilarityError {
     #[error("Number of positions does not match shape size")]
     PositionNumberMismatch
@@ -426,7 +426,7 @@ mod tests {
             let rotated_cloud = unit_sphere_normalize(random_rotation * cloud);
 
             let (permutation, similarity) = polyhedron_similarity(&rotated_cloud, shape.name).expect("Fine"); 
-            println!("Shape {} achieved similarity {} with permutation {}", shape.repr, similarity, permutation);
+            println!("Shape {} achieved similarity {} with permutation {}", shape.name.repr(), similarity, permutation);
             assert!(similarity < 1e-6);
         }
     }
