@@ -130,7 +130,21 @@ impl Permutation {
         permutation
     }
 
-    /// Determine the index of a permutation in the partial order of its set
+    /// Find a permutation ordering a container's elements
+    /// ```
+    /// # use molassembler::permutation::Permutation;
+    /// let container = vec![-3, 2, 0];
+    /// let p = Permutation::ordering(&container);
+    /// assert_eq!(p, Permutation::from_index(3, 1));
+    /// assert_eq!(p.apply(&container), Ok(vec![-3, 0, 2]));
+    /// ```
+    pub fn ordering<T: Ord>(container: &Vec<T>) -> Permutation {
+        let mut p = Permutation::identity(container.len());
+        p.sigma.sort_by(|i, j| container[*i as usize].cmp(&container[*j as usize]));
+        p
+    }
+
+    /// Determine the index of a permutation in its lexicographic order
     ///
     /// ```
     /// # use molassembler::permutation::Permutation;
