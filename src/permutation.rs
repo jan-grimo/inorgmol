@@ -116,11 +116,7 @@ impl Permutation {
     /// assert_eq!(Permutation::identity(3).sigma, vec![0, 1, 2])
     /// ```
     pub fn identity(n: usize) -> Permutation {
-        let mut sigma: Vec<u8> = Vec::with_capacity(n);
-        for i in 0..n as u8 {
-            sigma.push(i)
-        }
-        Permutation {sigma}
+        Permutation {sigma: (0..n as u8).collect()}
     }
 
     /// Initialize the i-th permutation by lexicographic order of size n
