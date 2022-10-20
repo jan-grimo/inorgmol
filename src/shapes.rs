@@ -55,7 +55,7 @@ impl Name {
 use crate::permutation;
 pub type Permutation = permutation::Permutation;
 
-pub static ORIGIN_PLACEHOLDER: u8 = u8::MAX;
+pub static ORIGIN: u8 = u8::MAX;
 
 pub struct Shape {
     pub name: Name,
@@ -117,7 +117,7 @@ lazy_static! {
             -0.805765, -0.366501, -0.465209
         ]),
         rotations: vec![Permutation {sigma: vec![2, 0, 1]}],
-        tetrahedra: vec![[ORIGIN_PLACEHOLDER, 0, 1, 2]],
+        tetrahedra: vec![[ORIGIN, 0, 1, 2]],
         mirror: Some(Permutation {sigma: vec![0, 2, 1]})
     };
 
@@ -177,7 +177,7 @@ lazy_static! {
             -0.0, -1.0, -0.0
         ]),
         rotations: vec![Permutation {sigma: vec![3, 2, 1, 0]}],
-        tetrahedra: vec![[0, ORIGIN_PLACEHOLDER, 1, 2], [ORIGIN_PLACEHOLDER, 3, 1, 2]],
+        tetrahedra: vec![[0, ORIGIN, 1, 2], [ORIGIN, 3, 1, 2]],
         mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
     };
 
