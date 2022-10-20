@@ -285,6 +285,33 @@ impl Permutation {
     }
 
     /// Compose two permutations into a new permutation
+    ///
+    /// The resulting permutation applies `self` first, then `other`. Note that 
+    /// permutation composition is not commutative.
+    ///
+    /// ```
+    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use std::convert::TryFrom;
+    /// # fn main() -> Result<(), PermutationError> {
+    /// // Usual case of non-commutative composition
+    /// let p = Permutation::try_from([1, 2, 0])?;
+    /// let q = Permutation::try_from([1, 0, 2])?;
+    /// assert_ne!(p.inverse(), q);
+    /// assert_eq!(p.compose(&q)?.sigma, vec![0, 2, 1]);
+    /// assert_ne!(p.compose(&q)?, q.compose(&p)?);
+    ///
+    /// let v = vec![-3, 4, 0];
+    /// assert_eq!(p.compose(&q)?.apply(&v)?, q.apply(&p.apply(&v)?)?); 
+    ///
+    ///
+    /// // If permutations are inverses of one another, their compositions are commutative
+    /// let r = Permutation::try_from([2, 0, 1])?;
+    /// assert_eq!(p.inverse(), r);
+    /// assert_eq!(p.compose(&r)?, Permutation::identity(3));
+    /// assert_eq!(r.compose(&p)?, Permutation::identity(3));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn compose(&self, other: &Permutation) -> Result<Permutation, PermutationError> {
         Ok(Permutation {sigma: self.inverse().apply(&other.sigma)?})
     }
