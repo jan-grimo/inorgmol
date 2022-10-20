@@ -59,13 +59,18 @@ pub static ORIGIN: u8 = u8::MAX;
 
 pub struct Shape {
     pub name: Name,
+    /// Unit sphere coordinates without a centroid
     pub coordinates: Matrix3N,
+    /// Spatial rotational basis expressed by vertex permutations
     pub rotations: Vec<Permutation>,
+    /// Minimal set of tetrahedra required to distinguish volumes in DG
     pub tetrahedra: Vec<[u8; 4]>,
+    /// Mirror symmetry element expressed by vertex permutation, if present
     pub mirror: Option<Permutation>
 }
 
 impl Shape {
+    /// Number of vertices of the shape
     pub fn size(&self) -> usize {
         self.coordinates.ncols()
     }
