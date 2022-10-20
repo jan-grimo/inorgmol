@@ -260,6 +260,17 @@ impl Permutation {
     }
 
     /// Apply the permutation to a vector
+    ///
+    /// ```
+    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use std::convert::TryFrom;
+    /// # fn main() -> Result<(), PermutationError> {
+    /// let p = Permutation::try_from([1, 2, 0])?;
+    /// let v = vec!["I", "am", "Yoda"];
+    /// assert_eq!(p.apply(&v), Ok(vec!["Yoda", "I", "am"]));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn apply<T: Copy>(&self, other: &Vec<T>) -> Result<Vec<T>, PermutationError> {
         let n = self.sigma.len();
         if n != other.len() {
