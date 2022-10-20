@@ -199,6 +199,17 @@ impl Permutation {
         index
     }
 
+    /// Determine the number of possible permutations
+    ///
+    /// ```
+    /// # use molassembler::permutation::Permutation;
+    /// assert_eq!(Permutation::identity(3).count(), 6);
+    /// ```
+    pub fn count(&self) -> usize {
+        let n = self.sigma.len();
+        (1..=n).product()
+    }
+
     /// Transform into the next permutation within the partial order of its set
     ///
     /// ```
