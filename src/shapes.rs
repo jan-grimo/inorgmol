@@ -58,6 +58,8 @@ impl Name {
 use crate::permutation;
 pub type Permutation = permutation::Permutation;
 
+pub struct Vertex(u8);
+
 pub static ORIGIN: u8 = u8::MAX;
 
 pub struct Shape {
@@ -65,7 +67,7 @@ pub struct Shape {
     /// Unit sphere coordinates without a centroid
     pub coordinates: Matrix3N,
     /// Spatial rotational basis expressed by vertex permutations
-    pub rotations: Vec<Permutation>,
+    pub rotation_basis: Vec<Permutation>,
     /// Minimal set of tetrahedra required to distinguish volumes in DG
     pub tetrahedra: Vec<[u8; 4]>,
     /// Mirror symmetry element expressed by vertex permutation, if present
@@ -77,6 +79,10 @@ impl Shape {
     pub fn size(&self) -> usize {
         self.coordinates.ncols()
     }
+
+    pub fn all_rotations(&self) {
+        unimplemented!();
+    }
 }
 
 lazy_static! {
@@ -86,7 +92,7 @@ lazy_static! {
              1.0, 0.0, 0.0,
             -1.0, 0.0, 0.0
         ]),
-        rotations: vec![Permutation {sigma: vec![1, 0]}],
+        rotation_basis: vec![Permutation {sigma: vec![1, 0]}],
         tetrahedra: vec![],
         mirror: None
     };
@@ -97,7 +103,7 @@ lazy_static! {
             1.0, 0.0, 0.0,
             -0.292372, 0.956305, 0.0
         ]),
-        rotations: vec![Permutation {sigma: vec![1, 0]}],
+        rotation_basis: vec![Permutation {sigma: vec![1, 0]}],
         tetrahedra: vec![],
         mirror: None
     };
@@ -109,7 +115,7 @@ lazy_static! {
             -0.5, 0.866025, 0.0,
             -0.5, -0.866025, 0.0
         ]),
-        rotations: vec![
+        rotation_basis: vec![
             Permutation {sigma: vec![1, 2, 0]},
             Permutation {sigma: vec![0, 2, 1]}
         ],
@@ -124,7 +130,7 @@ lazy_static! {
             0.805765, -0.366501, -0.465209,
             -0.805765, -0.366501, -0.465209
         ]),
-        rotations: vec![Permutation {sigma: vec![2, 0, 1]}],
+        rotation_basis: vec![Permutation {sigma: vec![2, 0, 1]}],
         tetrahedra: vec![[ORIGIN, 0, 1, 2]],
         mirror: Some(Permutation {sigma: vec![0, 2, 1]})
     };
@@ -136,7 +142,7 @@ lazy_static! {
             0.0, 1.0, 0.0,
             1.0, 0.0, 0.0,
         ]),
-        rotations: vec![Permutation {sigma: vec![2, 1, 0]}],
+        rotation_basis: vec![Permutation {sigma: vec![2, 1, 0]}],
         tetrahedra: vec![],
         mirror: None
     };
@@ -149,7 +155,7 @@ lazy_static! {
             0.816351, -0.333807, -0.471321,
             -0.816351, -0.333807, -0.471321
         ]),
-        rotations: vec![
+        rotation_basis: vec![
             Permutation {sigma: vec![0, 3, 1, 2]},
             Permutation {sigma: vec![2, 1, 3, 0]},
             Permutation {sigma: vec![3, 0, 2, 1]},
@@ -167,7 +173,7 @@ lazy_static! {
             -1.0, -0.0, -0.0,
             -0.0, -1.0, -0.0
         ]),
-        rotations: vec![
+        rotation_basis: vec![
             Permutation {sigma: vec![3, 0, 1, 2]},
             Permutation {sigma: vec![1, 0, 3, 2]},
             Permutation {sigma: vec![3, 2, 1, 0]},
@@ -184,7 +190,7 @@ lazy_static! {
             -0.5, 0.0, -0.866025,
             -0.0, -1.0, -0.0
         ]),
-        rotations: vec![Permutation {sigma: vec![3, 2, 1, 0]}],
+        rotation_basis: vec![Permutation {sigma: vec![3, 2, 1, 0]}],
         tetrahedra: vec![[0, ORIGIN, 1, 2], [ORIGIN, 3, 1, 2]],
         mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
     };
@@ -197,7 +203,7 @@ lazy_static! {
             -0.5, -0.866025, 0.0,
             0.0, 0.0, 1.0
         ]),
-        rotations: vec![Permutation {sigma: vec![2, 0, 1, 3]}],
+        rotation_basis: vec![Permutation {sigma: vec![2, 0, 1, 3]}],
         tetrahedra: vec![[0, 1, 3, 2]],
         mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
     };

@@ -2,8 +2,6 @@ use std::ops::Index;
 use core::convert::TryFrom;
 use num_traits::int::PrimInt;
 use itertools::Itertools;
-
-extern crate thiserror;
 use thiserror::Error;
 
 /// Slice-level permutation incrementation
@@ -199,6 +197,11 @@ impl Permutation {
         index
     }
 
+    /// Number of elements being permuted
+    pub fn len(&self) -> usize {
+        self.sigma.len()
+    }
+
     /// Determine the number of possible permutations
     ///
     /// ```
@@ -317,7 +320,7 @@ impl Permutation {
     }
 
     pub fn iter(&mut self) -> PermutationIterator {
-        PermutationIterator {permutation: self, increment: false}
+        PermutationIterator {permutation: self.clone(), increment: false}
     }
 }
 
@@ -382,6 +385,8 @@ impl<I: PrimInt, const N: usize> TryFrom<[I; N]> for Permutation {
 
 /// Iterator adaptor for permutations
 ///
+/// Yields permutations in increasing lexicographic order
+///
 /// ```
 /// # use molassembler::permutation::Permutation;
 /// let mut permutation = Permutation::from_index(2, 0);
@@ -390,25 +395,32 @@ impl<I: PrimInt, const N: usize> TryFrom<[I; N]> for Permutation {
 /// assert_eq!(iter.next(), Some(Permutation::from_index(2, 1)));
 /// assert_eq!(iter.next(), None);
 /// ```
-pub struct PermutationIterator<'a> {
-    permutation: &'a mut Permutation,
+pub struct PermutationIterator {
+    permutation: Permutation,
     increment: bool
 }
 
-// TODO figure out how to return references to permutation with the appropriate lifetime
-impl Iterator for PermutationIterator<'_> {
+// TODO figure out how to return references to permutation with the appropriate lifetime (GATs)
+impl Iterator for PermutationIterator {
     type Item = Permutation;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.increment {
-            if !self.permutation.next() {
-                return None;
-            }
+        if self.increment && !self.permutation.next() {
+            return None;
         }
 
         self.increment = true;
         Some(self.permutation.clone())
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.permutation.count() - self.permutation.index();
+        (remaining, Some(remaining))
+    }
+}
+
+pub fn permutations(n: usize) -> PermutationIterator {
+    PermutationIterator {permutation: Permutation::identity(n), increment: false}
 }
 
 #[cfg(test)]

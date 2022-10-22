@@ -1,29 +1,12 @@
 use std::marker::PhantomData;
-use num_traits::int::PrimInt;
 use num_traits::ToPrimitive;
 use num_traits::FromPrimitive;
+use delegate::delegate;
 
 use crate::permutation::{Permutation, PermutationError};
+use crate::index::NewTypeIndex;
 
-pub trait Index {
-    type Type : PrimInt + FromPrimitive;
-
-    fn get(&self) -> Self::Type;
-}
-
-pub trait NewTypeIndex : 
-    Index 
-    + Copy
-    + From<<Self as Index>::Type> 
-    + Into<<Self as Index>::Type> 
-{}
-
-impl<T> NewTypeIndex for T where T: Index 
-    + Copy
-    + From<<Self as Index>::Type> 
-    + Into<<Self as Index>::Type> 
-{}
-
+#[derive(PartialEq, Eq, PartialOrd, Clone, Debug)]
 pub struct Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
     pub permutation: Permutation,
     key_type: PhantomData<Key>,
@@ -31,71 +14,103 @@ pub struct Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
 }
 
 impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
+    /// Initialize from a Permutation
     pub fn new(p: Permutation) -> Bijection<Key, Value> {
         Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
     }
 
+    /// Invert the bijection
     pub fn inverse(&self) -> Bijection<Value, Key> {
         Bijection::new(self.permutation.inverse())
     }
 
+    /// Apply the map to a key and find its corresponding value
     pub fn get(&self, key: &Key) -> Option<Value> {
         let index = key.get().to_usize()?;
         let value = self.permutation.sigma.get(index)?;
         Some(Value::from(<Value::Type as FromPrimitive>::from_u8(*value)?))
     }
 
-    pub fn index(&self, value: &Value) -> Option<Key> {
+    /// Find the key to a corresponding value
+    pub fn inverse_of(&self, value: &Value) -> Option<Key> {
         let v = value.get().to_u8()?;
         let v_position = self.permutation.sigma.iter().position(|x| *x == v)?;
         Some(Key::from(<Key::Type as FromPrimitive>::from_usize(v_position)?))
     }
 
+    /// Compose the bijection with another
     pub fn compose<OtherValue>(&self, other: &Bijection<Value, OtherValue>) -> Result<Bijection<Key, OtherValue>, PermutationError> where OtherValue: NewTypeIndex {
         let p = self.permutation.compose(&other.permutation)?;
         Ok(Bijection::new(p))
     }
+
+    delegate! {
+        to self.permutation {
+            pub fn index(&self) -> usize;
+            pub fn count(&self) -> usize;
+            pub fn next(&mut self) -> bool;
+            pub fn prev(&mut self) -> bool;
+            pub fn len(&self) -> usize;
+        }
+    }
+}
+
+pub struct BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
+    bijection: Bijection<T, U>,
+    increment: bool
+}
+
+impl<T, U> BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
+    fn new(bijection: Bijection<T, U>) -> BijectionIterator<T, U> {
+        return BijectionIterator {bijection, increment: false}
+    }
+}
+
+impl<T, U> Iterator for BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
+    type Item = Bijection<T, U>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.increment && !self.bijection.permutation.next() {
+            return None;
+        }
+
+        self.increment = true;
+        Some(self.bijection.clone())
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let p = &self.bijection.permutation;
+        let remaining = p.count() - p.index();
+        (remaining, Some(remaining))
+    }
+}
+
+pub fn bijections<T, U>(n: usize) -> BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
+    BijectionIterator::<T, U>::new(Bijection::new(Permutation::identity(n)))
 }
 
 #[cfg(test)]
 mod tests {
     use derive_more::{From, Into};
     use crate::permutation::Permutation;
-    use crate::bijection::{Index, Bijection};
+    use crate::bijection::Bijection;
+    use crate::index::Index;
 
-    #[derive(From, Into, Debug, Copy, Clone, PartialEq)]
+    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
     struct Foo(u8);
 
-    #[derive(From, Into, Debug, Copy, Clone, PartialEq)]
+    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
     struct Bar(u8);
 
-    #[derive(From, Into, Debug, Copy, Clone, PartialEq)]
+    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
     struct Baz(u8);
-
-    impl Index for Foo {
-        type Type = u8;
-
-        fn get(&self) -> u8 { self.0 }
-    }
-
-    impl Index for Bar {
-        type Type = u8;
-
-        fn get(&self) -> u8 { self.0 }
-    }
-
-    impl Index for Baz {
-        type Type = u8;
-
-        fn get(&self) -> u8 { self.0 }
-    }
 
     #[test]
     fn basics() {
         let f1 = Bijection::<Foo, Bar>::new(Permutation::from_index(4, 3));
         let f1_at_two = Bar::from(f1.permutation.sigma[2]);
         assert_eq!(f1.get(&Foo(2)), Some(f1_at_two));
-        assert_eq!(f1.index(&f1_at_two), Some(Foo::from(2)));
+        assert_eq!(f1.inverse_of(&f1_at_two), Some(Foo::from(2)));
 
         let f2 = Bijection::<Bar, Baz>::new(Permutation::from_index(4, 3));
         let f3 = f1.compose(&f2).unwrap();
