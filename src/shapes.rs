@@ -11,10 +11,13 @@ use thiserror::Error;
 
 extern crate argmin;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+use derive_more::{From, Into};
+use crate::index::Index;
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Name {
     // 2
     Line,
@@ -58,6 +61,7 @@ impl Name {
 use crate::permutation;
 pub type Permutation = permutation::Permutation;
 
+#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
 pub struct Vertex(u8);
 
 pub static ORIGIN: u8 = u8::MAX;
@@ -80,8 +84,60 @@ impl Shape {
         self.coordinates.ncols()
     }
 
-    pub fn all_rotations(&self) {
-        unimplemented!();
+    /// Generate a full set of rotations from a shape's rotational basis
+    ///
+    /// ```
+    /// # use molassembler::shapes::*;
+    /// # use molassembler::permutation::*;
+    /// # use std::collections::HashSet;
+    /// # use std::iter::FromIterator;
+    /// let line_rotations = LINE.generate_rotations();
+    /// assert_eq!(line_rotations, HashSet::from_iter(permutations(2)));
+    /// assert!(line_rotations.iter().all(|r| r.len() == 2));
+    ///
+    /// let tetrahedron_rotations = TETRAHEDRON.generate_rotations();
+    /// assert_eq!(tetrahedron_rotations.len(), 12);
+    /// assert!(tetrahedron_rotations.iter().all(|r| r.len() == 4));
+    ///
+    /// ```
+    pub fn generate_rotations(&self) -> HashSet<Permutation> {
+        let mut rotations: HashSet<Permutation> = HashSet::new();
+        rotations.insert(Permutation::identity(self.size()));
+        let max_basis_idx = self.rotation_basis.len() - 1;
+
+        struct Frame {
+            permutation: Permutation,
+            next_basis: usize
+        }
+
+        let mut stack = Vec::<Frame>::new();
+        stack.push(Frame {permutation: Permutation::identity(self.size()), next_basis: 0});
+
+        // Tree-like traversal, while tracking rotations applied to get new rotations and pruning
+        // if rotations have been seen before
+        while stack.first().unwrap().next_basis <= max_basis_idx {
+            let latest = stack.last().unwrap();
+            let next_rotation = &self.rotation_basis[latest.next_basis];
+            let generated = latest.permutation.compose(&next_rotation).unwrap();
+
+            if rotations.insert(generated.clone()) {
+                // Continue finding new things from this structure
+                stack.push(Frame {permutation: generated, next_basis: 0});
+            } else {
+                // Try to pop unincrementable stack frames
+                while stack.len() > 1 && stack.last().unwrap().next_basis == max_basis_idx {
+                    stack.pop();
+                }
+
+                stack.last_mut().unwrap().next_basis += 1;
+            }
+        }
+
+        rotations
+    }
+
+    pub fn is_rotation(&self, a: &Permutation, b: &Permutation, rotations: &HashSet<Permutation>) -> bool {
+        rotations.iter().any(|r| a.compose(&r).expect("Passed bad rotations") == *b)
     }
 }
 
@@ -212,7 +268,9 @@ lazy_static! {
 }
 
 pub fn shape_from_name(name: Name) -> &'static Shape {
-    return SHAPES[name as usize];
+    let shape = SHAPES[name as usize];
+    assert_eq!(shape.name, name);
+    return shape;
 }
 
 pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
@@ -401,7 +459,9 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
         return Err(SimilarityError::PositionNumberMismatch);
     }
 
-    if n < 5 {
+    let n_prematch = 5;
+
+    if n < n_prematch {
         return polyhedron_similarity(x, s);
     }
 
@@ -419,7 +479,7 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
         mapping: PartialPermutation,
     }
 
-    let narrow = (0..n).permutations(5).fold(
+    let narrow = (0..n).permutations(n_prematch).fold(
         Narrowing {penalty: f64::MAX, mapping: PartialPermutation::new()},
         |best_narrow, vertices| -> Narrowing {
             let mut partial_map = PartialPermutation::with_capacity(n);
@@ -436,7 +496,7 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
                 return best_narrow;
             }
 
-            let left_free: Vec<usize> = (5..n).collect();
+            let left_free: Vec<usize> = (n_prematch..n).collect();
             let right_free: Vec<usize> = (0..n).filter(|i| !vertices.contains(i)).collect();
             assert_eq!(left_free.len(), right_free.len());
             let v = left_free.len();
@@ -487,8 +547,7 @@ mod tests {
     }
 
     fn random_permutation(n: usize) -> Permutation {
-        let max = (1..=n).product();
-        Permutation::from_index(n, random_discrete(max))
+        Permutation::from_index(n, random_discrete(Permutation::count(n)))
     }
 
     fn random_rotation() -> Quaternion {
@@ -548,18 +607,26 @@ mod tests {
         let fn_names = ["similarity", "similarity_shortcut"];
 
         for shape in SHAPES.iter() {
+            let shape_rotations = shape.generate_rotations();
+
             let cloud = shape.coordinates.clone().insert_column(shape.size(), 0.0);
             let random_rotation = random_rotation().to_rotation_matrix();
             let rotated_cloud = unit_sphere_normalize(random_rotation * cloud);
             let random_permutation = random_permutation(rotated_cloud.ncols());
             let permuted_cloud = apply_permutation(&rotated_cloud, &random_permutation);
 
-            for (fun, fun_name) in fns.iter().zip(fn_names) {
-                let (permutation, similarity) = fun(&permuted_cloud, shape.name).expect("Fine"); 
-                println!("Algorithm {} achieved similarity {} of {} with permutation {}", fun_name, similarity, shape.name.repr(), permutation);
-                assert!(similarity < 1e-6);
-                // TODO ensure one permutation is a rotation of the other
+            let results: Vec<(Permutation, f64)> = fns.iter().map(|f| f(&permuted_cloud, shape.name).expect("Fine")).collect();
+
+            for (fn_name, (permutation, similarity)) in fn_names.iter().zip(&results) {
+                println!("Algorithm {} achieved similarity {} of {} with permutation {}", fn_name, similarity, shape.name.repr(), permutation);
+                assert!(*similarity < 1e-6);
+                // Centroid must be last
+                assert_eq!(*permutation.sigma.last().unwrap(), shape.size() as u8);
             }
+
+            let permutation_results : Vec<Permutation> = results.iter().map(|(p, _)| { let mut q = p.clone(); q.sigma.pop(); q }).collect();
+            let mutual_rotations = permutation_results.iter().tuple_windows().all(|(p, q)| shape.is_rotation(p, q, &shape_rotations));
+            assert!(mutual_rotations);
         }
     }
 
