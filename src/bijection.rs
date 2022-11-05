@@ -14,7 +14,7 @@ pub struct Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
 }
 
 impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
-    /// Initialize from a Permutation
+    /// Initialize by wrapping a Permutation
     pub fn new(p: Permutation) -> Bijection<Key, Value> {
         Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
     }
@@ -47,11 +47,14 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     delegate! {
         to self.permutation {
             pub fn index(&self) -> usize;
-            pub fn count(&self) -> usize;
             pub fn next(&mut self) -> bool;
             pub fn prev(&mut self) -> bool;
             pub fn len(&self) -> usize;
         }
+    }
+
+    pub fn count(n: usize) -> usize {
+        Permutation::count(n)
     }
 }
 
@@ -80,7 +83,7 @@ impl<T, U> Iterator for BijectionIterator<T, U> where T: NewTypeIndex, U: NewTyp
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let p = &self.bijection.permutation;
-        let remaining = p.count() - p.index();
+        let remaining = Permutation::count(p.len()) - p.index();
         (remaining, Some(remaining))
     }
 }

@@ -81,7 +81,7 @@ pub fn slice_prev<T: PartialOrd>(slice: &mut [T]) -> bool {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Clone, Debug, Hash)]
 pub struct Permutation {
     // One-line representation
     pub sigma: Vec<u8>
@@ -206,10 +206,9 @@ impl Permutation {
     ///
     /// ```
     /// # use molassembler::permutation::Permutation;
-    /// assert_eq!(Permutation::identity(3).count(), 6);
+    /// assert_eq!(Permutation::count(3), 6);
     /// ```
-    pub fn count(&self) -> usize {
-        let n = self.sigma.len();
+    pub fn count(n: usize) -> usize {
         (1..=n).product()
     }
 
@@ -414,7 +413,7 @@ impl Iterator for PermutationIterator {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.permutation.count() - self.permutation.index();
+        let remaining = Permutation::count(self.permutation.len()) - self.permutation.index();
         (remaining, Some(remaining))
     }
 }
@@ -442,5 +441,33 @@ mod tests {
         assert_eq!(Permutation::identity(2).sigma.len(), 2);
         assert_eq!(Permutation::from_index(2, 0).index(), 0);
         assert_eq!(Permutation::from_index(2, 1).index(), 1);
+    }
+
+    fn random_discrete(n: usize) -> usize {
+        let float = rand::random::<f32>();
+        (float * n as f32) as usize
+    }
+
+    fn random_permutation(n: usize) -> Permutation {
+        Permutation::from_index(n, random_discrete(Permutation::count(n)))
+    }
+
+    #[test]
+    fn permutation_composition() -> Result<(), PermutationError> {
+        let n = 6;
+        let repeats = 100;
+
+        let v: Vec<usize> = (0..n).map(|_| random_discrete(100)).collect();
+
+        for _ in 0..repeats {
+            let p = random_permutation(n);
+            let q = random_permutation(n);
+
+            let compose_apply = p.compose(&q)?.apply(&v)?;
+            let apply_twice = q.apply(&p.apply(&v)?)?;
+            assert_eq!(compose_apply, apply_twice);
+        }
+
+        Ok(())
     }
 }
