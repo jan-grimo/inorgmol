@@ -1,3 +1,6 @@
+/// TODO
+/// - from_index could fail with indices higher than count()
+
 use std::ops::Index;
 use core::convert::TryFrom;
 use num_traits::int::PrimInt;
@@ -93,7 +96,7 @@ impl std::fmt::Display for Permutation {
     }
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum PermutationError {
     #[error("Mismatched lengths between permutation and argument")]
     LengthMismatch,
@@ -198,17 +201,18 @@ impl Permutation {
     }
 
     /// Number of elements being permuted
-    pub fn len(&self) -> usize {
+    pub fn set_size(&self) -> usize {
         self.sigma.len()
     }
 
-    /// Determine the number of possible permutations
+    /// Determine the number of possible permutations, also known as the order of the symmetric
+    /// group spanned by the Permutation
     ///
     /// ```
     /// # use molassembler::permutation::Permutation;
-    /// assert_eq!(Permutation::count(3), 6);
+    /// assert_eq!(Permutation::group_order(3), 6);
     /// ```
-    pub fn count(n: usize) -> usize {
+    pub fn group_order(n: usize) -> usize {
         (1..=n).product()
     }
 
@@ -218,11 +222,11 @@ impl Permutation {
     /// # use molassembler::permutation::Permutation;
     /// let mut permutation = Permutation::from_index(6, 0);
     /// for i in 1..15 {
-    ///     assert_eq!(permutation.next(), true);
+    ///     assert_eq!(permutation.next_permutation(), true);
     ///     assert_eq!(permutation, Permutation::from_index(6, i));
     /// }
     /// ```
-    pub fn next(&mut self) -> bool {
+    pub fn next_permutation(&mut self) -> bool {
         slice_next(self.sigma.as_mut_slice())
     }
 
@@ -232,11 +236,11 @@ impl Permutation {
     /// # use molassembler::permutation::Permutation;
     /// let mut permutation = Permutation::from_index(6, 15);
     /// for i in 14..1 {
-    ///     assert_eq!(permutation.prev(), true);
+    ///     assert_eq!(permutation.prev_permutation(), true);
     ///     assert_eq!(permutation, Permutation::from_index(6, i));
     /// }
     /// ```
-    pub fn prev(&mut self) -> bool {
+    pub fn prev_permutation(&mut self) -> bool {
         slice_prev(self.sigma.as_mut_slice())
     }
 
@@ -318,8 +322,8 @@ impl Permutation {
         Ok(Permutation {sigma: self.inverse().apply(&other.sigma)?})
     }
 
-    pub fn iter(&mut self) -> PermutationIterator {
-        PermutationIterator {permutation: self.clone(), increment: false}
+    pub fn iter_pairs(&self) -> std::iter::Enumerate<std::slice::Iter<u8>> {
+        self.sigma.iter().enumerate()
     }
 }
 
@@ -383,20 +387,15 @@ impl<I: PrimInt, const N: usize> TryFrom<[I; N]> for Permutation {
 }
 
 /// Iterator adaptor for permutations
-///
-/// Yields permutations in increasing lexicographic order
-///
-/// ```
-/// # use molassembler::permutation::Permutation;
-/// let mut permutation = Permutation::from_index(2, 0);
-/// let mut iter = permutation.iter();
-/// assert_eq!(iter.next(), Some(Permutation::from_index(2, 0)));
-/// assert_eq!(iter.next(), Some(Permutation::from_index(2, 1)));
-/// assert_eq!(iter.next(), None);
-/// ```
 pub struct PermutationIterator {
     permutation: Permutation,
     increment: bool
+}
+
+impl PermutationIterator {
+    fn new(permutation: Permutation) -> PermutationIterator {
+        PermutationIterator {permutation, increment:false}
+    }
 }
 
 // TODO figure out how to return references to permutation with the appropriate lifetime (GATs)
@@ -404,7 +403,7 @@ impl Iterator for PermutationIterator {
     type Item = Permutation;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.increment && !self.permutation.next() {
+        if self.increment && !self.permutation.next_permutation() {
             return None;
         }
 
@@ -413,13 +412,22 @@ impl Iterator for PermutationIterator {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = Permutation::count(self.permutation.len()) - self.permutation.index();
+        let remaining = Permutation::group_order(self.permutation.set_size()) - self.permutation.index();
         (remaining, Some(remaining))
     }
 }
 
+/// Yields permutations in increasing lexicographic order
+///
+/// ```
+/// # use molassembler::permutation::Permutation;
+/// let mut iter = permutations(2);
+/// assert_eq!(iter.next(), Some(Permutation::from_index(2, 0)));
+/// assert_eq!(iter.next(), Some(Permutation::from_index(2, 1)));
+/// assert_eq!(iter.next(), None);
+/// ```
 pub fn permutations(n: usize) -> PermutationIterator {
-    PermutationIterator {permutation: Permutation::identity(n), increment: false}
+    PermutationIterator::new(Permutation::identity(n))
 }
 
 #[cfg(test)]
@@ -427,20 +435,25 @@ mod tests {
     use crate::permutation::*;
 
     #[test]
-    fn small_permutations() {
+    fn small() {
         assert_eq!(Permutation::identity(0).sigma.len(), 0);
         assert_eq!(Permutation::from_index(0, 0).index(), 0);
-        assert_eq!(Permutation::identity(0).next(), false);
-        assert_eq!(Permutation::identity(0).prev(), false);
+        assert_eq!(Permutation::from_index(0, 1).index(), 0);
+        assert_eq!(Permutation::identity(0).next_permutation(), false);
+        assert_eq!(Permutation::identity(0).prev_permutation(), false);
 
         assert_eq!(Permutation::identity(1).sigma.len(), 1);
         assert_eq!(Permutation::from_index(1, 0).index(), 0);
-        assert_eq!(Permutation::identity(1).next(), false);
-        assert_eq!(Permutation::identity(1).prev(), false);
+        assert_eq!(Permutation::from_index(1, 1).index(), 0);
+        assert_eq!(Permutation::identity(1).next_permutation(), false);
+        assert_eq!(Permutation::identity(1).prev_permutation(), false);
 
         assert_eq!(Permutation::identity(2).sigma.len(), 2);
         assert_eq!(Permutation::from_index(2, 0).index(), 0);
         assert_eq!(Permutation::from_index(2, 1).index(), 1);
+        assert_eq!(Permutation::from_index(2, 2).index(), 1);
+        assert_eq!(Permutation::from_index(2, 3).index(), 1);
+        assert_eq!(Permutation::from_index(2, 4).index(), 1);
     }
 
     fn random_discrete(n: usize) -> usize {
@@ -449,11 +462,11 @@ mod tests {
     }
 
     fn random_permutation(n: usize) -> Permutation {
-        Permutation::from_index(n, random_discrete(Permutation::count(n)))
+        Permutation::from_index(n, random_discrete(Permutation::group_order(n)))
     }
 
     #[test]
-    fn permutation_composition() -> Result<(), PermutationError> {
+    fn composition() -> Result<(), PermutationError> {
         let n = 6;
         let repeats = 100;
 
@@ -466,6 +479,24 @@ mod tests {
             let compose_apply = p.compose(&q)?.apply(&v)?;
             let apply_twice = q.apply(&p.apply(&v)?)?;
             assert_eq!(compose_apply, apply_twice);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn application() -> Result<(), PermutationError> {
+        let n = 6;
+        let repeats = 100;
+
+        let v: Vec<usize> = (0..n).map(|_| random_discrete(100)).collect();
+
+        for _ in 0..repeats {
+            let p = random_permutation(n);
+
+            let w = p.apply(&v)?;
+            let v_reconstructed = p.inverse().apply(&w)?;
+            assert_eq!(v, v_reconstructed);
         }
 
         Ok(())

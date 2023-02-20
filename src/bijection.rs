@@ -47,14 +47,14 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     delegate! {
         to self.permutation {
             pub fn index(&self) -> usize;
-            pub fn next(&mut self) -> bool;
-            pub fn prev(&mut self) -> bool;
-            pub fn len(&self) -> usize;
+            pub fn next_permutation(&mut self) -> bool;
+            pub fn prev_permutation(&mut self) -> bool;
+            pub fn set_size(&self) -> usize;
         }
     }
 
-    pub fn count(n: usize) -> usize {
-        Permutation::count(n)
+    pub fn group_order(n: usize) -> usize {
+        Permutation::group_order(n)
     }
 }
 
@@ -65,7 +65,7 @@ pub struct BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
 
 impl<T, U> BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
     fn new(bijection: Bijection<T, U>) -> BijectionIterator<T, U> {
-        return BijectionIterator {bijection, increment: false}
+        BijectionIterator {bijection, increment: false}
     }
 }
 
@@ -73,7 +73,7 @@ impl<T, U> Iterator for BijectionIterator<T, U> where T: NewTypeIndex, U: NewTyp
     type Item = Bijection<T, U>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.increment && !self.bijection.permutation.next() {
+        if self.increment && !self.bijection.permutation.next_permutation() {
             return None;
         }
 
@@ -83,7 +83,7 @@ impl<T, U> Iterator for BijectionIterator<T, U> where T: NewTypeIndex, U: NewTyp
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let p = &self.bijection.permutation;
-        let remaining = Permutation::count(p.len()) - p.index();
+        let remaining = Permutation::group_order(p.set_size()) - p.index();
         (remaining, Some(remaining))
     }
 }
