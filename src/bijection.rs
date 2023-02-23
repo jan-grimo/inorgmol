@@ -6,7 +6,7 @@ use delegate::delegate;
 use crate::permutation::{Permutation, PermutationError};
 use crate::index::NewTypeIndex;
 
-#[derive(PartialEq, Eq, PartialOrd, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Clone, Debug, Hash)]
 pub struct Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
     pub permutation: Permutation,
     key_type: PhantomData<Key>,
@@ -17,6 +17,10 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     /// Initialize by wrapping a Permutation
     pub fn new(p: Permutation) -> Bijection<Key, Value> {
         Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
+    }
+
+    pub fn identity(n: usize) -> Bijection<Key, Value> {
+        Bijection::new(Permutation::identity(n))
     }
 
     /// Invert the bijection
@@ -55,6 +59,12 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
 
     pub fn group_order(n: usize) -> usize {
         Permutation::group_order(n)
+    }
+}
+
+impl<Key, Value> std::fmt::Display for Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.permutation)
     }
 }
 

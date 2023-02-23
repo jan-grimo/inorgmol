@@ -21,3 +21,20 @@ impl<T> NewTypeIndex for T where T: Index
     + From<<Self as Index>::Type> 
     + Into<<Self as Index>::Type> 
 {}
+
+#[cfg(test)]
+mod tests {
+    use crate::index::Index;
+    use derive_more::{From, Into};
+
+    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
+    struct Foo(u8);
+
+    #[test]
+    fn basics() {
+        let a: Foo = 8.into();
+        let _b: u8 = a.into();
+        // let c: usize = a.into(); compilation failure
+        let _d = Foo::from(3);
+    }
+}

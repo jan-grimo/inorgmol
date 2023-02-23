@@ -74,11 +74,18 @@ impl Name {
 }
 
 use crate::permutation::{Permutation, permutations};
+use crate::bijection::{Bijection, bijections};
 use crate::quaternions;
 use crate::quaternions::Fit;
 
-#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Vertex(u8);
+
+type Rotation = Bijection<Vertex, Vertex>;
+type Mirror = Bijection<Vertex, Vertex>;
+
+#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Column(u8);
 
 pub static ORIGIN: u8 = u8::MAX;
 
@@ -87,11 +94,11 @@ pub struct Shape {
     /// Unit sphere coordinates without a centroid
     pub coordinates: Matrix3N,
     /// Spatial rotational basis expressed by vertex permutations
-    pub rotation_basis: Vec<Permutation>,
+    pub rotation_basis: Vec<Rotation>,
     /// Minimal set of tetrahedra required to distinguish volumes in DG
     pub tetrahedra: Vec<[u8; 4]>,
     /// Mirror symmetry element expressed by vertex permutation, if present
-    pub mirror: Option<Permutation>
+    pub mirror: Option<Mirror>
 }
 
 impl Shape {
@@ -104,11 +111,11 @@ impl Shape {
     ///
     /// ```
     /// # use molassembler::shapes::*;
-    /// # use molassembler::permutation::*;
+    /// # use molassembler::bijection::bijections;
     /// # use std::collections::HashSet;
     /// # use std::iter::FromIterator;
     /// let line_rotations = LINE.generate_rotations();
-    /// assert_eq!(line_rotations, HashSet::from_iter(permutations(2)));
+    /// assert_eq!(line_rotations, HashSet::from_iter(bijections(2)));
     /// assert!(line_rotations.iter().all(|r| r.set_size() == 2));
     ///
     /// let tetrahedron_rotations = TETRAHEDRON.generate_rotations();
@@ -116,18 +123,18 @@ impl Shape {
     /// assert!(tetrahedron_rotations.iter().all(|r| r.set_size() == 4));
     ///
     /// ```
-    pub fn generate_rotations(&self) -> HashSet<Permutation> {
-        let mut rotations: HashSet<Permutation> = HashSet::new();
-        rotations.insert(Permutation::identity(self.size()));
+    pub fn generate_rotations(&self) -> HashSet<Rotation> {
+        let mut rotations: HashSet<Rotation> = HashSet::new();
+        rotations.insert(Rotation::identity(self.size()));
         let max_basis_idx = self.rotation_basis.len() - 1;
 
         struct Frame {
-            permutation: Permutation,
+            permutation: Rotation,
             next_basis: usize
         }
 
         let mut stack = Vec::<Frame>::new();
-        stack.push(Frame {permutation: Permutation::identity(self.size()), next_basis: 0});
+        stack.push(Frame {permutation: Rotation::identity(self.size()), next_basis: 0});
 
         // Tree-like traversal, while tracking rotations applied to get new rotations and pruning
         // if rotations have been seen before
@@ -152,9 +159,18 @@ impl Shape {
         rotations
     }
 
-    pub fn is_rotation(&self, a: &Permutation, b: &Permutation, rotations: &HashSet<Permutation>) -> bool {
-        rotations.iter().any(|r| a.compose(r).expect("Passed bad rotations") == *b)
+    // maybe strong variant is a, b of type X -> Vertex
+    pub fn is_rotation(&self, a: &Permutation, b: &Permutation, rotations: &HashSet<Rotation>) -> bool {
+        rotations.iter().any(|r| a.compose(&r.permutation).expect("Passed bad rotations") == *b)
     }
+}
+
+fn make_rotation(slice: &[u8]) -> Rotation {
+    Rotation::new(Permutation {sigma: slice.to_vec()})
+}
+
+fn make_mirror(slice: &[u8]) -> Option<Mirror> {
+    Some(make_rotation(slice))
 }
 
 lazy_static! {
@@ -164,7 +180,7 @@ lazy_static! {
              1.0, 0.0, 0.0,
             -1.0, 0.0, 0.0
         ]),
-        rotation_basis: vec![Permutation {sigma: vec![1, 0]}],
+        rotation_basis: vec![make_rotation(&[1, 0])],
         tetrahedra: vec![],
         mirror: None
     };
@@ -175,7 +191,7 @@ lazy_static! {
             1.0, 0.0, 0.0,
             -0.292372, 0.956305, 0.0
         ]),
-        rotation_basis: vec![Permutation {sigma: vec![1, 0]}],
+        rotation_basis: vec![make_rotation(&[1, 0])],
         tetrahedra: vec![],
         mirror: None
     };
@@ -188,8 +204,8 @@ lazy_static! {
             -0.5, -0.866025, 0.0
         ]),
         rotation_basis: vec![
-            Permutation {sigma: vec![1, 2, 0]},
-            Permutation {sigma: vec![0, 2, 1]}
+            make_rotation(&[1, 2, 0]),
+            make_rotation(&[0, 2, 1])
         ],
         tetrahedra: vec![],
         mirror: None
@@ -202,9 +218,9 @@ lazy_static! {
             0.805765, -0.366501, -0.465209,
             -0.805765, -0.366501, -0.465209
         ]),
-        rotation_basis: vec![Permutation {sigma: vec![2, 0, 1]}],
+        rotation_basis: vec![make_rotation(&[2, 0, 1])],
         tetrahedra: vec![[ORIGIN, 0, 1, 2]],
-        mirror: Some(Permutation {sigma: vec![0, 2, 1]})
+        mirror: make_mirror(&[0, 2, 1])
     };
 
     pub static ref TSHAPE: Shape = Shape {
@@ -214,7 +230,7 @@ lazy_static! {
             0.0, 1.0, 0.0,
             1.0, 0.0, 0.0,
         ]),
-        rotation_basis: vec![Permutation {sigma: vec![2, 1, 0]}],
+        rotation_basis: vec![Rotation::new(Permutation {sigma: vec![2, 1, 0]})],
         tetrahedra: vec![],
         mirror: None
     };
@@ -228,13 +244,13 @@ lazy_static! {
             -0.816351, -0.333807, -0.471321
         ]),
         rotation_basis: vec![
-            Permutation {sigma: vec![0, 3, 1, 2]},
-            Permutation {sigma: vec![2, 1, 3, 0]},
-            Permutation {sigma: vec![3, 0, 2, 1]},
-            Permutation {sigma: vec![1, 2, 0, 3]}
+            make_rotation(&[0, 3, 1, 2]),
+            make_rotation(&[2, 1, 3, 0]),
+            make_rotation(&[3, 0, 2, 1]),
+            make_rotation(&[1, 2, 0, 3])
         ],
         tetrahedra: vec![[0, 1, 2, 3]],
-        mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
+        mirror: make_mirror(&[0, 2, 1, 3])
     };
 
     pub static ref SQUARE: Shape = Shape {
@@ -246,9 +262,9 @@ lazy_static! {
             -0.0, -1.0, -0.0
         ]),
         rotation_basis: vec![
-            Permutation {sigma: vec![3, 0, 1, 2]},
-            Permutation {sigma: vec![1, 0, 3, 2]},
-            Permutation {sigma: vec![3, 2, 1, 0]},
+            make_rotation(&[3, 0, 1, 2]),
+            make_rotation(&[1, 0, 3, 2]),
+            make_rotation(&[3, 2, 1, 0]),
         ],
         tetrahedra: vec![],
         mirror: None
@@ -262,9 +278,9 @@ lazy_static! {
             -0.5, 0.0, -0.866025,
             -0.0, -1.0, -0.0
         ]),
-        rotation_basis: vec![Permutation {sigma: vec![3, 2, 1, 0]}],
+        rotation_basis: vec![make_rotation(&[3, 2, 1, 0])],
         tetrahedra: vec![[0, ORIGIN, 1, 2], [ORIGIN, 3, 1, 2]],
-        mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
+        mirror: make_mirror(&[0, 2, 1, 3])
     };
 
     pub static ref TRIGONALPYRAMID: Shape = Shape {
@@ -275,9 +291,9 @@ lazy_static! {
             -0.5, -0.866025, 0.0,
             0.0, 0.0, 1.0
         ]),
-        rotation_basis: vec![Permutation {sigma: vec![2, 0, 1, 3]}],
+        rotation_basis: vec![make_rotation(&[2, 0, 1, 3])],
         tetrahedra: vec![[0, 1, 3, 2]],
-        mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
+        mirror: make_mirror(&[0, 2, 1, 3])
     };
 
     pub static ref SQUAREPYRAMID: Shape = Shape {
@@ -289,14 +305,14 @@ lazy_static! {
             0.0, -1.0, 0.0,
             0.0, 0.0, 1.0,
         ]),
-        rotation_basis: vec![Permutation {sigma: vec![3, 0, 1, 2, 4]}],
+        rotation_basis: vec![make_rotation(&[3, 0, 1, 2, 4])],
         tetrahedra: vec![
             [0, 1, 4, ORIGIN],
             [1, 2, 4, ORIGIN],
             [2, 3, 4, ORIGIN],
             [3, 0, 4, ORIGIN],
         ],
-        mirror: Some(Permutation {sigma: vec![1, 0, 3, 2, 4]})
+        mirror: make_mirror(&[1, 0, 3, 2, 4])
     };
 
     pub static ref TRIGONALBIPYRAMID: Shape = Shape {
@@ -309,13 +325,11 @@ lazy_static! {
             0.0, 0.0, -1.0
         ]),
         rotation_basis: vec![
-            Permutation {sigma: vec![2, 0, 1, 3, 4]},
-            Permutation {sigma: vec![0, 2, 1, 4, 3]},
-            Permutation {sigma: vec![2, 1, 0, 4, 3]},
-            Permutation {sigma: vec![1, 0, 2, 4, 3]},
+            make_rotation(&[2, 0, 1, 3, 4]), // C3
+            make_rotation(&[0, 2, 1, 4, 3]), // C2 on 0
         ],
         tetrahedra: vec![[0, 1, 3, 2], [0, 1, 2, 4]],
-        mirror: Some(Permutation {sigma: vec![0, 2, 1, 3, 4]})
+        mirror: make_mirror(&[0, 2, 1, 3, 4])
     };
 
     pub static ref PENTAGON: Shape = Shape {
@@ -328,8 +342,8 @@ lazy_static! {
             0.309017, -0.951057, 0.0
         ]),
         rotation_basis: vec![
-            Permutation {sigma: vec![4, 0, 1, 2, 3]},
-            Permutation {sigma: vec![0, 4, 3, 2, 1]},
+            make_rotation(&[4, 0, 1, 2, 3]),
+            make_rotation(&[0, 4, 3, 2, 1]),
         ],
         tetrahedra: vec![],
         mirror: None
@@ -436,8 +450,15 @@ pub enum SimilarityError {
     PositionNumberMismatch
 }
 
+pub struct Similarity {
+    pub bijection: Bijection<Column, Vertex>,
+    pub csm: f64,
+}
+
 /// Polyhedron similarity performing quaternion fits on all vertices 
-pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64), SimilarityError> {
+pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+    type Occupation = Bijection<Column, Vertex>;
+
     let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.size() + 1 {
@@ -451,18 +472,18 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64)
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
 
-    let evaluate_permutation = |p: Permutation| -> (Permutation, Fit) {
-        let permuted_shape = apply_permutation(&shape_coordinates, &p);
+    let evaluate_permutation = |p: Occupation| -> (Occupation, Fit) {
+        let permuted_shape = apply_permutation(&shape_coordinates, &p.permutation);
         let fit = quaternions::fit(&cloud, &permuted_shape);
         (p, fit)
     };
 
-    let (best_permutation, best_fit) = permutations(n)
+    let (best_bijection, best_fit) = bijections(n)
         .map(evaluate_permutation)
         .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("NaN in MSDs"))
         .expect("Not a single permutation available to try");
 
-    let permuted_shape = apply_permutation(&shape_coordinates, &best_permutation);
+    let permuted_shape = apply_permutation(&shape_coordinates, &best_bijection.permutation);
     let rotated_shape = best_fit.rotate_rotor(permuted_shape);
 
     let csm = scaling::minimize(&cloud, &rotated_shape);
@@ -472,12 +493,12 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64)
             println!("- minimization: {:e}, direct: {:e}", csm, direct);
         }
     }
-    Ok((best_permutation, csm))
+    Ok(Similarity {bijection: best_bijection, csm})
 }
 
 /// Polyhedron similarity performing quaternion fits only on a limited number of 
 /// vertices before assigning the rest by brute force linear assignment
-pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutation, f64), SimilarityError> {
+pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.size() + 1 {
@@ -513,7 +534,6 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
 
             // If the msd caused only by the partial map is already worse, skip
             if partial_fit.msd > best.msd {
-                // println!("Skipped {:?}, partial fit msd {:e}", vertices, partial_fit.msd);
                 return best;
             }
 
@@ -521,7 +541,7 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
             let right_free: Vec<usize> = (0..n)
                 .filter(|i| !vertices.contains(i))
                 .collect();
-            assert_eq!(left_free.len(), right_free.len());
+            debug_assert_eq!(left_free.len(), right_free.len());
 
             let v = left_free.len();
             let prematch_rotated_shape = partial_fit.rotate_rotor(shape_coordinates.clone());
@@ -548,10 +568,13 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
                 partial_map.insert(left_free[i], right_free[*j as usize]);
             }
 
+            if cfg!(debug_assertions) {
+                assert_eq!(partial_map.len(), n);
+                assert!(itertools::equal(partial_map.keys().copied().sorted(), 0..n));
+                assert!(itertools::equal(partial_map.values().copied().sorted(), 0..n));
+            }
+
             // Make a clean quaternion fit with the full mapping
-            assert_eq!(partial_map.len(), n);
-            assert!(itertools::equal(partial_map.keys().copied().sorted(), 0..n));
-            assert!(itertools::equal(partial_map.values().copied().sorted(), 0..n));
             let full_fit = quaternions::fit_with_map(&cloud, &shape_coordinates, &partial_map);
 
             println!("Tried vertices {:?}, linear assigning {:?}, msd {:e}", vertices, right_free, full_fit.msd);
@@ -575,13 +598,19 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
         p
     };
 
+    if cfg!(debug_assertions) {
+        for (i, j) in narrow.mapping.iter() {
+            assert_eq!(best_permutation[*i] as usize, *j);
+        }
+    }
+
     let permuted_shape = apply_permutation(&shape_coordinates, &best_permutation);
     let fit = quaternions::fit(&cloud, &permuted_shape);
     let rotated_shape = fit.rotate_rotor(permuted_shape);
 
     let csm = scaling::minimize(&cloud, &rotated_shape);
     println!("- minimization: {:e}, direct: {:e}", csm, scaling::direct(&cloud, &rotated_shape));
-    Ok((best_permutation, csm))
+    Ok(Similarity {bijection: Bijection::new(best_permutation), csm})
 }
 
 #[cfg(test)]
@@ -620,6 +649,9 @@ mod tests {
         for i in 0..n {
             assert_eq!(stator.column(i), permuted.column(permutation[i] as usize));
         }
+
+        let reconstituted = apply_permutation(&permuted, &permutation.inverse());
+        approx::assert_relative_eq!(stator, reconstituted);
     }
 
     #[test]
@@ -640,7 +672,7 @@ mod tests {
         let tetr_rotations = TETRAHEDRON.generate_rotations();
         let perm = Permutation::from_index(4, 23);
         for rot in &tetr_rotations {
-            let rotated_perm = perm.compose(&rot).expect("fine");
+            let rotated_perm = perm.compose(&rot.permutation).expect("fine");
             assert!(TETRAHEDRON.is_rotation(&perm, &rotated_perm, &tetr_rotations));
         }
     }
@@ -649,7 +681,6 @@ mod tests {
     // are rotations of one another
     #[test]
     fn self_similarity() {
-
         let fns = [polyhedron_similarity, polyhedron_similarity_shortcut];
         let fn_names = ["similarity", "similarity_shortcut"];
 
@@ -669,20 +700,20 @@ mod tests {
             };
             let permuted_cloud = apply_permutation(&rotated_cloud, &random_permutation);
 
-            let results: Vec<(Permutation, f64)> = fns.iter().map(|f| f(&permuted_cloud, shape.name).expect("Fine")).collect();
+            let results: Vec<Similarity> = fns.iter().map(|f| f(&permuted_cloud, shape.name).expect("Fine")).collect();
 
-            for (fn_name, (permutation, similarity)) in fn_names.iter().zip(&results) {
-                println!("Algorithm {} achieved similarity {:e} of {} with permutation {}", fn_name, similarity, shape.name.repr(), permutation);
+            for (fn_name, similarity) in fn_names.iter().zip(&results) {
+                println!("Algorithm {} achieved similarity {:e} of {} with permutation {}", fn_name, similarity.csm, shape.name.repr(), similarity.bijection);
 
-                println!("true {} <-> minimal {}, same: {}, inverse: {}", random_permutation, permutation, random_permutation == *permutation, random_permutation == permutation.inverse());
-                assert!(*similarity < 1e-6);
+                println!("true {} <-> minimal {}, same: {}, inverse: {}", random_permutation, similarity.bijection, random_permutation == similarity.bijection.permutation, random_permutation == similarity.bijection.permutation.inverse());
+                assert!(similarity.csm < 1e-6);
                 // Centroid must be last
-                assert_eq!(*permutation.sigma.last().unwrap(), shape.size() as u8);
+                assert_eq!(*similarity.bijection.permutation.sigma.last().unwrap(), shape.size() as u8);
             }
 
             // Found permutations are rotations of one another
             let shape_rotations = shape.generate_rotations();
-            let fn_permutation_results: Vec<Permutation> = results.iter().map(|(p, _)| { let mut q = p.clone(); q.sigma.pop(); q }).collect(); // drop centroid
+            let fn_permutation_results: Vec<Permutation> = results.iter().map(|s| { let mut q = s.bijection.permutation.clone(); q.sigma.pop(); q }).collect(); // drop centroid
             let mutual_rotations = fn_permutation_results.iter().tuple_windows().all(|(p, q)| shape.is_rotation(p, q, &shape_rotations));
             assert!(mutual_rotations);
 
