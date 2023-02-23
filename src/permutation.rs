@@ -420,7 +420,7 @@ impl Iterator for PermutationIterator {
 /// Yields permutations in increasing lexicographic order
 ///
 /// ```
-/// # use molassembler::permutation::Permutation;
+/// # use molassembler::permutation::{Permutation, permutations};
 /// let mut iter = permutations(2);
 /// assert_eq!(iter.next(), Some(Permutation::from_index(2, 0)));
 /// assert_eq!(iter.next(), Some(Permutation::from_index(2, 1)));

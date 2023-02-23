@@ -15,7 +15,6 @@ extern crate nalgebra as na;
 
 pub type Matrix3N = na::Matrix3xX<f64>;
 pub type Matrix3 = na::Matrix3<f64>;
-type Matrix4 = na::Matrix4<f64>;
 
 pub type Quaternion = na::UnitQuaternion<f64>;
 
@@ -45,9 +44,9 @@ pub enum Name {
     Seesaw,
     TrigonalPyramid,
     // 5
-    // SquarePyramid,
-    // TrigonalBipyramid,
-    // Pentagon,
+    SquarePyramid,
+    TrigonalBipyramid,
+    Pentagon,
     // 6
     // Octahedron,
     // TrigonalPrism,
@@ -66,12 +65,17 @@ impl Name {
             Name::Tetrahedron => "tetrahedron",
             Name::Square => "square",
             Name::Seesaw => "seesaw",
-            Name::TrigonalPyramid => "trigonal pyramid"
+            Name::TrigonalPyramid => "trigonal pyramid",
+            Name::SquarePyramid => "square pyramid",
+            Name::TrigonalBipyramid => "trigonal bipyramid",
+            Name::Pentagon => "pentagon",
         }
     }
 }
 
 use crate::permutation::{Permutation, permutations};
+use crate::quaternions;
+use crate::quaternions::Fit;
 
 #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Vertex(u8);
@@ -276,7 +280,62 @@ lazy_static! {
         mirror: Some(Permutation {sigma: vec![0, 2, 1, 3]})
     };
 
-    pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID];
+    pub static ref SQUAREPYRAMID: Shape = Shape {
+        name: Name::SquarePyramid,
+        coordinates: Matrix3N::from_column_slice(&[
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            -1.0, 0.0, 0.0,
+            0.0, -1.0, 0.0,
+            0.0, 0.0, 1.0,
+        ]),
+        rotation_basis: vec![Permutation {sigma: vec![3, 0, 1, 2, 4]}],
+        tetrahedra: vec![
+            [0, 1, 4, ORIGIN],
+            [1, 2, 4, ORIGIN],
+            [2, 3, 4, ORIGIN],
+            [3, 0, 4, ORIGIN],
+        ],
+        mirror: Some(Permutation {sigma: vec![1, 0, 3, 2, 4]})
+    };
+
+    pub static ref TRIGONALBIPYRAMID: Shape = Shape {
+        name: Name::TrigonalBipyramid,
+        coordinates: Matrix3N::from_column_slice(&[
+            1.0, 0.0, 0.0,
+            -0.5, 0.866025, 0.0,
+            -0.5, -0.866025, 0.0,
+            0.0, 0.0, 1.0,
+            0.0, 0.0, -1.0
+        ]),
+        rotation_basis: vec![
+            Permutation {sigma: vec![2, 0, 1, 3, 4]},
+            Permutation {sigma: vec![0, 2, 1, 4, 3]},
+            Permutation {sigma: vec![2, 1, 0, 4, 3]},
+            Permutation {sigma: vec![1, 0, 2, 4, 3]},
+        ],
+        tetrahedra: vec![[0, 1, 3, 2], [0, 1, 2, 4]],
+        mirror: Some(Permutation {sigma: vec![0, 2, 1, 3, 4]})
+    };
+
+    pub static ref PENTAGON: Shape = Shape {
+        name: Name::Pentagon,
+        coordinates: Matrix3N::from_column_slice(&[
+            1.0, 0.0, 0.0,
+            0.309017, 0.951057, 0.0,
+            -0.809017, 0.587785, 0.0,
+            -0.809017, -0.587785, 0.0,
+            0.309017, -0.951057, 0.0
+        ]),
+        rotation_basis: vec![
+            Permutation {sigma: vec![4, 0, 1, 2, 3]},
+            Permutation {sigma: vec![0, 4, 3, 2, 1]},
+        ],
+        tetrahedra: vec![],
+        mirror: None
+    };
+
+    pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID, &SQUAREPYRAMID, &TRIGONALBIPYRAMID, &PENTAGON];
 }
 
 pub fn shape_from_name(name: Name) -> &'static Shape {
@@ -301,90 +360,6 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     x
 }
 
-fn quaternion_pair_contribution<'a>(stator_col: &na::MatrixSlice3x1<'a, f64>, rotor_col: &na::MatrixSlice3x1<'a, f64>) -> Matrix4 {
-    let mut a = Matrix4::zeros();
-
-    let forward_difference = (rotor_col - stator_col).transpose();
-    a.fixed_slice_mut::<1, 3>(0, 1).copy_from(&forward_difference);
-
-    let backward_difference = stator_col - rotor_col;
-    a.fixed_slice_mut::<3, 1>(1, 0).copy_from(&backward_difference);
-
-    let mut block = Matrix3::zeros();
-    let sum = stator_col + rotor_col;
-    for (col, mut block_col) in Matrix3::identity().column_iter().zip(block.column_iter_mut()) {
-        block_col.copy_from(&col.cross(&sum));
-    }
-    a.fixed_slice_mut::<3, 3>(1, 1).copy_from(&block);
-
-    a.transpose() * a
-}
-
-pub struct Fit {
-    quaternion: Quaternion,
-    msd: f64
-}
-
-impl Fit {
-    pub fn rotate_stator(&self, stator: Matrix3N) -> Matrix3N {
-        self.quaternion.to_rotation_matrix() * stator
-    }
-    pub fn rotate_rotor(&self, rotor: Matrix3N) -> Matrix3N {
-        self.quaternion.inverse().to_rotation_matrix() * rotor
-    }
-}
-
-fn quaternion_decomposition(mat: Matrix4) -> Fit {
-    let decomposition = na::SymmetricEigen::new(mat);
-    let min_eigenvalue_index = decomposition.eigenvalues
-        .iter()
-        .enumerate()
-        .min_by(|(_, a), (_, b)| a.partial_cmp(b).expect("Encountered NaN"))
-        .map(|(index, _)| index)
-        .expect("No eigenvalues present");
-
-    let q = decomposition.eigenvectors.column(min_eigenvalue_index);
-    let quaternion = na::Quaternion::new(q[0], q[1], q[2], q[3]);
-
-    Fit {
-        quaternion: na::UnitQuaternion::from_quaternion(quaternion),
-        msd: decomposition.eigenvalues[min_eigenvalue_index]
-    }
-}
-
-/// Find a quaternion that best transforms the stator into the rotor
-///
-/// Postcondition is rotor = quat * stator and stator = quat.inverse() * rotor,
-/// see rotate_rotor and rotate_stator fns
-pub fn fit_quaternion(stator: &Matrix3N, rotor: &Matrix3N) -> Fit {
-    // Ensure centroids are removed from matrices
-    assert!(stator.column_mean().norm_squared() < 1e-8);
-    assert!(rotor.column_mean().norm_squared() < 1e-8);
-
-    let mut a = Matrix4::zeros();
-    // Generate decomposable matrix per atom and add them
-    for (rotor_col, stator_col) in rotor.column_iter().zip(stator.column_iter()) {
-        a += quaternion_pair_contribution(&stator_col, &rotor_col);
-    }
-
-    quaternion_decomposition(a)
-}
-
-pub fn fit_quaternion_with_map(stator: &Matrix3N, rotor: &Matrix3N, vertex_map: &HashMap<usize, usize>) -> Fit {
-    // Ensure centroids are removed from matrices
-    assert!(stator.column_mean().norm_squared() < 1e-8);
-    assert!(rotor.column_mean().norm_squared() < 1e-8);
-    
-    let mut a = Matrix4::zeros();
-    for (stator_i, rotor_i) in vertex_map {
-        let stator_col = stator.column(*stator_i);
-        let rotor_col = rotor.column(*rotor_i);
-        a += quaternion_pair_contribution(&stator_col, &rotor_col);
-    }
-
-    quaternion_decomposition(a)
-}
-
 pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
     assert_eq!(x.ncols(), p.set_size());
     let inverse = p.inverse();
@@ -394,45 +369,64 @@ pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
 mod scaling {
     use crate::shapes::Matrix3N;
 
-    use argmin::prelude::*;
+    use argmin::core::{CostFunction, Error, Executor};
     use argmin::solver::goldensectionsearch::GoldenSectionSearch;
+
+    fn evaluate_msd(cloud: &Matrix3N, rotated_shape: &Matrix3N, factor: f64) -> f64 {
+        (cloud.clone() - rotated_shape.scale(factor))
+            .column_iter()
+            .map(|col| col.norm_squared())
+            .sum()
+    }
 
     struct CoordinateScalingProblem<'a> {
         pub cloud: &'a Matrix3N,
         pub rotated_shape: &'a Matrix3N
     }
 
-    impl ArgminOp for CoordinateScalingProblem<'_> {
+    impl CostFunction for CoordinateScalingProblem<'_> {
         type Param = f64;
         type Output = f64;
-        type Hessian = ();
-        type Jacobian = ();
-        type Float = f64;
 
-        fn apply(&self, p: &Self::Param) -> Result<Self::Output, Error> {
-            let msd = (self.cloud.clone() - self.rotated_shape.scale(*p))
-                .column_iter()
-                .map(|col| col.norm_squared())
-                .sum();
-
-            Ok(msd)
+        fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
+            Ok(evaluate_msd(&self.cloud, &self.rotated_shape, *p))
         }
     }
 
+    fn normalize(cloud: &Matrix3N, msd: f64) -> f64 {
+        100.0 * msd / cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
+    }
+
     pub fn minimize(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
-        let phi_sectioning = GoldenSectionSearch::new(0.5, 1.1);
+        let phi_sectioning = GoldenSectionSearch::new(0.5, 1.1).expect("yup");
         let scaling_problem = CoordinateScalingProblem {
             cloud,
             rotated_shape: shape 
         };
-        let result = Executor::new(scaling_problem, phi_sectioning, 1.0)
-            .max_iters(100)
+        let result = Executor::new(scaling_problem, phi_sectioning)
+            .configure(|state| state.param(1.0).max_iters(100))
             .run()
             .unwrap();
 
-        let result_msd = result.state.best_cost;
-        let normalization: f64 = cloud.column_iter().map(|v| v.norm_squared()).sum();
-        100.0 * result_msd / normalization
+        if cfg!(debug_assertions) {
+            let scale = result.state.best_param.expect("present");
+            let direct = (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
+                / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt();
+            if (scale - direct).abs() > 1e-6 {
+                println!("-- Scaling {:e} vs direct {:e}", scale, direct);
+            }
+        }
+
+        normalize(&cloud, result.state.best_cost)
+    }
+
+    // TODO Untested, maybe faster?
+    // Final scale formula of section 2E in "Closed-form solution of absolute orientation with
+    // quaternions" by Berthold K.P. Horn in J. Opt. Soc. Am. A, 1986
+    pub fn direct(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
+        let factor = (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
+            / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt();
+        normalize(&cloud, evaluate_msd(&cloud, &shape, factor))
     }
 }
 
@@ -459,7 +453,7 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64)
 
     let evaluate_permutation = |p: Permutation| -> (Permutation, Fit) {
         let permuted_shape = apply_permutation(&shape_coordinates, &p);
-        let fit = fit_quaternion(&cloud, &permuted_shape);
+        let fit = quaternions::fit(&cloud, &permuted_shape);
         (p, fit)
     };
 
@@ -472,6 +466,12 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<(Permutation, f64)
     let rotated_shape = best_fit.rotate_rotor(permuted_shape);
 
     let csm = scaling::minimize(&cloud, &rotated_shape);
+    if cfg!(debug_assertions) {
+        let direct = scaling::direct(&cloud, &rotated_shape);
+        if (direct - csm).abs() > 1e-6 {
+            println!("- minimization: {:e}, direct: {:e}", csm, direct);
+        }
+    }
     Ok((best_permutation, csm))
 }
 
@@ -485,8 +485,7 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
     }
 
     let n_prematch = 5;
-
-    if n < n_prematch {
+    if n <= n_prematch {
         return polyhedron_similarity(x, s);
     }
 
@@ -503,30 +502,41 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
         msd: f64,
         mapping: PartialPermutation,
     }
+    let left_free: Vec<usize> = (n_prematch..n).collect();
 
     let narrow = (0..n).permutations(n_prematch).fold(
         PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new()},
-        |best_partial, vertices| -> PartialMsd {
+        |best, vertices| -> PartialMsd {
             let mut partial_map = PartialPermutation::with_capacity(n);
             vertices.iter().enumerate().for_each(|(k, v)| { partial_map.insert(k, *v); });
-            let partial_fit = fit_quaternion_with_map(&cloud, &shape_coordinates, &partial_map); 
+            let partial_fit = quaternions::fit_with_map(&cloud, &shape_coordinates, &partial_map); 
 
-            // If the rmsd caused only by the partial map is already worse, skip
-            if partial_fit.msd > best_partial.msd {
-                return best_partial;
+            // If the msd caused only by the partial map is already worse, skip
+            if partial_fit.msd > best.msd {
+                // println!("Skipped {:?}, partial fit msd {:e}", vertices, partial_fit.msd);
+                return best;
             }
 
             // Assemble cost matrix of matching each pair of unmatched vertices
-            let left_free: Vec<usize> = (n_prematch..n).collect();
             let right_free: Vec<usize> = (0..n)
                 .filter(|i| !vertices.contains(i))
                 .collect();
-
             assert_eq!(left_free.len(), right_free.len());
-            let v = left_free.len();
 
+            let v = left_free.len();
             let prematch_rotated_shape = partial_fit.rotate_rotor(shape_coordinates.clone());
-            let costs = na::DMatrix::from_fn(v, v, |i, j| (cloud.column(i) - prematch_rotated_shape.column(j)).norm_squared());
+
+            if cfg!(debug_assertions) {
+                let partial_msd: f64 = vertices.iter()
+                    .enumerate()
+                    .map(|(i, j)| (cloud.column(i) - prematch_rotated_shape.column(*j)).norm_squared())
+                    .sum();
+                approx::assert_relative_eq!(partial_fit.msd, partial_msd, epsilon=1e-6);
+            }
+
+            let cost_fn = |i, j| (cloud.column(left_free[i]) - prematch_rotated_shape.column(right_free[j])).norm_squared();
+            let costs = na::DMatrix::from_fn(v, v, cost_fn);
+            
             // Brute-force the costs matrix linear assignment permutation
             let (_, sub_permutation) = permutations(v)
                 .map(|permutation| ((0..v).map(|i| costs[(i, permutation[i] as usize)]).sum(), permutation) )
@@ -539,9 +549,18 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
             }
 
             // Make a clean quaternion fit with the full mapping
-            let full_fit = fit_quaternion_with_map(&cloud, &shape_coordinates, &partial_map);
+            assert_eq!(partial_map.len(), n);
+            assert!(itertools::equal(partial_map.keys().copied().sorted(), 0..n));
+            assert!(itertools::equal(partial_map.values().copied().sorted(), 0..n));
+            let full_fit = quaternions::fit_with_map(&cloud, &shape_coordinates, &partial_map);
 
-            PartialMsd {msd: full_fit.msd, mapping: partial_map}
+            println!("Tried vertices {:?}, linear assigning {:?}, msd {:e}", vertices, right_free, full_fit.msd);
+
+            if full_fit.msd < best.msd {
+                PartialMsd {msd: full_fit.msd, mapping: partial_map}
+            } else {
+                best
+            }
         }
     );
 
@@ -557,10 +576,11 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<(Permutat
     };
 
     let permuted_shape = apply_permutation(&shape_coordinates, &best_permutation);
-    let fit = fit_quaternion(&cloud, &permuted_shape);
+    let fit = quaternions::fit(&cloud, &permuted_shape);
     let rotated_shape = fit.rotate_rotor(permuted_shape);
 
     let csm = scaling::minimize(&cloud, &rotated_shape);
+    println!("- minimization: {:e}, direct: {:e}", csm, scaling::direct(&cloud, &rotated_shape));
     Ok((best_permutation, csm))
 }
 
@@ -586,32 +606,6 @@ mod tests {
 
     fn random_cloud(n: usize) -> Matrix3N {
         unit_sphere_normalize(Matrix3N::new_random(n))
-    }
-
-    #[test]
-    fn quaternion_fit() {
-        let v = 6;
-        let stator = random_cloud(v);
-        let true_quaternion = random_rotation();
-
-        let rotor = true_quaternion.to_rotation_matrix() * stator.clone();
-        let fit = fit_quaternion(&stator, &rotor);
-        approx::assert_relative_eq!(true_quaternion, fit.quaternion, epsilon = 1e-6);
-
-        // Test postconditions
-        approx::assert_relative_eq!(rotor, fit.rotate_stator(stator.clone()), epsilon=1e-6);
-        approx::assert_relative_eq!(stator, fit.rotate_rotor(rotor.clone()), epsilon=1e-6);
-
-        // Inexact fit msd from eigenvalue is accurate
-        let distorted_rotor = rotor + 0.01 * random_cloud(v);
-        let distorted_fit = fit_quaternion(&stator, &distorted_rotor);
-        let rotated_rotor = distorted_fit.quaternion.inverse().to_rotation_matrix() * distorted_rotor;
-        let msd: f64 = (stator.clone() - rotated_rotor)
-            .column_iter()
-            .map(|col| col.norm_squared())
-            .sum();
-
-        approx::assert_relative_eq!(msd, distorted_fit.msd, epsilon = 1e-6);
     }
 
     #[test]
@@ -660,6 +654,10 @@ mod tests {
         let fn_names = ["similarity", "similarity_shortcut"];
 
         for shape in SHAPES.iter() {
+            if shape.size() < 5 {
+                continue;
+            }
+
             let cloud = shape.coordinates.clone().insert_column(shape.size(), 0.0);
             let random_rotation = random_rotation().to_rotation_matrix();
             let rotated_cloud = unit_sphere_normalize(random_rotation * cloud);
@@ -687,6 +685,8 @@ mod tests {
             let fn_permutation_results: Vec<Permutation> = results.iter().map(|(p, _)| { let mut q = p.clone(); q.sigma.pop(); q }).collect(); // drop centroid
             let mutual_rotations = fn_permutation_results.iter().tuple_windows().all(|(p, q)| shape.is_rotation(p, q, &shape_rotations));
             assert!(mutual_rotations);
+
+            println!("");
         }
     }
 
