@@ -27,7 +27,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 
 use derive_more::{From, Into};
-use crate::index::Index;
+use crate::index::{Index, NewTypeIndex};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Name {
@@ -444,6 +444,11 @@ mod scaling {
     }
 }
 
+struct StrongPoints<IndexingType> where IndexingType: NewTypeIndex {
+    pub matrix: Matrix3N,
+    index_type: PhantomData<IndexingType>
+}
+
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum SimilarityError {
     #[error("Number of positions does not match shape size")]
@@ -674,6 +679,39 @@ mod tests {
         for rot in &tetr_rotations {
             let rotated_perm = perm.compose(&rot.permutation).expect("fine");
             assert!(TETRAHEDRON.is_rotation(&perm, &rotated_perm, &tetr_rotations));
+        }
+    }
+
+    #[test]
+    fn similarity_postconditions() {
+        for shape in SHAPES.iter() {
+            let cloud = shape.coordinates.clone().insert_column(shape.size(), 0.0);
+
+            let random_rotation = random_rotation().to_rotation_matrix();
+            let rotated_cloud = unit_sphere_normalize(random_rotation * cloud);
+            // Centroid preserving random permutation
+            let random_permutation = {
+                let mut p = random_permutation(rotated_cloud.ncols() - 1);
+                p.sigma.push(p.set_size() as u8);
+                p
+            };
+            let permuted_cloud = apply_permutation(&rotated_cloud, &random_permutation);
+
+            let similarity = polyhedron_similarity(&permuted_cloud, shape.name).expect("Ok");
+
+            // Bijection must be a rotation of applied random permutation
+            let shape_rotations = shape.generate_rotations();
+            let pop_centroid = |p: &Permutation| {
+                let mut q = p.clone();
+                let maybe_centroid = q.sigma.pop();
+                // Ensure centroid was at end of permutation
+                assert_eq!(maybe_centroid, Some(q.set_size() as u8));
+                q
+            };
+            let a = pop_centroid(&random_permutation);
+            let b = pop_centroid(&similarity.bijection.permutation);
+            println!("shape {}, random: {}, result: {}", shape.name.repr(), a, b);
+            assert!(shape.is_rotation(&a, &b, &shape_rotations));
         }
     }
 

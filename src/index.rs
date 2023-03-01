@@ -9,13 +9,15 @@ pub trait Index {
     fn get(&self) -> Self::Type;
 }
 
+// Collective trait
 pub trait NewTypeIndex : 
     Index 
     + Copy
     + From<<Self as Index>::Type> 
-    + Into<<Self as Index>::Type> 
+    + Into<<Self as Index>::Type>
 {}
 
+// Blanket impl to add From and Into if Index is defined
 impl<T> NewTypeIndex for T where T: Index 
     + Copy
     + From<<Self as Index>::Type> 
@@ -27,7 +29,7 @@ mod tests {
     use crate::index::Index;
     use derive_more::{From, Into};
 
-    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
+    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     struct Foo(u8);
 
     #[test]

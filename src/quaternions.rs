@@ -42,6 +42,10 @@ impl Fit {
 
 fn quaternion_decomposition(mat: Matrix4) -> Fit {
     let decomposition = na::SymmetricEigen::new(mat);
+    // Eigenvalues are unsorted here, we seek the minimum value
+    // NOTE: Best inverted fit uses eigenvector of largest eigenvector l_3 
+    // with msd of 0.5 * (l_0 + l_1 + l_2 - l_3), so can check if inversion
+    // better quite easily
     let (min_eigenvalue_index, msd) = decomposition.eigenvalues
         .iter()
         .enumerate()
@@ -59,8 +63,10 @@ fn quaternion_decomposition(mat: Matrix4) -> Fit {
 
 /// Find a quaternion that best transforms the stator into the rotor
 ///
-/// Postcondition is rotor = quat * stator and stator = quat.inverse() * rotor,
-/// see rotate_rotor and rotate_stator fns
+/// Postconditions 
+/// - rotor = quat * stator and stator = quat.inverse() * rotor,
+///   see rotate_rotor and rotate_stator fns
+/// - The resulting quaternion is a proper rotation (no inversions)
 pub fn fit(stator: &Matrix3N, rotor: &Matrix3N) -> Fit {
     // Ensure centroids are removed from matrices
     assert!(stator.column_mean().norm_squared() < 1e-8);
