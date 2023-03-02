@@ -131,7 +131,7 @@ impl Rotor {
 #[cfg(test)]
 mod tests {
     use crate::quaternions::*;
-    use crate::shapes::{unit_sphere_normalize, apply_permutation};
+    use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
     use crate::permutation::Permutation;
     use nalgebra::{Vector3, Unit};
 
