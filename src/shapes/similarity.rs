@@ -1,24 +1,27 @@
-extern crate nalgebra as na;
+// TODO
+// - Add lapjv linear assignment variation
+// - Add skip lists
+// - Unify implementations (?)
+// - "Horn [13] considered including a scaling in the transfor-
+//   mation T in eq. (11). This is quite easily accommodated." 
+//   from https://arxiv.org/pdf/physics/0506177.pdf
+//   -> Could maybe radically simplify the scaling optimization step
+// 
 
+extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
 
-extern crate thiserror;
-use num_traits::ToPrimitive;
 use thiserror::Error;
-
-use std::collections::HashMap;
-use std::marker::PhantomData;
 use itertools::Itertools;
+use std::collections::HashMap;
 
+use crate::strong::matrix::StrongPoints;
+use crate::strong::bijection::{Bijection, bijections};
 use crate::permutation::{Permutation, permutations};
-use crate::bijection::{Bijection, bijections};
-use crate::quaternions;
 use crate::quaternions::Fit;
-
-extern crate argmin;
-use crate::index::NewTypeIndex;
-
 use crate::shapes::*;
+
+
 
 pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     // Remove centroid
@@ -106,74 +109,6 @@ mod scaling {
         let factor = (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
             / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt();
         normalize(&cloud, evaluate_msd(&cloud, &shape, factor))
-    }
-}
-
-pub struct AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
-    pub matrix: &'a Matrix3N,
-    index_type: PhantomData<I>
-}
-
-impl<'a, I> AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
-    pub fn new(matrix: &'a Matrix3N) -> AsNewTypeIndexedMatrix<'a, I> {
-        AsNewTypeIndexedMatrix {matrix, index_type: PhantomData}
-    }
-
-    pub fn column(&self, index: I) -> na::VectorSlice3<'a, f64> {
-        self.matrix.column(index.get().to_usize().expect("Conversion failure"))
-    }
-
-    pub fn quaternion_fit_with_rotor(&self, rotor: AsNewTypeIndexedMatrix<I>) -> Fit {
-        quaternions::fit(&self.matrix, &rotor.matrix)
-    }
-
-    pub fn quaternion_fit_with_map<J>(&self, rotor: AsNewTypeIndexedMatrix<J>, map: &HashMap<I, J>) -> Fit where J: NewTypeIndex {
-        assert!(self.matrix.column_mean().norm_squared() < 1e-8);
-        assert!(rotor.matrix.column_mean().norm_squared() < 1e-8);
-        
-        let mut a = nalgebra::Matrix4::<f64>::zeros();
-        for (stator_i, rotor_i) in map {
-            let stator_col = self.column(*stator_i);
-            let rotor_col = rotor.column(*rotor_i);
-            a += quaternions::quaternion_pair_contribution(&stator_col, &rotor_col);
-        }
-
-        quaternions::quaternion_decomposition(a)
-    }
-
-    pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
-        StrongPoints::new(apply_permutation(&self.matrix, &bijection.permutation))
-    }
-}
-
-pub struct StrongPoints<I> where I: NewTypeIndex {
-    pub matrix: Matrix3N,
-    index_type: PhantomData<I>
-}
-
-impl<I> StrongPoints<I> where I: NewTypeIndex {
-    fn raise(&self) -> AsNewTypeIndexedMatrix<I> {
-        AsNewTypeIndexedMatrix::new(&self.matrix)
-    }
-
-    pub fn new(matrix: Matrix3N) -> StrongPoints<I> {
-        StrongPoints {matrix, index_type: PhantomData}
-    }
-
-    pub fn column(&self, index: I) -> na::VectorSlice3<f64> {
-        self.raise().column(index)
-    }
-
-    pub fn quaternion_fit_with_rotor(&self, rotor: &StrongPoints<I>) -> Fit {
-        self.raise().quaternion_fit_with_rotor(rotor.raise())
-    }
-
-    pub fn quaternion_fit_with_map<J>(&self, rotor: &StrongPoints<J>, map: &HashMap<I, J>) -> Fit where J: NewTypeIndex {
-        self.raise().quaternion_fit_with_map(rotor.raise(), &map)
-    }
-
-    pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
-        self.raise().apply_bijection(&bijection)
     }
 }
 

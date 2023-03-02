@@ -26,9 +26,12 @@ impl<T> NewTypeIndex for T where T: Index
     + PartialEq
 {}
 
+pub mod matrix;
+pub mod bijection;
+
 #[cfg(test)]
 mod tests {
-    use crate::index::Index;
+    use crate::strong::Index;
 
     #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     struct Foo(u8);

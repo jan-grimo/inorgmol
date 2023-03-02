@@ -4,7 +4,7 @@ use num_traits::FromPrimitive;
 use delegate::delegate;
 
 use crate::permutation::{Permutation, PermutationError};
-use crate::index::NewTypeIndex;
+use crate::strong::NewTypeIndex;
 
 #[derive(PartialEq, Eq, PartialOrd, Clone, Debug, Hash)]
 pub struct Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
@@ -109,8 +109,8 @@ pub fn bijections<T, U>(n: usize) -> BijectionIterator<T, U> where T: NewTypeInd
 #[cfg(test)]
 mod tests {
     use crate::permutation::Permutation;
-    use crate::bijection::Bijection;
-    use crate::index::Index;
+    use crate::strong::bijection::Bijection;
+    use crate::strong::Index;
 
     #[derive(Index, Debug, Copy, Clone, PartialEq)]
     struct Foo(u8);

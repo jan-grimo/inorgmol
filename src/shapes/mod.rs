@@ -1,23 +1,12 @@
 // TODO
 // - Expand shape data
-// - Add lapjv linear assignment variation
-// - Add skip lists
-// - Unify implementations (?)
-// - "Horn [13] considered including a scaling in the transfor-
-//   mation T in eq. (11). This is quite easily accommodated." 
-//   from https://arxiv.org/pdf/physics/0506177.pdf
-//   -> Could maybe radically simplify the scaling optimization step
-// 
-
 
 extern crate nalgebra as na;
-
 type Matrix3N = na::Matrix3xX<f64>;
 
-extern crate thiserror;
-
-use crate::index::{Index, NewTypeIndex};
 use std::collections::HashSet;
+
+use crate::strong::{Index, NewTypeIndex};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Name {
@@ -74,7 +63,7 @@ impl std::fmt::Display for Name {
 }
 
 use crate::permutation::Permutation;
-use crate::bijection::Bijection;
+use crate::strong::bijection::Bijection;
 
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Vertex(u8);
@@ -109,7 +98,7 @@ impl Shape {
     ///
     /// ```
     /// # use molassembler::shapes::*;
-    /// # use molassembler::bijection::bijections;
+    /// # use molassembler::strong::bijection::bijections;
     /// # use std::collections::HashSet;
     /// # use std::iter::FromIterator;
     /// let line_rotations = LINE.generate_rotations();
@@ -468,7 +457,7 @@ pub mod similarity;
 #[cfg(test)]
 mod tests {
     use crate::shapes::*;
-    use crate::shapes::similarity::AsNewTypeIndexedMatrix;
+    use crate::strong::matrix::AsNewTypeIndexedMatrix;
 
     fn tetrahedron_volume(tetrahedron: &[Vertex; 4], points: &Matrix3N) -> f64 {
         let coords = AsNewTypeIndexedMatrix::<Vertex>::new(points);
