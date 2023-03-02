@@ -607,24 +607,28 @@ struct StrongPoints<I> where I: NewTypeIndex {
 }
 
 impl<I> StrongPoints<I> where I: NewTypeIndex {
+    fn raise(&self) -> AsNewTypeIndexedMatrix<I> {
+        AsNewTypeIndexedMatrix::new(&self.matrix)
+    }
+
     pub fn new(matrix: Matrix3N) -> StrongPoints<I> {
         StrongPoints {matrix, index_type: PhantomData}
     }
 
     pub fn column(&self, index: I) -> na::VectorSlice3<f64> {
-        AsNewTypeIndexedMatrix::<I>::new(&self.matrix).column(index)
+        self.raise().column(index)
     }
 
     pub fn quaternion_fit_with_rotor(&self, rotor: &StrongPoints<I>) -> Fit {
-        quaternions::fit(&self.matrix, &rotor.matrix)
+        self.raise().quaternion_fit_with_rotor(rotor.raise())
     }
 
     pub fn quaternion_fit_with_map<J>(&self, rotor: &StrongPoints<J>, map: &HashMap<I, J>) -> Fit where J: NewTypeIndex {
-        AsNewTypeIndexedMatrix::<I>::new(&self.matrix).quaternion_fit_with_map(AsNewTypeIndexedMatrix::<J>::new(&rotor.matrix), &map)
+        self.raise().quaternion_fit_with_map(rotor.raise(), &map)
     }
 
     pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
-        AsNewTypeIndexedMatrix::<I>::new(&self.matrix).apply_bijection(&bijection)
+        self.raise().apply_bijection(&bijection)
     }
 }
 
