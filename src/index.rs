@@ -1,10 +1,10 @@
 use num_traits::int::PrimInt;
-use num_traits::FromPrimitive;
+use num_traits::{FromPrimitive, ToPrimitive};
 
 pub use index_derive::Index;
 
 pub trait Index {
-    type Type : PrimInt + FromPrimitive;
+    type Type : PrimInt + ToPrimitive + FromPrimitive;
 
     fn get(&self) -> Self::Type;
 }
@@ -15,13 +15,15 @@ pub trait NewTypeIndex :
     + Copy
     + From<<Self as Index>::Type> 
     + Into<<Self as Index>::Type>
+    + PartialEq
 {}
 
-// Blanket impl to add From and Into if Index is defined
+// Blanket impl for any Index types since NewTypeIndex doesn't define anything
 impl<T> NewTypeIndex for T where T: Index 
     + Copy
     + From<<Self as Index>::Type> 
     + Into<<Self as Index>::Type> 
+    + PartialEq
 {}
 
 #[cfg(test)]

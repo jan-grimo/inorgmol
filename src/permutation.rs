@@ -84,6 +84,19 @@ pub fn slice_prev<T: PartialOrd>(slice: &mut [T]) -> bool {
     }
 }
 
+pub fn slice_apply<T: PrimInt, U: Copy>(permutation: &[T], values: &[U]) -> Option<Vec<U>> {
+    let n = permutation.len();
+    if n != values.len() {
+        return None;
+    } 
+
+    let mut permuted = values.to_vec();
+    for i in 0..n {
+        permuted[permutation[i].to_usize().unwrap()] = values[i];
+    }
+    Some(permuted)
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Clone, Debug, Hash)]
 pub struct Permutation {
     // One-line representation
@@ -278,16 +291,7 @@ impl Permutation {
     /// # }
     /// ```
     pub fn apply<T: Copy>(&self, other: &Vec<T>) -> Result<Vec<T>, PermutationError> {
-        let n = self.sigma.len();
-        if n != other.len() {
-            return Err(PermutationError::LengthMismatch);
-        } 
-
-        let mut permuted = other.clone();
-        for i in 0..n {
-            permuted[self.sigma[i] as usize] = other[i];
-        }
-        Ok(permuted)
+        slice_apply(self.sigma.as_slice(), other.as_slice()).ok_or(PermutationError::LengthMismatch)
     }
 
     /// Compose two permutations into a new permutation

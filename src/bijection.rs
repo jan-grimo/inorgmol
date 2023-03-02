@@ -19,6 +19,10 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
         Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
     }
 
+    pub fn from_index(n: usize, i: usize) -> Bijection<Key, Value> {
+        Bijection::new(Permutation::from_index(n, i))
+    }
+
     pub fn identity(n: usize) -> Bijection<Key, Value> {
         Bijection::new(Permutation::identity(n))
     }

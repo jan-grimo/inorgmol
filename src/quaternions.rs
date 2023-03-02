@@ -7,7 +7,9 @@ type Matrix4 = na::Matrix4<f64>;
 
 use std::collections::HashMap;
 
-fn quaternion_pair_contribution<'a>(stator_col: &na::MatrixSlice3x1<'a, f64>, rotor_col: &na::MatrixSlice3x1<'a, f64>) -> Matrix4 {
+use derive_more::From;
+
+pub fn quaternion_pair_contribution<'a>(stator_col: &na::MatrixSlice3x1<'a, f64>, rotor_col: &na::MatrixSlice3x1<'a, f64>) -> Matrix4 {
     let mut a = Matrix4::zeros();
 
     let forward_difference = (rotor_col - stator_col).transpose();
@@ -32,15 +34,15 @@ pub struct Fit {
 }
 
 impl Fit {
-    pub fn rotate_stator(&self, stator: Matrix3N) -> Matrix3N {
+    pub fn rotate_stator(&self, stator: &Matrix3N) -> Matrix3N {
         self.quaternion.to_rotation_matrix() * stator
     }
-    pub fn rotate_rotor(&self, rotor: Matrix3N) -> Matrix3N {
+    pub fn rotate_rotor(&self, rotor: &Matrix3N) -> Matrix3N {
         self.quaternion.inverse().to_rotation_matrix() * rotor
     }
 }
 
-fn quaternion_decomposition(mat: Matrix4) -> Fit {
+pub fn quaternion_decomposition(mat: Matrix4) -> Fit {
     let decomposition = na::SymmetricEigen::new(mat);
     // Eigenvalues are unsorted here, we seek the minimum value
     // NOTE: Best inverted fit uses eigenvector of largest eigenvector l_3 
@@ -96,6 +98,36 @@ pub fn fit_with_map(stator: &Matrix3N, rotor: &Matrix3N, vertex_map: &HashMap<us
     quaternion_decomposition(a)
 }
 
+#[derive(Debug, Clone, From)]
+pub struct Stator {
+    pub matrix: Matrix3N
+}
+
+#[derive(Debug, Clone, From)]
+pub struct Rotor {
+    pub matrix: Matrix3N
+}
+
+impl Stator {
+    pub fn fit(&self, rotor: &Rotor) -> Fit {
+        crate::quaternions::fit(&self.matrix, &rotor.matrix)
+    }
+
+    pub fn fit_with_map(&self, rotor: &Rotor, vertex_map: &HashMap<usize, usize>) -> Fit {
+        crate::quaternions::fit_with_map(&self.matrix, &rotor.matrix, vertex_map)
+    }
+
+    pub fn rotate(self, fit: &Fit) -> Matrix3N {
+        fit.quaternion.to_rotation_matrix() * self.matrix
+    }
+}
+
+impl Rotor {
+    pub fn rotate(self, fit: &Fit) -> Matrix3N {
+        fit.quaternion.inverse().to_rotation_matrix() * self.matrix
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::quaternions::*;
@@ -123,16 +155,16 @@ mod tests {
     }
 
     struct Case {
-        stator: Matrix3N,
-        rotor: Matrix3N,
+        stator: Stator,
+        rotor: Rotor,
         quaternion: Quaternion
     }
 
     impl Case {
         fn new(v: usize) -> Case {
-            let stator = random_cloud(v);
+            let stator = Stator::from(random_cloud(v));
             let quaternion = random_rotation();
-            let rotor = quaternion.to_rotation_matrix() * stator.clone();
+            let rotor = Rotor::from(quaternion.to_rotation_matrix() * stator.matrix.clone());
 
 
             Case {stator, rotor, quaternion}
@@ -143,12 +175,14 @@ mod tests {
     fn basics() {
         let case = Case::new(6);
 
-        let fit = fit(&case.stator, &case.rotor);
+        let fit = case.stator.fit(&case.rotor);
         approx::assert_relative_eq!(case.quaternion, fit.quaternion, epsilon = 1e-6);
 
         // Test postconditions
-        approx::assert_relative_eq!(case.rotor, fit.rotate_stator(case.stator.clone()), epsilon=1e-6);
-        approx::assert_relative_eq!(case.stator, fit.rotate_rotor(case.rotor.clone()), epsilon=1e-6);
+        approx::assert_relative_eq!(case.rotor.matrix, fit.rotate_stator(&case.stator.matrix), epsilon=1e-6);
+        approx::assert_relative_eq!(case.rotor.matrix, case.stator.clone().rotate(&fit), epsilon=1e-6);
+        approx::assert_relative_eq!(case.stator.matrix, fit.rotate_rotor(&case.rotor.matrix), epsilon=1e-6);
+        approx::assert_relative_eq!(case.stator.matrix, case.rotor.rotate(&fit), epsilon=1e-6);
     }
 
     #[test]
@@ -157,10 +191,10 @@ mod tests {
         let case = Case::new(v);
 
         // Inexact fit msd from eigenvalue is accurate
-        let distorted_rotor = case.rotor + 0.01 * random_cloud(v);
-        let distorted_fit = fit(&case.stator, &distorted_rotor);
-        let rotated_rotor = distorted_fit.quaternion.inverse().to_rotation_matrix() * distorted_rotor;
-        let msd: f64 = (case.stator.clone() - rotated_rotor)
+        let distorted_rotor = Rotor::from(case.rotor.matrix + 0.01 * random_cloud(v));
+        let distorted_fit = case.stator.fit(&distorted_rotor);
+        let rotated_rotor = distorted_fit.quaternion.inverse().to_rotation_matrix() * distorted_rotor.matrix;
+        let msd: f64 = (case.stator.matrix.clone() - rotated_rotor)
             .column_iter()
             .map(|col| col.norm_squared())
             .sum();
@@ -173,7 +207,7 @@ mod tests {
         let v = 6;
         let case = Case::new(v);
         let permutation = random_permutation(v);
-        let permuted_rotor = apply_permutation(&case.rotor, &permutation);
+        let permuted_rotor = Rotor::from(apply_permutation(&case.rotor.matrix, &permutation));
         let partial_permutation = {
             let mut p = HashMap::new();
             for (i, j) in permutation.iter_pairs().take(3) {
@@ -181,7 +215,7 @@ mod tests {
             }
             p
         };
-        let partial_fit = fit_with_map(&case.stator, &permuted_rotor, &partial_permutation);
+        let partial_fit = case.stator.fit_with_map(&permuted_rotor, &partial_permutation);
 
         approx::assert_relative_eq!(partial_fit.msd, 0.0, epsilon = 1e-6);
     }

@@ -19,11 +19,13 @@ pub type Matrix3 = na::Matrix3<f64>;
 pub type Quaternion = na::UnitQuaternion<f64>;
 
 extern crate thiserror;
+use num_traits::ToPrimitive;
 use thiserror::Error;
 
 extern crate argmin;
 
 use std::collections::{HashMap, HashSet};
+use std::marker::PhantomData;
 use itertools::Itertools;
 
 use derive_more::{From, Into};
@@ -78,13 +80,13 @@ use crate::bijection::{Bijection, bijections};
 use crate::quaternions;
 use crate::quaternions::Fit;
 
-#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Vertex(u8);
 
 type Rotation = Bijection<Vertex, Vertex>;
 type Mirror = Bijection<Vertex, Vertex>;
 
-#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Column(u8);
 
 pub static ORIGIN: u8 = u8::MAX;
@@ -159,9 +161,8 @@ impl Shape {
         rotations
     }
 
-    // maybe strong variant is a, b of type X -> Vertex
-    pub fn is_rotation(&self, a: &Permutation, b: &Permutation, rotations: &HashSet<Rotation>) -> bool {
-        rotations.iter().any(|r| a.compose(&r.permutation).expect("Passed bad rotations") == *b)
+    pub fn is_rotation<T: NewTypeIndex>(&self, a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
+        rotations.iter().any(|r| r.compose(a).expect("Bad occupations") == *b)
     }
 }
 
@@ -374,6 +375,9 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     x
 }
 
+// Column-permute a matrix
+//
+// Post-condition is x.column(i) == result.column(p(i))
 pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
     assert_eq!(x.ncols(), p.set_size());
     let inverse = p.inverse();
@@ -444,9 +448,41 @@ mod scaling {
     }
 }
 
-struct StrongPoints<IndexingType> where IndexingType: NewTypeIndex {
+struct StrongPoints<I> where I: NewTypeIndex {
     pub matrix: Matrix3N,
-    index_type: PhantomData<IndexingType>
+    index_type: PhantomData<I>
+}
+
+impl<I> StrongPoints<I> where I: NewTypeIndex {
+    pub fn new(matrix: Matrix3N) -> StrongPoints<I> {
+        StrongPoints {matrix, index_type: PhantomData}
+    }
+
+    pub fn column(&self, index: I) -> na::VectorSlice3<f64> {
+        self.matrix.column(index.get().to_usize().expect("Conversion failure"))
+    }
+
+    pub fn quaternion_fit_with_rotor(&self, rotor: &StrongPoints<I>) -> Fit {
+        quaternions::fit(&self.matrix, &rotor.matrix)
+    }
+
+    pub fn quaternion_fit_with_map<J>(&self, rotor: &StrongPoints<J>, map: &HashMap<I, J>) -> Fit where J: NewTypeIndex {
+        assert!(self.matrix.column_mean().norm_squared() < 1e-8);
+        assert!(rotor.matrix.column_mean().norm_squared() < 1e-8);
+        
+        let mut a = nalgebra::Matrix4::<f64>::zeros();
+        for (stator_i, rotor_i) in map {
+            let stator_col = self.column(*stator_i);
+            let rotor_col = rotor.column(*rotor_i);
+            a += quaternions::quaternion_pair_contribution(&stator_col, &rotor_col);
+        }
+
+        quaternions::quaternion_decomposition(a)
+    }
+
+    pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
+        StrongPoints::new(apply_permutation(&self.matrix, &bijection.permutation))
+    }
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -456,13 +492,13 @@ pub enum SimilarityError {
 }
 
 pub struct Similarity {
-    pub bijection: Bijection<Column, Vertex>,
+    pub bijection: Bijection<Vertex, Column>,
     pub csm: f64,
 }
 
 /// Polyhedron similarity performing quaternion fits on all vertices 
 pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
-    type Occupation = Bijection<Column, Vertex>;
+    type Occupation = Bijection<Vertex, Column>;
 
     let shape = shape_from_name(s);
     let n = x.ncols();
@@ -470,16 +506,16 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<Similarity, Simila
         return Err(SimilarityError::PositionNumberMismatch);
     }
 
-    let cloud = unit_sphere_normalize(x.clone());
+    let cloud = StrongPoints::new(unit_sphere_normalize(x.clone()));
     // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
-    let shape_coordinates = unit_sphere_normalize(shape_coordinates);
+    let shape_coordinates = StrongPoints::new(unit_sphere_normalize(shape_coordinates));
 
     let evaluate_permutation = |p: Occupation| -> (Occupation, Fit) {
-        let permuted_shape = apply_permutation(&shape_coordinates, &p.permutation);
-        let fit = quaternions::fit(&cloud, &permuted_shape);
+        let permuted_shape = shape_coordinates.apply_bijection(&p);
+        let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
         (p, fit)
     };
 
@@ -488,12 +524,12 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<Similarity, Simila
         .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("NaN in MSDs"))
         .expect("Not a single permutation available to try");
 
-    let permuted_shape = apply_permutation(&shape_coordinates, &best_bijection.permutation);
-    let rotated_shape = best_fit.rotate_rotor(permuted_shape);
+    let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
+    let rotated_shape = best_fit.rotate_rotor(&permuted_shape.matrix);
 
-    let csm = scaling::minimize(&cloud, &rotated_shape);
+    let csm = scaling::minimize(&cloud.matrix, &rotated_shape);
     if cfg!(debug_assertions) {
-        let direct = scaling::direct(&cloud, &rotated_shape);
+        let direct = scaling::direct(&cloud.matrix, &rotated_shape);
         if (direct - csm).abs() > 1e-6 {
             println!("- minimization: {:e}, direct: {:e}", csm, direct);
         }
@@ -504,6 +540,7 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<Similarity, Simila
 /// Polyhedron similarity performing quaternion fits only on a limited number of 
 /// vertices before assigning the rest by brute force linear assignment
 pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+    type Occupation = Bijection<Vertex, Column>;
     let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.size() + 1 {
@@ -515,107 +552,119 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<Similarit
         return polyhedron_similarity(x, s);
     }
 
-    let cloud = unit_sphere_normalize(x.clone());
+    let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x.clone()));
     // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
+    let shape_coordinates = StrongPoints::<Vertex>::new(shape_coordinates);
 
-    type PartialPermutation = HashMap<usize, usize>;
+    type PartialPermutation = HashMap<Column, Vertex>;
 
     struct PartialMsd {
         msd: f64,
         mapping: PartialPermutation,
     }
-    let left_free: Vec<usize> = (n_prematch..n).collect();
+    let left_free: Vec<Column> = (n_prematch..n).map(|i| Column::from(i as u8)).collect();
 
-    let narrow = (0..n).permutations(n_prematch).fold(
-        PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new()},
-        |best, vertices| -> PartialMsd {
-            let mut partial_map = PartialPermutation::with_capacity(n);
-            vertices.iter().enumerate().for_each(|(k, v)| { partial_map.insert(k, *v); });
-            let partial_fit = quaternions::fit_with_map(&cloud, &shape_coordinates, &partial_map); 
+    let narrow = (0..n)
+        .map(|i| Vertex::from(i as u8))
+        .permutations(n_prematch)
+        .fold(
+            PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new()},
+            |best, vertices| -> PartialMsd {
+                let mut partial_map = PartialPermutation::with_capacity(n);
+                vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c as u8), *v); });
+                let partial_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
 
-            // If the msd caused only by the partial map is already worse, skip
-            if partial_fit.msd > best.msd {
-                return best;
+                // If the msd caused only by the partial map is already worse, skip
+                if partial_fit.msd > best.msd {
+                    return best;
+                }
+
+                // Assemble cost matrix of matching each pair of unmatched vertices
+                let right_free: Vec<Vertex> = (0..n)
+                    .map(|i| Vertex::from(i as u8))
+                    .filter(|v| !vertices.contains(v))
+                    .collect();
+                debug_assert_eq!(left_free.len(), right_free.len());
+
+                let v = left_free.len();
+                let prematch_rotated_shape = partial_fit.rotate_rotor(&shape_coordinates.matrix.clone());
+                let prematch_rotated_shape = StrongPoints::<Vertex>::new(prematch_rotated_shape);
+
+                if cfg!(debug_assertions) {
+                    let partial_msd: f64 = vertices.iter()
+                        .enumerate()
+                        .map(|(i, j)| (cloud.matrix.column(i) - prematch_rotated_shape.column(*j)).norm_squared())
+                        .sum();
+                    approx::assert_relative_eq!(partial_fit.msd, partial_msd, epsilon=1e-6);
+                }
+
+                let cost_fn = |i, j| (cloud.column(left_free[i]) - prematch_rotated_shape.column(right_free[j])).norm_squared();
+                let costs = na::DMatrix::from_fn(v, v, cost_fn);
+                
+                // Brute-force the costs matrix linear assignment permutation
+                let (_, sub_permutation) = permutations(v)
+                    .map(|permutation| ((0..v).map(|i| costs[(i, permutation[i] as usize)]).sum(), permutation) )
+                    .min_by(|(a, _): &(f64, Permutation), (b, _): &(f64, Permutation)| a.partial_cmp(b).expect("Encountered NaNs"))
+                    .expect("At least one permutation present");
+
+                // Fuse pre-match and best subpermutation
+                for (i, j) in sub_permutation.iter_pairs() {
+                    partial_map.insert(left_free[i], right_free[*j as usize]);
+                }
+
+                if cfg!(debug_assertions) {
+                    assert_eq!(partial_map.len(), n);
+                    assert!(itertools::equal(
+                        partial_map.keys().copied().sorted(), 
+                        (0..n).map(|i| Column::from(i as u8))
+                    ));
+                    assert!(itertools::equal(
+                        partial_map.values().copied().sorted(), 
+                        (0..n).map(|i| Vertex::from(i as u8))
+                    ));
+                }
+
+                // Make a clean quaternion fit with the full mapping
+                let full_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
+
+                println!("Tried vertices {:?}, linear assigning {:?}, msd {:e}", vertices, right_free, full_fit.msd);
+
+                if full_fit.msd < best.msd {
+                    PartialMsd {msd: full_fit.msd, mapping: partial_map}
+                } else {
+                    best
+                }
             }
-
-            // Assemble cost matrix of matching each pair of unmatched vertices
-            let right_free: Vec<usize> = (0..n)
-                .filter(|i| !vertices.contains(i))
-                .collect();
-            debug_assert_eq!(left_free.len(), right_free.len());
-
-            let v = left_free.len();
-            let prematch_rotated_shape = partial_fit.rotate_rotor(shape_coordinates.clone());
-
-            if cfg!(debug_assertions) {
-                let partial_msd: f64 = vertices.iter()
-                    .enumerate()
-                    .map(|(i, j)| (cloud.column(i) - prematch_rotated_shape.column(*j)).norm_squared())
-                    .sum();
-                approx::assert_relative_eq!(partial_fit.msd, partial_msd, epsilon=1e-6);
-            }
-
-            let cost_fn = |i, j| (cloud.column(left_free[i]) - prematch_rotated_shape.column(right_free[j])).norm_squared();
-            let costs = na::DMatrix::from_fn(v, v, cost_fn);
-            
-            // Brute-force the costs matrix linear assignment permutation
-            let (_, sub_permutation) = permutations(v)
-                .map(|permutation| ((0..v).map(|i| costs[(i, permutation[i] as usize)]).sum(), permutation) )
-                .min_by(|(a, _): &(f64, Permutation), (b, _): &(f64, Permutation)| a.partial_cmp(b).expect("Encountered NaNs"))
-                .expect("At least one permutation present");
-
-            // Fuse pre-match and best subpermutation
-            for (i, j) in sub_permutation.iter_pairs() {
-                partial_map.insert(left_free[i], right_free[*j as usize]);
-            }
-
-            if cfg!(debug_assertions) {
-                assert_eq!(partial_map.len(), n);
-                assert!(itertools::equal(partial_map.keys().copied().sorted(), 0..n));
-                assert!(itertools::equal(partial_map.values().copied().sorted(), 0..n));
-            }
-
-            // Make a clean quaternion fit with the full mapping
-            let full_fit = quaternions::fit_with_map(&cloud, &shape_coordinates, &partial_map);
-
-            println!("Tried vertices {:?}, linear assigning {:?}, msd {:e}", vertices, right_free, full_fit.msd);
-
-            if full_fit.msd < best.msd {
-                PartialMsd {msd: full_fit.msd, mapping: partial_map}
-            } else {
-                best
-            }
-        }
-    );
+        );
 
     /* Given the best permutation for the rotational fit, we still have to
      * minimize over the isotropic scaling factor. It is cheaper to reorder the
      * positions once here for the minimization so that memory access is in-order
      * during the repeated scaling minimization function call.
      */
-    let best_permutation = {
+    let best_bijection = {
         let mut p = Permutation::identity(n);
-        narrow.mapping.iter().for_each(|(i, j)| { p.sigma[*i] = *j as u8; });
-        p
+        narrow.mapping.iter().for_each(|(c, v)| { p.sigma[v.get() as usize] = c.get(); });
+        Occupation::new(p)
     };
 
     if cfg!(debug_assertions) {
-        for (i, j) in narrow.mapping.iter() {
-            assert_eq!(best_permutation[*i] as usize, *j);
+        for (c, v) in narrow.mapping.iter() {
+            assert_eq!(best_bijection.get(v), Some(*c));
         }
     }
 
-    let permuted_shape = apply_permutation(&shape_coordinates, &best_permutation);
-    let fit = quaternions::fit(&cloud, &permuted_shape);
-    let rotated_shape = fit.rotate_rotor(permuted_shape);
+    let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
+    let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
+    let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
-    let csm = scaling::minimize(&cloud, &rotated_shape);
-    println!("- minimization: {:e}, direct: {:e}", csm, scaling::direct(&cloud, &rotated_shape));
-    Ok(Similarity {bijection: Bijection::new(best_permutation), csm})
+    let csm = scaling::minimize(&cloud.matrix, &rotated_shape);
+    println!("- minimization: {:e}, direct: {:e}", csm, scaling::direct(&cloud.matrix, &rotated_shape));
+    Ok(Similarity {bijection: best_bijection, csm})
 }
 
 #[cfg(test)]
@@ -675,88 +724,67 @@ mod tests {
     #[test]
     fn is_rotation_works() {
         let tetr_rotations = TETRAHEDRON.generate_rotations();
-        let perm = Permutation::from_index(4, 23);
+        let occupation: Bijection<Vertex, Column> = Bijection::from_index(4, 23);
         for rot in &tetr_rotations {
-            let rotated_perm = perm.compose(&rot.permutation).expect("fine");
-            assert!(TETRAHEDRON.is_rotation(&perm, &rotated_perm, &tetr_rotations));
+            let rotated_occupation = rot.compose(&occupation).expect("fine");
+            assert!(TETRAHEDRON.is_rotation(&occupation, &rotated_occupation, &tetr_rotations));
         }
     }
 
-    #[test]
-    fn similarity_postconditions() {
-        for shape in SHAPES.iter() {
-            let cloud = shape.coordinates.clone().insert_column(shape.size(), 0.0);
+    struct Case {
+        shape_name: Name,
+        bijection: Bijection<Vertex, Column>,
+        cloud: StrongPoints<Column>
+    }
 
-            let random_rotation = random_rotation().to_rotation_matrix();
-            let rotated_cloud = unit_sphere_normalize(random_rotation * cloud);
-            // Centroid preserving random permutation
-            let random_permutation = {
-                let mut p = random_permutation(rotated_cloud.ncols() - 1);
+    impl Case {
+        fn pristine(shape: &Shape) -> Case {
+            let shape_coords = shape.coordinates.clone().insert_column(shape.size(), 0.0);
+            let rotation = random_rotation().to_rotation_matrix();
+            let rotated_shape = StrongPoints::new(unit_sphere_normalize(rotation * shape_coords));
+
+            let bijection = {
+                let mut p = random_permutation(shape.size());
                 p.sigma.push(p.set_size() as u8);
-                p
+                Bijection::new(p)
             };
-            let permuted_cloud = apply_permutation(&rotated_cloud, &random_permutation);
+            let cloud = rotated_shape.apply_bijection(&bijection);
+            Case {shape_name: shape.name, bijection, cloud}
+        }
 
-            let similarity = polyhedron_similarity(&permuted_cloud, shape.name).expect("Ok");
+        // fn distort(self, max_v_len: f64) -> Case {}
 
-            // Bijection must be a rotation of applied random permutation
+        fn assert_postconditions_with(&self, f: &dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>) {
+            let similarity = f(&self.cloud.matrix, self.shape_name).expect("Fine");
+
+            // Found bijection must be a rotation of the original bijection
+            let shape = shape_from_name(self.shape_name);
             let shape_rotations = shape.generate_rotations();
-            let pop_centroid = |p: &Permutation| {
-                let mut q = p.clone();
-                let maybe_centroid = q.sigma.pop();
-                // Ensure centroid was at end of permutation
-                assert_eq!(maybe_centroid, Some(q.set_size() as u8));
-                q
-            };
-            let a = pop_centroid(&random_permutation);
-            let b = pop_centroid(&similarity.bijection.permutation);
-            println!("shape {}, random: {}, result: {}", shape.name.repr(), a, b);
-            assert!(shape.is_rotation(&a, &b, &shape_rotations));
+            let reference_bijection = pop_centroid(self.bijection.clone());
+            let found_bijection = pop_centroid(similarity.bijection);
+            assert!(shape.is_rotation(&reference_bijection, &found_bijection, &shape_rotations));
+
+            // Fit must be vanishingly small
+            assert!(similarity.csm < 1e-6);
         }
     }
 
-    // Test variations on the initial implementation by ensuring their results
-    // are rotations of one another
+    fn pop_centroid<Key, Value>(mut p: Bijection<Key, Value>) -> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
+        let maybe_centroid = p.permutation.sigma.pop();
+        // Ensure centroid was at end of permutation
+        assert_eq!(maybe_centroid, Some(p.set_size() as u8));
+        p
+    }
+
     #[test]
-    fn self_similarity() {
-        let fns = [polyhedron_similarity, polyhedron_similarity_shortcut];
-        let fn_names = ["similarity", "similarity_shortcut"];
-
+    fn try_all_similarities() -> Result<(), SimilarityError> {
         for shape in SHAPES.iter() {
-            if shape.size() < 5 {
-                continue;
-            }
-
-            let cloud = shape.coordinates.clone().insert_column(shape.size(), 0.0);
-            let random_rotation = random_rotation().to_rotation_matrix();
-            let rotated_cloud = unit_sphere_normalize(random_rotation * cloud);
-            // Centroid preserving random permutation
-            let random_permutation = {
-                let mut p = random_permutation(rotated_cloud.ncols() - 1);
-                p.sigma.push(p.set_size() as u8);
-                p
-            };
-            let permuted_cloud = apply_permutation(&rotated_cloud, &random_permutation);
-
-            let results: Vec<Similarity> = fns.iter().map(|f| f(&permuted_cloud, shape.name).expect("Fine")).collect();
-
-            for (fn_name, similarity) in fn_names.iter().zip(&results) {
-                println!("Algorithm {} achieved similarity {:e} of {} with permutation {}", fn_name, similarity.csm, shape.name.repr(), similarity.bijection);
-
-                println!("true {} <-> minimal {}, same: {}, inverse: {}", random_permutation, similarity.bijection, random_permutation == similarity.bijection.permutation, random_permutation == similarity.bijection.permutation.inverse());
-                assert!(similarity.csm < 1e-6);
-                // Centroid must be last
-                assert_eq!(*similarity.bijection.permutation.sigma.last().unwrap(), shape.size() as u8);
-            }
-
-            // Found permutations are rotations of one another
-            let shape_rotations = shape.generate_rotations();
-            let fn_permutation_results: Vec<Permutation> = results.iter().map(|s| { let mut q = s.bijection.permutation.clone(); q.sigma.pop(); q }).collect(); // drop centroid
-            let mutual_rotations = fn_permutation_results.iter().tuple_windows().all(|(p, q)| shape.is_rotation(p, q, &shape_rotations));
-            assert!(mutual_rotations);
-
-            println!("");
+            let case = Case::pristine(shape);
+            case.assert_postconditions_with(&polyhedron_similarity);
+            case.assert_postconditions_with(&polyhedron_similarity_shortcut);
         }
+
+        Ok(())
     }
 
     // for v in cloud.column_iter_mut() {
