@@ -29,9 +29,8 @@ impl<T> NewTypeIndex for T where T: Index
 #[cfg(test)]
 mod tests {
     use crate::index::Index;
-    use derive_more::{From, Into};
 
-    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     struct Foo(u8);
 
     #[test]

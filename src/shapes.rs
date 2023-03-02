@@ -1,8 +1,7 @@
 // TODO
-// - Rewrite polyhedron similarity functions with strong permutation
-// - Understand test failure (could be either buggy or logically faulty)
 // - Expand shape data
 // - Add lapjv linear assignment variation
+// - Add skip lists
 // - Unify implementations (?)
 // - "Horn [13] considered including a scaling in the transfor-
 //   mation T in eq. (11). This is quite easily accommodated." 
@@ -28,7 +27,6 @@ use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use itertools::Itertools;
 
-use derive_more::{From, Into};
 use crate::index::{Index, NewTypeIndex};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
@@ -50,10 +48,10 @@ pub enum Name {
     TrigonalBipyramid,
     Pentagon,
     // 6
-    // Octahedron,
-    // TrigonalPrism,
-    // PentagonalPyramid,
-    // Hexagon
+    Octahedron,
+    TrigonalPrism,
+    PentagonalPyramid,
+    Hexagon
 }
 
 impl Name {
@@ -71,7 +69,17 @@ impl Name {
             Name::SquarePyramid => "square pyramid",
             Name::TrigonalBipyramid => "trigonal bipyramid",
             Name::Pentagon => "pentagon",
+            Name::Octahedron => "octahedron",
+            Name::TrigonalPrism => "trigonal prism",
+            Name::PentagonalPyramid => "pentagonal pyramid",
+            Name::Hexagon => "hexagon",
         }
+    }
+}
+
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.repr())
     }
 }
 
@@ -80,16 +88,16 @@ use crate::bijection::{Bijection, bijections};
 use crate::quaternions;
 use crate::quaternions::Fit;
 
-#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Vertex(u8);
 
 type Rotation = Bijection<Vertex, Vertex>;
 type Mirror = Bijection<Vertex, Vertex>;
 
-#[derive(Index, From, Into, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Column(u8);
 
-pub static ORIGIN: u8 = u8::MAX;
+pub static ORIGIN: Vertex = Vertex(u8::MAX);
 
 pub struct Shape {
     pub name: Name,
@@ -98,7 +106,7 @@ pub struct Shape {
     /// Spatial rotational basis expressed by vertex permutations
     pub rotation_basis: Vec<Rotation>,
     /// Minimal set of tetrahedra required to distinguish volumes in DG
-    pub tetrahedra: Vec<[u8; 4]>,
+    pub tetrahedra: Vec<[Vertex; 4]>,
     /// Mirror symmetry element expressed by vertex permutation, if present
     pub mirror: Option<Mirror>
 }
@@ -186,6 +194,7 @@ lazy_static! {
         mirror: None
     };
 
+    /// Bent at 107°
     pub static ref BENT: Shape = Shape {
         name: Name::Bent,
         coordinates: Matrix3N::from_column_slice(&[
@@ -212,6 +221,10 @@ lazy_static! {
         mirror: None
     };
 
+    /// Monovacant tetrahedron. 
+    ///
+    /// Widely called trigonal pyramidal, but easily confusable with a 
+    /// face-centered trigonal pyramid.
     pub static ref VACANT_TETRAHEDRON: Shape = Shape {
         name: Name::VacantTetrahedron,
         coordinates: Matrix3N::from_column_slice(&[
@@ -220,7 +233,7 @@ lazy_static! {
             -0.805765, -0.366501, -0.465209
         ]),
         rotation_basis: vec![make_rotation(&[2, 0, 1])],
-        tetrahedra: vec![[ORIGIN, 0, 1, 2]],
+        tetrahedra: vec![[ORIGIN, Vertex(0), Vertex(1), Vertex(2)]],
         mirror: make_mirror(&[0, 2, 1])
     };
 
@@ -250,7 +263,7 @@ lazy_static! {
             make_rotation(&[3, 0, 2, 1]),
             make_rotation(&[1, 2, 0, 3])
         ],
-        tetrahedra: vec![[0, 1, 2, 3]],
+        tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(2), Vertex(3)]],
         mirror: make_mirror(&[0, 2, 1, 3])
     };
 
@@ -271,6 +284,7 @@ lazy_static! {
         mirror: None
     };
 
+    /// Equatorially monovacant trigonal bipyramid or edge-centered tetragonal disphenoid
     pub static ref SEESAW: Shape = Shape {
         name: Name::Seesaw,
         coordinates: Matrix3N::from_column_slice(&[
@@ -280,10 +294,15 @@ lazy_static! {
             -0.0, -1.0, -0.0
         ]),
         rotation_basis: vec![make_rotation(&[3, 2, 1, 0])],
-        tetrahedra: vec![[0, ORIGIN, 1, 2], [ORIGIN, 3, 1, 2]],
+        tetrahedra: vec![
+            [Vertex(0), ORIGIN, Vertex(1), Vertex(2)],
+            [ORIGIN, Vertex(3), Vertex(1), Vertex(2)]
+        ],
         mirror: make_mirror(&[0, 2, 1, 3])
     };
 
+    /// Face-centered trigonal pyramid = trig. pl. + axial ligand 
+    /// (or monovacant trigonal bipyramid)
     pub static ref TRIGONALPYRAMID: Shape = Shape {
         name: Name::TrigonalPyramid,
         coordinates: Matrix3N::from_column_slice(&[
@@ -293,10 +312,11 @@ lazy_static! {
             0.0, 0.0, 1.0
         ]),
         rotation_basis: vec![make_rotation(&[2, 0, 1, 3])],
-        tetrahedra: vec![[0, 1, 3, 2]],
+        tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(3), Vertex(2)]],
         mirror: make_mirror(&[0, 2, 1, 3])
     };
 
+    /// J1 solid (central position is square-face centered)
     pub static ref SQUAREPYRAMID: Shape = Shape {
         name: Name::SquarePyramid,
         coordinates: Matrix3N::from_column_slice(&[
@@ -308,14 +328,15 @@ lazy_static! {
         ]),
         rotation_basis: vec![make_rotation(&[3, 0, 1, 2, 4])],
         tetrahedra: vec![
-            [0, 1, 4, ORIGIN],
-            [1, 2, 4, ORIGIN],
-            [2, 3, 4, ORIGIN],
-            [3, 0, 4, ORIGIN],
+            [Vertex(0), Vertex(1), Vertex(4), ORIGIN],
+            [Vertex(1), Vertex(2), Vertex(4), ORIGIN],
+            [Vertex(2), Vertex(3), Vertex(4), ORIGIN],
+            [Vertex(3), Vertex(0), Vertex(4), ORIGIN],
         ],
         mirror: make_mirror(&[1, 0, 3, 2, 4])
     };
 
+    /// J12 solid
     pub static ref TRIGONALBIPYRAMID: Shape = Shape {
         name: Name::TrigonalBipyramid,
         coordinates: Matrix3N::from_column_slice(&[
@@ -329,7 +350,10 @@ lazy_static! {
             make_rotation(&[2, 0, 1, 3, 4]), // C3
             make_rotation(&[0, 2, 1, 4, 3]), // C2 on 0
         ],
-        tetrahedra: vec![[0, 1, 3, 2], [0, 1, 2, 4]],
+        tetrahedra: vec![
+            [Vertex(0), Vertex(1), Vertex(3), Vertex(2)], 
+            [Vertex(0), Vertex(1), Vertex(2), Vertex(4)]
+        ],
         mirror: make_mirror(&[0, 2, 1, 3, 4])
     };
 
@@ -350,7 +374,99 @@ lazy_static! {
         mirror: None
     };
 
-    pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID, &SQUAREPYRAMID, &TRIGONALBIPYRAMID, &PENTAGON];
+    pub static ref OCTAHEDRON: Shape = Shape {
+        name: Name::Octahedron,
+        coordinates: Matrix3N::from_column_slice(&[
+            1.0,  0.0,  0.0,
+            0.0,  1.0,  0.0,
+           -1.0,  0.0,  0.0,
+            0.0, -1.0,  0.0,
+            0.0,  0.0,  1.0,
+            0.0,  0.0, -1.0,
+        ]),
+        rotation_basis: vec![
+            make_rotation(&[3, 0, 1, 2, 4, 5]),
+            make_rotation(&[0, 5, 2, 4, 1, 3]),
+            make_rotation(&[4, 1, 5, 3, 2, 0]), // TODO maybe unnecessary?
+        ],
+        tetrahedra: vec![ // TODO check if reducible
+            [Vertex(3), Vertex(0), Vertex(4), ORIGIN],
+            [Vertex(0), Vertex(1), Vertex(4), ORIGIN],
+            [Vertex(1), Vertex(2), Vertex(4), ORIGIN],
+            [Vertex(2), Vertex(3), Vertex(4), ORIGIN],
+            [Vertex(3), Vertex(0), ORIGIN, Vertex(5)],
+            [Vertex(0), Vertex(1), ORIGIN, Vertex(5)],
+            [Vertex(1), Vertex(2), ORIGIN, Vertex(5)],
+            [Vertex(2), Vertex(3), ORIGIN, Vertex(5)],
+        ],
+        mirror: make_mirror(&[1, 0, 3, 2, 4, 5])
+    };
+
+    pub static ref TRIGONALPRISM: Shape = Shape {
+        name: Name::TrigonalPrism,
+        coordinates: Matrix3N::from_column_slice(&[
+             0.755929,  0.000000,  0.654654,
+            -0.377964,  0.654654,  0.654654,
+            -0.377964, -0.654654,  0.654654,
+             0.755929,  0.000000, -0.654654,
+            -0.377964,  0.654654, -0.654654,
+            -0.377964, -0.654654, -0.654654
+        ]),
+        rotation_basis: vec![
+            make_rotation(&[2, 0, 1, 5, 3, 4]), // C3 axial
+            make_rotation(&[3, 5, 4, 0, 2, 1]), // C2 between 0, 3
+        ],
+        tetrahedra: vec![
+            [ORIGIN, Vertex(0), Vertex(2), Vertex(1)],
+            [Vertex(3), ORIGIN, Vertex(5), Vertex(4)]
+        ],
+        mirror: make_mirror(&[0, 2, 1, 3, 5, 4])
+    };
+    
+    /// J2 solid
+    pub static ref PENTAGONALPYRAMID: Shape = Shape {
+        name: Name::PentagonalPyramid,
+        coordinates: Matrix3N::from_column_slice(&[
+            1.0, 0.0, 0.0,
+            0.309017, 0.951057, 0.0,
+            -0.809017, 0.587785, 0.0,
+            -0.809017, -0.587785, 0.0,
+            0.309017, -0.951057, 0.0,
+            0.0, 0.0, 1.0
+        ]),
+        rotation_basis: vec![
+            make_rotation(&[4, 0, 1, 2, 3, 5]),
+        ],
+        tetrahedra: vec![
+            [Vertex(0), ORIGIN, Vertex(1), Vertex(5)],
+            [Vertex(1), ORIGIN, Vertex(2), Vertex(5)],
+            [Vertex(2), ORIGIN, Vertex(3), Vertex(5)],
+            [Vertex(3), ORIGIN, Vertex(4), Vertex(5)],
+            [Vertex(4), ORIGIN, Vertex(0), Vertex(5)],
+
+        ],
+        mirror: make_mirror(&[0, 4, 3, 2, 1, 5])
+    };
+
+    pub static ref HEXAGON: Shape = Shape {
+        name: Name::Hexagon,
+        coordinates: Matrix3N::from_column_slice(&[
+             1.000000,  0.000000,  0.000000,
+             0.500000,  0.866025,  0.000000,
+            -0.500000,  0.866025,  0.000000,
+            -1.000000,  0.000000,  0.000000,
+            -0.500000, -0.866025,  0.000000,
+             0.500000, -0.866025,  0.000000
+        ]),
+        rotation_basis: vec![
+            make_rotation(&[5, 0, 1, 2, 3, 4]),
+            make_rotation(&[0, 5, 4, 3, 2, 1]),
+        ],
+        tetrahedra: vec![],
+        mirror: None
+    };
+
+    pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID, &SQUAREPYRAMID, &TRIGONALBIPYRAMID, &PENTAGON, &OCTAHEDRON, &TRIGONALPRISM, &PENTAGONALPYRAMID, &HEXAGON];
 }
 
 pub fn shape_from_name(name: Name) -> &'static Shape {
@@ -448,25 +564,25 @@ mod scaling {
     }
 }
 
-struct StrongPoints<I> where I: NewTypeIndex {
-    pub matrix: Matrix3N,
+struct AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
+    pub matrix: &'a Matrix3N,
     index_type: PhantomData<I>
 }
 
-impl<I> StrongPoints<I> where I: NewTypeIndex {
-    pub fn new(matrix: Matrix3N) -> StrongPoints<I> {
-        StrongPoints {matrix, index_type: PhantomData}
+impl<'a, I> AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
+    pub fn new(matrix: &'a Matrix3N) -> AsNewTypeIndexedMatrix<'a, I> {
+        AsNewTypeIndexedMatrix {matrix, index_type: PhantomData}
     }
 
-    pub fn column(&self, index: I) -> na::VectorSlice3<f64> {
+    pub fn column(&self, index: I) -> na::VectorSlice3<'a, f64> {
         self.matrix.column(index.get().to_usize().expect("Conversion failure"))
     }
 
-    pub fn quaternion_fit_with_rotor(&self, rotor: &StrongPoints<I>) -> Fit {
+    pub fn quaternion_fit_with_rotor(&self, rotor: AsNewTypeIndexedMatrix<I>) -> Fit {
         quaternions::fit(&self.matrix, &rotor.matrix)
     }
 
-    pub fn quaternion_fit_with_map<J>(&self, rotor: &StrongPoints<J>, map: &HashMap<I, J>) -> Fit where J: NewTypeIndex {
+    pub fn quaternion_fit_with_map<J>(&self, rotor: AsNewTypeIndexedMatrix<J>, map: &HashMap<I, J>) -> Fit where J: NewTypeIndex {
         assert!(self.matrix.column_mean().norm_squared() < 1e-8);
         assert!(rotor.matrix.column_mean().norm_squared() < 1e-8);
         
@@ -482,6 +598,33 @@ impl<I> StrongPoints<I> where I: NewTypeIndex {
 
     pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
         StrongPoints::new(apply_permutation(&self.matrix, &bijection.permutation))
+    }
+}
+
+struct StrongPoints<I> where I: NewTypeIndex {
+    pub matrix: Matrix3N,
+    index_type: PhantomData<I>
+}
+
+impl<I> StrongPoints<I> where I: NewTypeIndex {
+    pub fn new(matrix: Matrix3N) -> StrongPoints<I> {
+        StrongPoints {matrix, index_type: PhantomData}
+    }
+
+    pub fn column(&self, index: I) -> na::VectorSlice3<f64> {
+        AsNewTypeIndexedMatrix::<I>::new(&self.matrix).column(index)
+    }
+
+    pub fn quaternion_fit_with_rotor(&self, rotor: &StrongPoints<I>) -> Fit {
+        quaternions::fit(&self.matrix, &rotor.matrix)
+    }
+
+    pub fn quaternion_fit_with_map<J>(&self, rotor: &StrongPoints<J>, map: &HashMap<I, J>) -> Fit where J: NewTypeIndex {
+        AsNewTypeIndexedMatrix::<I>::new(&self.matrix).quaternion_fit_with_map(AsNewTypeIndexedMatrix::<J>::new(&rotor.matrix), &map)
+    }
+
+    pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
+        AsNewTypeIndexedMatrix::<I>::new(&self.matrix).apply_bijection(&bijection)
     }
 }
 
@@ -672,13 +815,56 @@ mod tests {
     use crate::shapes::*;
     use nalgebra::{Vector3, Unit};
 
+    fn tetrahedron_volume(tetrahedron: &[Vertex; 4], points: &Matrix3N) -> f64 {
+        let coords = AsNewTypeIndexedMatrix::<Vertex>::new(points);
+        let zero = Matrix3N::zeros(1);
+        let r = |v: Vertex| {
+            if v == ORIGIN {
+                zero.column(0)
+            } else {
+                coords.column(v)
+            }
+        };
+
+        (r(tetrahedron[0]) - r(tetrahedron[3])).dot(
+            &(r(tetrahedron[1]) - r(tetrahedron[3])).cross(
+                &(r(tetrahedron[2]) - r(tetrahedron[3]))
+            )
+        )
+    }
+
+    #[test]
+    fn all_tetrahedra_positive_volume() {
+        for shape in SHAPES.iter() {
+            let mut pass = true;
+            for tetrahedron in shape.tetrahedra.iter() {
+                let volume = tetrahedron_volume(&tetrahedron, &shape.coordinates);
+                if volume < 0.0 {
+                    pass = false;
+                    println!("Shape {} tetrahedron {:?} does not have positive volume.", shape.name, tetrahedron);
+                }
+            }
+            assert!(pass);
+        }
+    }
+
     fn random_discrete(n: usize) -> usize {
         let float = rand::random::<f32>();
         (float * n as f32) as usize
     }
 
     fn random_permutation(n: usize) -> Permutation {
-        Permutation::from_index(n, random_discrete(Permutation::group_order(n)))
+        let order = Permutation::group_order(n);
+        if order > 1 {
+            // Avoid the identity permutation
+            let mut index = random_discrete(order);
+            while index == 1 {
+                index = random_discrete(order);
+            }
+            Permutation::from_index(n, index)
+        } else {
+            Permutation::identity(n)
+        }
     }
 
     fn random_rotation() -> Quaternion {
@@ -752,8 +938,6 @@ mod tests {
             Case {shape_name: shape.name, bijection, cloud}
         }
 
-        // fn distort(self, max_v_len: f64) -> Case {}
-
         fn assert_postconditions_with(&self, f: &dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>) {
             let similarity = f(&self.cloud.matrix, self.shape_name).expect("Fine");
 
@@ -776,15 +960,44 @@ mod tests {
         p
     }
 
-    #[test]
-    fn try_all_similarities() -> Result<(), SimilarityError> {
-        for shape in SHAPES.iter() {
-            let case = Case::pristine(shape);
-            case.assert_postconditions_with(&polyhedron_similarity);
-            case.assert_postconditions_with(&polyhedron_similarity_shortcut);
-        }
+    struct SimilarityFnTestBounds<'a> {
+        f: &'a dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>,
+        min: usize,
+        max: usize,
+    }
 
-        Ok(())
+    fn similarity_fn_bounds() -> Vec<SimilarityFnTestBounds<'static>> {
+        if cfg!(debug_assertions) {
+            [
+                SimilarityFnTestBounds {f: &polyhedron_similarity, min: 1, max: 5},
+                SimilarityFnTestBounds {f: &polyhedron_similarity_shortcut, min: 1, max: 6}
+            ].into()
+        } else {
+            [
+                SimilarityFnTestBounds {f: &polyhedron_similarity, min: 1, max: 7},
+                SimilarityFnTestBounds {f: &polyhedron_similarity_shortcut, min: 1, max: 8}
+            ].into()
+        }
+    }
+
+    #[test]
+    fn try_all_similarities() {
+        let fn_bounds = similarity_fn_bounds();
+        let repeats = 3;
+
+        for shape in SHAPES.iter() {
+            let shape_size = shape.size();
+
+            for _ in 0..repeats {
+                let case = Case::pristine(shape);
+
+                for bounds in fn_bounds.iter() {
+                    if bounds.min <= shape_size && shape_size <= bounds.max {
+                        case.assert_postconditions_with(bounds.f);
+                    }
+                }
+            }
+        }
     }
 
     // for v in cloud.column_iter_mut() {

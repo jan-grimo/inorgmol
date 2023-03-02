@@ -108,18 +108,17 @@ pub fn bijections<T, U>(n: usize) -> BijectionIterator<T, U> where T: NewTypeInd
 
 #[cfg(test)]
 mod tests {
-    use derive_more::{From, Into};
     use crate::permutation::Permutation;
     use crate::bijection::Bijection;
     use crate::index::Index;
 
-    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
+    #[derive(Index, Debug, Copy, Clone, PartialEq)]
     struct Foo(u8);
 
-    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
+    #[derive(Index, Debug, Copy, Clone, PartialEq)]
     struct Bar(u8);
 
-    #[derive(Index, From, Into, Debug, Copy, Clone, PartialEq)]
+    #[derive(Index, Debug, Copy, Clone, PartialEq)]
     struct Baz(u8);
 
     #[test]

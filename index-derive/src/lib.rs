@@ -27,6 +27,18 @@ pub fn impl_index(input: TokenStream) -> TokenStream {
                     self.0
                 }
             }
+
+            impl ::core::convert::From<#field_type> for #name {
+                fn from(original: #field_type) -> #name {
+                    #name(original)
+                }
+            }
+
+            impl ::core::convert::Into<#field_type> for #name {
+                fn into(self) -> #field_type {
+                    self.0
+                }
+            }
         };
 
         TokenStream::from(expanded)
