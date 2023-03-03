@@ -9,6 +9,12 @@ use std::collections::HashMap;
 
 use derive_more::From;
 
+pub fn random_rotation() -> Quaternion {
+    let random_axis = na::Unit::new_normalize(na::Vector3::new_random());
+    let random_angle = rand::random::<f64>() * std::f64::consts::PI;
+    Quaternion::from_axis_angle(&random_axis, random_angle)
+}
+
 pub fn quaternion_pair_contribution<'a>(stator_col: &na::MatrixSlice3x1<'a, f64>, rotor_col: &na::MatrixSlice3x1<'a, f64>) -> Matrix4 {
     let mut a = Matrix4::zeros();
 
@@ -133,22 +139,6 @@ mod tests {
     use crate::quaternions::*;
     use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
     use crate::permutation::Permutation;
-    use nalgebra::{Vector3, Unit};
-
-    fn random_discrete(n: usize) -> usize {
-        let float = rand::random::<f32>();
-        (float * n as f32) as usize
-    }
-
-    fn random_permutation(n: usize) -> Permutation {
-        Permutation::from_index(n, random_discrete(Permutation::group_order(n)))
-    }
-
-    fn random_rotation() -> Quaternion {
-        let random_axis = Unit::new_normalize(Vector3::new_random());
-        let random_angle = rand::random::<f64>() * std::f64::consts::PI;
-        Quaternion::from_axis_angle(&random_axis, random_angle)
-    }
 
     fn random_cloud(n: usize) -> Matrix3N {
         unit_sphere_normalize(Matrix3N::new_random(n))
@@ -206,7 +196,7 @@ mod tests {
     fn with_map_zero_msd() {
         let v = 6;
         let case = Case::new(v);
-        let permutation = random_permutation(v);
+        let permutation = Permutation::random(v);
         let permuted_rotor = Rotor::from(apply_permutation(&case.rotor.matrix, &permutation));
         let partial_permutation = {
             let mut p = HashMap::new();

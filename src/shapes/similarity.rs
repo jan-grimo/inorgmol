@@ -327,33 +327,7 @@ mod tests {
     use crate::shapes::*;
     use crate::shapes::similarity::*;
     use crate::shapes::Matrix3N;
-    use crate::quaternions::Quaternion;
-    use nalgebra::{Vector3, Unit};
-
-    fn random_discrete(n: usize) -> usize {
-        let float = rand::random::<f32>();
-        (float * n as f32) as usize
-    }
-
-    fn random_permutation(n: usize) -> Permutation {
-        let order = Permutation::group_order(n);
-        if order > 1 {
-            // Avoid the identity permutation
-            let mut index = random_discrete(order);
-            while index == 1 {
-                index = random_discrete(order);
-            }
-            Permutation::from_index(n, index)
-        } else {
-            Permutation::identity(n)
-        }
-    }
-
-    fn random_rotation() -> Quaternion {
-        let random_axis = Unit::new_normalize(Vector3::new_random());
-        let random_angle = rand::random::<f64>() * std::f64::consts::PI;
-        Quaternion::from_axis_angle(&random_axis, random_angle)
-    }
+    use crate::quaternions::random_rotation;
 
     fn random_cloud(n: usize) -> Matrix3N {
         unit_sphere_normalize(Matrix3N::new_random(n))
@@ -362,8 +336,7 @@ mod tests {
     #[test]
     fn column_permutation() {
         let n = 6;
-        let permutation_index = random_discrete(Permutation::group_order(n));
-        let permutation = Permutation::from_index(n, permutation_index);
+        let permutation = Permutation::random(n);
 
         let stator = random_cloud(n);
         let permuted = apply_permutation(&stator, &permutation);
@@ -406,7 +379,7 @@ mod tests {
     }
 
     impl Case {
-        fn random_rotation(shape: &Shape) -> StrongPoints<Vertex> {
+        fn random_shape_rotation(shape: &Shape) -> StrongPoints<Vertex> {
             let shape_coords = shape.coordinates.clone().insert_column(shape.size(), 0.0);
             let rotation = random_rotation().to_rotation_matrix();
             StrongPoints::new(unit_sphere_normalize(rotation * shape_coords))
@@ -414,12 +387,12 @@ mod tests {
 
         fn random(shape: &Shape) -> Case {
             let bijection = {
-                let mut p = random_permutation(shape.size());
+                let mut p = Permutation::random(shape.size());
                 p.sigma.push(p.set_size() as u8);
                 Bijection::new(p)
             };
 
-            let cloud = Self::random_rotation(shape).apply_bijection(&bijection);
+            let cloud = Self::random_shape_rotation(shape).apply_bijection(&bijection);
             Case { shape_name: shape.name, bijection, cloud }
         }
 
@@ -430,7 +403,7 @@ mod tests {
                 Bijection::new(p)
             };
 
-            let cloud = Self::random_rotation(shape).apply_bijection(&bijection);
+            let cloud = Self::random_shape_rotation(shape).apply_bijection(&bijection);
             Case { shape_name: shape.name, bijection, cloud }
         }
 

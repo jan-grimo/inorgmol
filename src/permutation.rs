@@ -97,6 +97,11 @@ pub fn slice_apply<T: PrimInt, U: Copy>(permutation: &[T], values: &[U]) -> Opti
     Some(permuted)
 }
 
+fn random_discrete(n: usize) -> usize {
+    let float = rand::random::<f32>();
+    (float * n as f32) as usize
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Clone, Debug, Hash)]
 pub struct Permutation {
     // One-line representation
@@ -329,6 +334,10 @@ impl Permutation {
     pub fn iter_pairs(&self) -> std::iter::Enumerate<std::slice::Iter<u8>> {
         self.sigma.iter().enumerate()
     }
+
+    pub fn random(n: usize) -> Permutation {
+        Permutation::from_index(n, random_discrete(Permutation::group_order(n)))
+    }
 }
 
 /// Implements indexing, letting Permutation behave as a container directly
@@ -460,15 +469,6 @@ mod tests {
         assert_eq!(Permutation::from_index(2, 4).index(), 1);
     }
 
-    fn random_discrete(n: usize) -> usize {
-        let float = rand::random::<f32>();
-        (float * n as f32) as usize
-    }
-
-    fn random_permutation(n: usize) -> Permutation {
-        Permutation::from_index(n, random_discrete(Permutation::group_order(n)))
-    }
-
     #[test]
     fn composition() -> Result<(), PermutationError> {
         let n = 6;
@@ -477,8 +477,8 @@ mod tests {
         let v: Vec<usize> = (0..n).map(|_| random_discrete(100)).collect();
 
         for _ in 0..repeats {
-            let p = random_permutation(n);
-            let q = random_permutation(n);
+            let p = Permutation::random(n);
+            let q = Permutation::random(n);
 
             let compose_apply = p.compose(&q)?.apply(&v)?;
             let apply_twice = q.apply(&p.apply(&v)?)?;
@@ -496,7 +496,7 @@ mod tests {
         let v: Vec<usize> = (0..n).map(|_| random_discrete(100)).collect();
 
         for _ in 0..repeats {
-            let p = random_permutation(n);
+            let p = Permutation::random(n);
 
             let w = p.apply(&v)?;
             let v_reconstructed = p.inverse().apply(&w)?;
