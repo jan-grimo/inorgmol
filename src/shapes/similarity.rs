@@ -12,6 +12,7 @@ extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
 
 use thiserror::Error;
+use memoize::memoize;
 use itertools::Itertools;
 use std::collections::HashMap;
 
@@ -20,8 +21,6 @@ use crate::strong::bijection::{Bijection, bijections};
 use crate::permutation::{Permutation, permutations};
 use crate::quaternions::Fit;
 use crate::shapes::*;
-
-
 
 pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     // Remove centroid
@@ -112,6 +111,34 @@ mod scaling {
     }
 }
 
+// Yields a boolean matrix indicating
+#[memoize]
+pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
+    let shape = shape_from_name(shape_name);
+
+    let s = shape.size();
+    let mut skips = na::DMatrix::<bool>::from_element(s + 1, s + 1, true);
+    let rotations = shape.generate_rotations();
+    let viable_vertices: Vec<Vertex> = shape.vertex_groups().iter().map(|g| *g.first().unwrap()).collect();
+    for i in viable_vertices.iter() {
+        let vertex_groups = shape.vertex_groups_holding(*i, &rotations);
+        for group in vertex_groups {
+            let j = group.first().expect("Vertex groups shouldn't be empty");
+            skips[(i.get() as usize, j.get() as usize)] = false;
+        }
+
+        // Centroid is always a valid second match
+        skips[(i.get() as usize, s)] = false;
+    }
+
+    // If matching centroid first, reuse viable_vertices for second match
+    for i in 0..s {
+        skips[(s, i)] = skips[(i, 0)];
+    }
+
+    skips
+}
+
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum SimilarityError {
     #[error("Number of positions does not match shape size")]
@@ -123,8 +150,8 @@ pub struct Similarity {
     pub csm: f64,
 }
 
-/// Polyhedron similarity performing quaternion fits on all vertices 
-pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+/// Polyhedron similarity performing quaternion fits on all rotationally distinct bijections
+pub fn polyhedron_reference(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     type Occupation = Bijection<Vertex, Column>;
 
     let shape = shape_from_name(s);
@@ -146,7 +173,10 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<Similarity, Simila
         (p, fit)
     };
 
+    let skips = skip_vertices(s);
+
     let (best_bijection, best_fit) = bijections(n)
+        .filter(|b| skips[(b.permutation[0] as usize, b.permutation[1] as usize)])
         .map(evaluate_permutation)
         .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("NaN in MSDs"))
         .expect("Not a single permutation available to try");
@@ -166,7 +196,7 @@ pub fn polyhedron_similarity(x: &Matrix3N, s: Name) -> Result<Similarity, Simila
 
 /// Polyhedron similarity performing quaternion fits only on a limited number of 
 /// vertices before assigning the rest by brute force linear assignment
-pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     type Occupation = Bijection<Vertex, Column>;
     let shape = shape_from_name(s);
     let n = x.ncols();
@@ -176,7 +206,7 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<Similarit
 
     let n_prematch = 5;
     if n <= n_prematch {
-        return polyhedron_similarity(x, s);
+        return polyhedron_reference(x, s);
     }
 
     let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x.clone()));
@@ -194,10 +224,12 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<Similarit
         mapping: PartialPermutation,
     }
     let left_free: Vec<Column> = (n_prematch..n).map(|i| Column::from(i as u8)).collect();
+    let skips = skip_vertices(s);
 
     let narrow = (0..n)
         .map(|i| Vertex::from(i as u8))
         .permutations(n_prematch)
+        .filter(|p| skips[(p[0].get() as usize, p[1].get() as usize)])
         .fold(
             PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new()},
             |best, vertices| -> PartialMsd {
@@ -257,9 +289,6 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<Similarit
 
                 // Make a clean quaternion fit with the full mapping
                 let full_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
-
-                println!("Tried vertices {:?}, linear assigning {:?}, msd {:e}", vertices, right_free, full_fit.msd);
-
                 if full_fit.msd < best.msd {
                     PartialMsd {msd: full_fit.msd, mapping: partial_map}
                 } else {
@@ -290,7 +319,6 @@ pub fn polyhedron_similarity_shortcut(x: &Matrix3N, s: Name) -> Result<Similarit
     let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
     let csm = scaling::minimize(&cloud.matrix, &rotated_shape);
-    println!("- minimization: {:e}, direct: {:e}", csm, scaling::direct(&cloud.matrix, &rotated_shape));
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
@@ -378,18 +406,32 @@ mod tests {
     }
 
     impl Case {
-        fn pristine(shape: &Shape) -> Case {
+        fn random_rotation(shape: &Shape) -> StrongPoints<Vertex> {
             let shape_coords = shape.coordinates.clone().insert_column(shape.size(), 0.0);
             let rotation = random_rotation().to_rotation_matrix();
-            let rotated_shape = StrongPoints::new(unit_sphere_normalize(rotation * shape_coords));
+            StrongPoints::new(unit_sphere_normalize(rotation * shape_coords))
+        }
 
+        fn random(shape: &Shape) -> Case {
             let bijection = {
                 let mut p = random_permutation(shape.size());
                 p.sigma.push(p.set_size() as u8);
                 Bijection::new(p)
             };
-            let cloud = rotated_shape.apply_bijection(&bijection);
-            Case {shape_name: shape.name, bijection, cloud}
+
+            let cloud = Self::random_rotation(shape).apply_bijection(&bijection);
+            Case { shape_name: shape.name, bijection, cloud }
+        }
+
+        fn indexed(shape: &Shape, index: usize) -> Case {
+            let bijection = {
+                let mut p = Permutation::from_index(shape.size(), index);
+                p.sigma.push(p.set_size() as u8);
+                Bijection::new(p)
+            };
+
+            let cloud = Self::random_rotation(shape).apply_bijection(&bijection);
+            Case { shape_name: shape.name, bijection, cloud }
         }
 
         fn assert_postconditions_with(&self, f: &dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>) {
@@ -423,33 +465,43 @@ mod tests {
     fn similarity_fn_bounds() -> Vec<SimilarityFnTestBounds<'static>> {
         if cfg!(debug_assertions) {
             [
-                SimilarityFnTestBounds {f: &polyhedron_similarity, min: 1, max: 5},
-                SimilarityFnTestBounds {f: &polyhedron_similarity_shortcut, min: 1, max: 6}
+                SimilarityFnTestBounds {f: &polyhedron_reference, min: 1, max: 5},
+                SimilarityFnTestBounds {f: &polyhedron, min: 1, max: 6}
             ].into()
         } else {
             [
-                SimilarityFnTestBounds {f: &polyhedron_similarity, min: 1, max: 7},
-                SimilarityFnTestBounds {f: &polyhedron_similarity_shortcut, min: 1, max: 8}
+                SimilarityFnTestBounds {f: &polyhedron_reference, min: 1, max: 7},
+                SimilarityFnTestBounds {f: &polyhedron, min: 1, max: 8}
             ].into()
         }
     }
 
     #[test]
     fn try_all_similarities() {
-        let fn_bounds = similarity_fn_bounds();
-        let repeats = 3;
-
         for shape in SHAPES.iter() {
             let shape_size = shape.size();
+            let case = Case::random(shape);
 
-            for _ in 0..repeats {
-                let case = Case::pristine(shape);
-
-                for bounds in fn_bounds.iter() {
-                    if bounds.min <= shape_size && shape_size <= bounds.max {
-                        case.assert_postconditions_with(bounds.f);
-                    }
+            for bounds in similarity_fn_bounds() {
+                if bounds.min <= shape_size && shape_size <= bounds.max {
+                    case.assert_postconditions_with(bounds.f);
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn pyramid_exhaustive() {
+        let test_shape: &Shape = {
+            if cfg!(debug_assertions) { &TRIGONALPYRAMID } else { &SQUAREPYRAMID }
+        };
+
+        let index_bound = Permutation::group_order(test_shape.size());
+        for i in 0..index_bound {
+            let case = Case::indexed(test_shape, i);
+
+            for bounds in similarity_fn_bounds() {
+                case.assert_postconditions_with(bounds.f);
             }
         }
     }

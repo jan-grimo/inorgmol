@@ -4,9 +4,10 @@
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use crate::strong::{Index, NewTypeIndex};
+use petgraph::unionfind::UnionFind;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Name {
@@ -148,6 +149,59 @@ impl Shape {
 
     pub fn is_rotation<T: NewTypeIndex>(&self, a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
         rotations.iter().any(|r| r.compose(a).expect("Bad occupations") == *b)
+    }
+
+    fn union_to_groups(sets: UnionFind<usize>) -> Vec<Vec<Vertex>> {
+        let group_injection: Vec<usize> = {
+            let injection: Vec<usize> = sets.into_labeling();
+
+            // Normalize in one pass
+            let mut label_map = HashMap::new();
+            let mut unused_group = 0;
+            injection.iter().map(|label| {
+                if let Some(target) = label_map.get(label) {
+                    *target
+                } else {
+                    let target = unused_group;
+                    label_map.insert(label, unused_group);
+                    unused_group += 1;
+                    target
+                }
+            }).collect()
+        };
+
+        let num_groups = group_injection.iter().max().expect("Empty injection") + 1;
+        let mut groups: Vec<Vec<Vertex>> = Vec::new();
+        groups.resize(num_groups, Vec::<Vertex>::new());
+        for (v, g) in group_injection.iter().enumerate() {
+            groups[*g].push(Vertex::from(v as u8));
+        }
+
+        groups
+    }
+
+    pub fn vertex_groups(&self) -> Vec<Vec<Vertex>> {
+        let shape_size = self.size();
+        let mut sets = UnionFind::new(shape_size);
+        for rotation in self.rotation_basis.iter() {
+            for v in 0..shape_size {
+                sets.union(v, rotation.permutation[v] as usize);
+            }
+        }
+
+        Self::union_to_groups(sets)
+    }
+
+    pub fn vertex_groups_holding(&self, held: Vertex, rotations: &HashSet<Rotation>) -> Vec<Vec<Vertex>> {
+        let shape_size = self.size();
+        let mut sets = UnionFind::new(shape_size);
+        for rotation in rotations.iter().filter(|rot| rot.get(&held) == Some(held)) {
+            for v in 0..shape_size {
+                sets.union(v, rotation.permutation[v] as usize);
+            }
+        }
+
+        Self::union_to_groups(sets)
     }
 }
 
@@ -490,5 +544,34 @@ mod tests {
             }
             assert!(pass);
         }
+    }
+
+    fn vertex_group_correct(shape: &Shape, expected_len: usize) {
+        let vertex_groups = shape.vertex_groups();
+        assert_eq!(vertex_groups.len(), expected_len);
+
+        // Every vertex occurs once
+        let mut counts = Vec::new();
+        counts.resize(shape.size(), 0);
+        for group in vertex_groups.iter() {
+            for v in group.iter() {
+                let usize_v = v.get() as usize;
+                assert!(usize_v < shape.size());
+                counts[usize_v] += 1;
+            }
+        }
+
+        assert!(counts.iter().all(|c| *c == 1));
+    }
+
+    #[test]
+    fn vertex_groups() {
+        vertex_group_correct(&TSHAPE, 2);
+        vertex_group_correct(&SQUARE, 1);
+        vertex_group_correct(&TETRAHEDRON, 1);
+        vertex_group_correct(&SEESAW, 2);
+        vertex_group_correct(&SQUAREPYRAMID, 2);
+        vertex_group_correct(&OCTAHEDRON, 1);
+        vertex_group_correct(&PENTAGONALPYRAMID, 2);
     }
 }

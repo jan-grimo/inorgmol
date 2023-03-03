@@ -18,3 +18,5 @@ num-traits = "0.2"
 derive_more = "0.99"
 index-derive = { path = "index-derive" }
 delegate = "0.8.0"
+petgraph = "0.6"
+memoize = "0.4"
