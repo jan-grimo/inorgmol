@@ -1,6 +1,3 @@
-// TODO
-// - Expand shape data
-
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
 
@@ -31,7 +28,27 @@ pub enum Name {
     Octahedron,
     TrigonalPrism,
     PentagonalPyramid,
-    Hexagon
+    Hexagon,
+    // 7
+    PentagonalBipyramid,
+    CappedOctahedron,
+    CappedTrigonalPrism,
+    // 8
+    SquareAntiprism,
+    Cube,
+    TrigonalDodecahedron,
+    HexagonalBipyramid,
+    // 9
+    TricappedTrigonalPrism,
+    CappedSquareAntiprism,
+    HeptagonalBipyramid,
+    // 10
+    BicappedSquareAntiprism,
+    // 11
+    EdgeContractedIcosahedron,
+    // 12
+    Icosahedron,
+    Cuboctahedron
 }
 
 impl Name {
@@ -53,6 +70,20 @@ impl Name {
             Name::TrigonalPrism => "trigonal prism",
             Name::PentagonalPyramid => "pentagonal pyramid",
             Name::Hexagon => "hexagon",
+            Name::PentagonalBipyramid => "pentagonal bipyramid",
+            Name::CappedOctahedron => "capped octahedron",
+            Name::CappedTrigonalPrism => "capped trigonal prism",
+            Name::SquareAntiprism => "square antiprism",
+            Name::Cube => "cube",
+            Name::TrigonalDodecahedron => "trigonal dodecahedron",
+            Name::HexagonalBipyramid => "hexagonal bipyramid",
+            Name::TricappedTrigonalPrism => "tricapped trigonal prism",
+            Name::CappedSquareAntiprism => "capped square antiprism",
+            Name::HeptagonalBipyramid => "heptagonal bipyramid",
+            Name::BicappedSquareAntiprism => "bicapped square antiprism",
+            Name::EdgeContractedIcosahedron => "edge contracted icosahedron",
+            Name::Icosahedron => "icosahedron",
+            Name::Cuboctahedron => "cuboctahedron"
         }
     }
 }
@@ -63,7 +94,6 @@ impl std::fmt::Display for Name {
     }
 }
 
-use crate::permutation::Permutation;
 use crate::strong::bijection::Bijection;
 
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -74,8 +104,6 @@ type Mirror = Bijection<Vertex, Vertex>;
 
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Column(u8);
-
-pub static ORIGIN: Vertex = Vertex(u8::MAX);
 
 pub struct Shape {
     pub name: Name,
@@ -205,300 +233,8 @@ impl Shape {
     }
 }
 
-fn make_rotation(slice: &[u8]) -> Rotation {
-    Rotation::new(Permutation {sigma: slice.to_vec()})
-}
-
-fn make_mirror(slice: &[u8]) -> Option<Mirror> {
-    Some(make_rotation(slice))
-}
-
-lazy_static! {
-    pub static ref LINE: Shape = Shape {
-        name: Name::Line,
-        coordinates: Matrix3N::from_column_slice(&[
-             1.0, 0.0, 0.0,
-            -1.0, 0.0, 0.0
-        ]),
-        rotation_basis: vec![make_rotation(&[1, 0])],
-        tetrahedra: vec![],
-        mirror: None
-    };
-
-    /// Bent at 107°
-    pub static ref BENT: Shape = Shape {
-        name: Name::Bent,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            -0.292372, 0.956305, 0.0
-        ]),
-        rotation_basis: vec![make_rotation(&[1, 0])],
-        tetrahedra: vec![],
-        mirror: None
-    };
-
-    pub static ref EQUILATERAL_TRIANGLE: Shape = Shape {
-        name: Name::EquilateralTriangle,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            -0.5, 0.866025, 0.0,
-            -0.5, -0.866025, 0.0
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[1, 2, 0]),
-            make_rotation(&[0, 2, 1])
-        ],
-        tetrahedra: vec![],
-        mirror: None
-    };
-
-    /// Monovacant tetrahedron. 
-    ///
-    /// Widely called trigonal pyramidal, but easily confusable with a 
-    /// face-centered trigonal pyramid.
-    pub static ref VACANT_TETRAHEDRON: Shape = Shape {
-        name: Name::VacantTetrahedron,
-        coordinates: Matrix3N::from_column_slice(&[
-            0.0, -0.366501, 0.930418,
-            0.805765, -0.366501, -0.465209,
-            -0.805765, -0.366501, -0.465209
-        ]),
-        rotation_basis: vec![make_rotation(&[2, 0, 1])],
-        tetrahedra: vec![[ORIGIN, Vertex(0), Vertex(1), Vertex(2)]],
-        mirror: make_mirror(&[0, 2, 1])
-    };
-
-    pub static ref TSHAPE: Shape = Shape {
-        name: Name::T,
-        coordinates: Matrix3N::from_column_slice(&[
-            -1.0, -0.0, -0.0,
-            0.0, 1.0, 0.0,
-            1.0, 0.0, 0.0,
-        ]),
-        rotation_basis: vec![Rotation::new(Permutation {sigma: vec![2, 1, 0]})],
-        tetrahedra: vec![],
-        mirror: None
-    };
-
-    pub static ref TETRAHEDRON: Shape = Shape {
-        name: Name::Tetrahedron,
-        coordinates: Matrix3N::from_column_slice(&[
-            0.0, 1.0, 0.0,
-            0.0, -0.333807, 0.942641,
-            0.816351, -0.333807, -0.471321,
-            -0.816351, -0.333807, -0.471321
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[0, 3, 1, 2]),
-            make_rotation(&[2, 1, 3, 0]),
-            make_rotation(&[3, 0, 2, 1]),
-            make_rotation(&[1, 2, 0, 3])
-        ],
-        tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(2), Vertex(3)]],
-        mirror: make_mirror(&[0, 2, 1, 3])
-    };
-
-    pub static ref SQUARE: Shape = Shape {
-        name: Name::Square,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            -1.0, -0.0, -0.0,
-            -0.0, -1.0, -0.0
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[3, 0, 1, 2]),
-            make_rotation(&[1, 0, 3, 2]),
-            make_rotation(&[3, 2, 1, 0]),
-        ],
-        tetrahedra: vec![],
-        mirror: None
-    };
-
-    /// Equatorially monovacant trigonal bipyramid or edge-centered tetragonal disphenoid
-    pub static ref SEESAW: Shape = Shape {
-        name: Name::Seesaw,
-        coordinates: Matrix3N::from_column_slice(&[
-            0.0, 1.0, 0.0,
-            1.0, 0.0, 0.0,
-            -0.5, 0.0, -0.866025,
-            -0.0, -1.0, -0.0
-        ]),
-        rotation_basis: vec![make_rotation(&[3, 2, 1, 0])],
-        tetrahedra: vec![
-            [Vertex(0), ORIGIN, Vertex(1), Vertex(2)],
-            [ORIGIN, Vertex(3), Vertex(1), Vertex(2)]
-        ],
-        mirror: make_mirror(&[0, 2, 1, 3])
-    };
-
-    /// Face-centered trigonal pyramid = trig. pl. + axial ligand 
-    /// (or monovacant trigonal bipyramid)
-    pub static ref TRIGONALPYRAMID: Shape = Shape {
-        name: Name::TrigonalPyramid,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            -0.5, 0.866025, 0.0,
-            -0.5, -0.866025, 0.0,
-            0.0, 0.0, 1.0
-        ]),
-        rotation_basis: vec![make_rotation(&[2, 0, 1, 3])],
-        tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(3), Vertex(2)]],
-        mirror: make_mirror(&[0, 2, 1, 3])
-    };
-
-    /// J1 solid (central position is square-face centered)
-    pub static ref SQUAREPYRAMID: Shape = Shape {
-        name: Name::SquarePyramid,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            -1.0, 0.0, 0.0,
-            0.0, -1.0, 0.0,
-            0.0, 0.0, 1.0,
-        ]),
-        rotation_basis: vec![make_rotation(&[3, 0, 1, 2, 4])],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(4), ORIGIN],
-            [Vertex(1), Vertex(2), Vertex(4), ORIGIN],
-            [Vertex(2), Vertex(3), Vertex(4), ORIGIN],
-            [Vertex(3), Vertex(0), Vertex(4), ORIGIN],
-        ],
-        mirror: make_mirror(&[1, 0, 3, 2, 4])
-    };
-
-    /// J12 solid
-    pub static ref TRIGONALBIPYRAMID: Shape = Shape {
-        name: Name::TrigonalBipyramid,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            -0.5, 0.866025, 0.0,
-            -0.5, -0.866025, 0.0,
-            0.0, 0.0, 1.0,
-            0.0, 0.0, -1.0
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[2, 0, 1, 3, 4]), // C3
-            make_rotation(&[0, 2, 1, 4, 3]), // C2 on 0
-        ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(3), Vertex(2)], 
-            [Vertex(0), Vertex(1), Vertex(2), Vertex(4)]
-        ],
-        mirror: make_mirror(&[0, 2, 1, 3, 4])
-    };
-
-    pub static ref PENTAGON: Shape = Shape {
-        name: Name::Pentagon,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.309017, 0.951057, 0.0,
-            -0.809017, 0.587785, 0.0,
-            -0.809017, -0.587785, 0.0,
-            0.309017, -0.951057, 0.0
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[4, 0, 1, 2, 3]),
-            make_rotation(&[0, 4, 3, 2, 1]),
-        ],
-        tetrahedra: vec![],
-        mirror: None
-    };
-
-    pub static ref OCTAHEDRON: Shape = Shape {
-        name: Name::Octahedron,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0,  0.0,  0.0,
-            0.0,  1.0,  0.0,
-           -1.0,  0.0,  0.0,
-            0.0, -1.0,  0.0,
-            0.0,  0.0,  1.0,
-            0.0,  0.0, -1.0,
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[3, 0, 1, 2, 4, 5]),
-            make_rotation(&[0, 5, 2, 4, 1, 3]),
-            make_rotation(&[4, 1, 5, 3, 2, 0]), // TODO maybe unnecessary?
-        ],
-        tetrahedra: vec![ // TODO check if reducible
-            [Vertex(3), Vertex(0), Vertex(4), ORIGIN],
-            [Vertex(0), Vertex(1), Vertex(4), ORIGIN],
-            [Vertex(1), Vertex(2), Vertex(4), ORIGIN],
-            [Vertex(2), Vertex(3), Vertex(4), ORIGIN],
-            [Vertex(3), Vertex(0), ORIGIN, Vertex(5)],
-            [Vertex(0), Vertex(1), ORIGIN, Vertex(5)],
-            [Vertex(1), Vertex(2), ORIGIN, Vertex(5)],
-            [Vertex(2), Vertex(3), ORIGIN, Vertex(5)],
-        ],
-        mirror: make_mirror(&[1, 0, 3, 2, 4, 5])
-    };
-
-    pub static ref TRIGONALPRISM: Shape = Shape {
-        name: Name::TrigonalPrism,
-        coordinates: Matrix3N::from_column_slice(&[
-             0.755929,  0.000000,  0.654654,
-            -0.377964,  0.654654,  0.654654,
-            -0.377964, -0.654654,  0.654654,
-             0.755929,  0.000000, -0.654654,
-            -0.377964,  0.654654, -0.654654,
-            -0.377964, -0.654654, -0.654654
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[2, 0, 1, 5, 3, 4]), // C3 axial
-            make_rotation(&[3, 5, 4, 0, 2, 1]), // C2 between 0, 3
-        ],
-        tetrahedra: vec![
-            [ORIGIN, Vertex(0), Vertex(2), Vertex(1)],
-            [Vertex(3), ORIGIN, Vertex(5), Vertex(4)]
-        ],
-        mirror: make_mirror(&[0, 2, 1, 3, 5, 4])
-    };
-    
-    /// J2 solid
-    pub static ref PENTAGONALPYRAMID: Shape = Shape {
-        name: Name::PentagonalPyramid,
-        coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.309017, 0.951057, 0.0,
-            -0.809017, 0.587785, 0.0,
-            -0.809017, -0.587785, 0.0,
-            0.309017, -0.951057, 0.0,
-            0.0, 0.0, 1.0
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[4, 0, 1, 2, 3, 5]),
-        ],
-        tetrahedra: vec![
-            [Vertex(0), ORIGIN, Vertex(1), Vertex(5)],
-            [Vertex(1), ORIGIN, Vertex(2), Vertex(5)],
-            [Vertex(2), ORIGIN, Vertex(3), Vertex(5)],
-            [Vertex(3), ORIGIN, Vertex(4), Vertex(5)],
-            [Vertex(4), ORIGIN, Vertex(0), Vertex(5)],
-
-        ],
-        mirror: make_mirror(&[0, 4, 3, 2, 1, 5])
-    };
-
-    pub static ref HEXAGON: Shape = Shape {
-        name: Name::Hexagon,
-        coordinates: Matrix3N::from_column_slice(&[
-             1.000000,  0.000000,  0.000000,
-             0.500000,  0.866025,  0.000000,
-            -0.500000,  0.866025,  0.000000,
-            -1.000000,  0.000000,  0.000000,
-            -0.500000, -0.866025,  0.000000,
-             0.500000, -0.866025,  0.000000
-        ]),
-        rotation_basis: vec![
-            make_rotation(&[5, 0, 1, 2, 3, 4]),
-            make_rotation(&[0, 5, 4, 3, 2, 1]),
-        ],
-        tetrahedra: vec![],
-        mirror: None
-    };
-
-    pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID, &SQUAREPYRAMID, &TRIGONALBIPYRAMID, &PENTAGON, &OCTAHEDRON, &TRIGONALPRISM, &PENTAGONALPYRAMID, &HEXAGON];
-}
+pub mod statics;
+pub use statics::*;
 
 pub fn shape_from_name(name: Name) -> &'static Shape {
     let shape = SHAPES[name as usize];
@@ -543,6 +279,18 @@ mod tests {
                 }
             }
             assert!(pass);
+        }
+    }
+
+    #[test]
+    fn mirrors_are_not_a_rotation() {
+        for shape in SHAPES.iter() {
+            if let Some(mirror) = &shape.mirror {
+                let rotations = shape.generate_rotations();
+                assert!(!rotations.contains(mirror));
+
+                // Mirrors might only be composed of 2-cycles and fixed points
+            }
         }
     }
 
