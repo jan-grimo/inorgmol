@@ -1,12 +1,9 @@
 // TODO
 // - Add lapjv linear assignment variation
-// - Add skip lists
-// - Unify implementations (?)
 // - "Horn [13] considered including a scaling in the transfor-
 //   mation T in eq. (11). This is quite easily accommodated." 
 //   from https://arxiv.org/pdf/physics/0506177.pdf
-//   -> Could maybe radically simplify the scaling optimization step
-// 
+//   -> Should simplify the scaling optimization step, prospective 3-5%
 
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
@@ -17,10 +14,12 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::strong::matrix::StrongPoints;
-use crate::strong::bijection::{Bijection, bijections};
-use crate::permutation::{Permutation, permutations};
+use crate::strong::bijection::Bijection;
+use crate::permutation::{Permutation, permutations, slice_next};
 use crate::quaternions::Fit;
 use crate::shapes::*;
+
+use std::convert::TryFrom;
 
 pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     // Remove centroid
@@ -111,7 +110,7 @@ mod scaling {
     }
 }
 
-// Yields a boolean matrix indicating
+// Bool matrix indicating which vertex pairs are rotationally unique
 #[memoize]
 pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
     let shape = shape_from_name(shape_name);
@@ -121,7 +120,7 @@ pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
     let rotations = shape.generate_rotations();
     let viable_vertices: Vec<Vertex> = shape.vertex_groups().iter().map(|g| *g.first().unwrap()).collect();
     for i in viable_vertices.iter() {
-        let vertex_groups = shape.vertex_groups_holding(*i, &rotations);
+        let vertex_groups = shape.vertex_groups_holding(&[*i].to_vec(), &rotations);
         for group in vertex_groups {
             let j = group.first().expect("Vertex groups shouldn't be empty");
             skips[(i.get() as usize, j.get() as usize)] = false;
@@ -139,6 +138,72 @@ pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
     skips
 }
 
+struct SkipsBijectionGenerator {
+    starting_pairs: Vec<(Vertex, Vertex)>,
+    maybe_next: Option<Bijection<Column, Vertex>>
+}
+
+impl SkipsBijectionGenerator {
+    pub fn new(shape_name: Name) -> SkipsBijectionGenerator {
+        let skips = skip_vertices(shape_name);
+        let s = skips.ncols();
+
+        let mut pairs: Vec<(Vertex, Vertex)> = (0..s).cartesian_product(0..s)
+            .filter(|(i, j)| !skips[(*i, *j)] && i != j)
+            .map(|(i, j)| (Vertex(i as u8), Vertex(j as u8)))
+            .collect();
+
+        pairs.reverse();
+
+        let mut generator = SkipsBijectionGenerator {
+            starting_pairs: pairs,
+            maybe_next: Some(Bijection::new(Permutation::identity(s)))
+        };
+        generator.reset_from_next_pair();
+        generator
+    }
+
+    pub fn reset_from_next_pair(&mut self) {
+        if let Some((a, b)) = self.starting_pairs.pop() {
+            let mut initial = Vec::new();
+            initial.push(a.get());
+            initial.push(b.get());
+
+            let previous = self.maybe_next.as_ref();
+            let s = previous.expect("As long as there's pairs, this should be set").set_size();
+
+            for i in 0u8..(s as u8) {
+                if i != a.get() && i != b.get() {
+                    initial.push(i);
+                }
+            }
+
+            let first = Permutation::try_from(initial).unwrap();
+
+            self.maybe_next = Some(Bijection::new(first));
+        } else {
+            self.maybe_next = None;
+        }
+    }
+}
+
+impl Iterator for SkipsBijectionGenerator {
+    type Item = Bijection<Column, Vertex>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.maybe_next.is_none() {
+            return None;
+        }
+
+        let cached_maybe_next = self.maybe_next.clone();
+        if !slice_next(&mut self.maybe_next.as_mut().unwrap().permutation.sigma[2..]) {
+            self.reset_from_next_pair();
+        }
+
+        cached_maybe_next
+    } 
+}
+
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum SimilarityError {
     #[error("Number of positions does not match shape size")]
@@ -152,8 +217,6 @@ pub struct Similarity {
 
 /// Polyhedron similarity performing quaternion fits on all rotationally distinct bijections
 pub fn polyhedron_reference(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
-    type Occupation = Bijection<Vertex, Column>;
-
     let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.size() + 1 {
@@ -167,22 +230,21 @@ pub fn polyhedron_reference(x: &Matrix3N, s: Name) -> Result<Similarity, Similar
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = StrongPoints::new(unit_sphere_normalize(shape_coordinates));
 
-    let evaluate_permutation = |p: Occupation| -> (Occupation, Fit) {
-        let permuted_shape = shape_coordinates.apply_bijection(&p);
-        let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
+    let evaluate_permutation = |p: Bijection<Column, Vertex>| -> (Bijection<Column, Vertex>, Fit) {
+        let permuted_cloud = cloud.apply_bijection(&p);
+        let fit = shape_coordinates.quaternion_fit_with_rotor(&permuted_cloud);
         (p, fit)
     };
 
-    let skips = skip_vertices(s);
-
-    let (best_bijection, best_fit) = bijections(n)
-        .filter(|b| skips[(b.permutation[0] as usize, b.permutation[1] as usize)])
+    let (best_bijection, best_fit) = SkipsBijectionGenerator::new(s)
         .map(evaluate_permutation)
         .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("NaN in MSDs"))
         .expect("Not a single permutation available to try");
 
+    let best_bijection = best_bijection.inverse();
+
     let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
-    let rotated_shape = best_fit.rotate_rotor(&permuted_shape.matrix);
+    let rotated_shape = best_fit.rotate_stator(&permuted_shape.matrix);
 
     let csm = scaling::minimize(&cloud.matrix, &rotated_shape);
     if cfg!(debug_assertions) {
@@ -224,12 +286,10 @@ pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> 
         mapping: PartialPermutation,
     }
     let left_free: Vec<Column> = (n_prematch..n).map(|i| Column::from(i as u8)).collect();
-    let skips = skip_vertices(s);
 
     let narrow = (0..n)
         .map(|i| Vertex::from(i as u8))
         .permutations(n_prematch)
-        .filter(|p| skips[(p[0].get() as usize, p[1].get() as usize)])
         .fold(
             PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new()},
             |best, vertices| -> PartialMsd {
@@ -301,6 +361,8 @@ pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> 
      * minimize over the isotropic scaling factor. It is cheaper to reorder the
      * positions once here for the minimization so that memory access is in-order
      * during the repeated scaling minimization function call.
+     *
+     * NOTE: The bijection gets inverted here
      */
     let best_bijection = {
         let mut p = Permutation::identity(n);
@@ -328,6 +390,7 @@ mod tests {
     use crate::shapes::similarity::*;
     use crate::shapes::Matrix3N;
     use crate::quaternions::random_rotation;
+    use crate::strong::bijection::bijections;
 
     fn random_cloud(n: usize) -> Matrix3N {
         unit_sphere_normalize(Matrix3N::new_random(n))
@@ -407,22 +470,24 @@ mod tests {
             Case { shape_name: shape.name, bijection, cloud }
         }
 
-        fn assert_postconditions_with(&self, f: &dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>) {
+        fn can_find_bijection_with(&self, f: &dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>) -> bool {
             let similarity = f(&self.cloud.matrix, self.shape_name).expect("Fine");
 
             // Found bijection must be a rotation of the original bijection
             let shape = shape_from_name(self.shape_name);
-            let shape_rotations = shape.generate_rotations();
+            let rotations = shape.generate_rotations();
             let reference_bijection = pop_centroid(self.bijection.clone());
             let found_bijection = pop_centroid(similarity.bijection);
-            assert!(shape.is_rotation(&reference_bijection, &found_bijection, &shape_rotations));
 
-            // Fit must be vanishingly small
-            assert!(similarity.csm < 1e-6);
+
+            let is_rotation_of_reference = shape.is_rotation(&reference_bijection, &found_bijection, &rotations);
+            let zero_csm = similarity.csm < 1e-6;
+
+            is_rotation_of_reference && zero_csm
         }
     }
 
-    fn pop_centroid<Key, Value>(mut p: Bijection<Key, Value>) -> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
+    fn pop_centroid<T>(mut p: Bijection<Vertex, T>) -> Bijection<Vertex, T> where T: NewTypeIndex {
         let maybe_centroid = p.permutation.sigma.pop();
         // Ensure centroid was at end of permutation
         assert_eq!(maybe_centroid, Some(p.set_size() as u8));
@@ -431,40 +496,42 @@ mod tests {
 
     struct SimilarityFnTestBounds<'a> {
         f: &'a dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>,
-        min: usize,
         max: usize,
     }
 
     fn similarity_fn_bounds() -> Vec<SimilarityFnTestBounds<'static>> {
         if cfg!(debug_assertions) {
             [
-                SimilarityFnTestBounds {f: &polyhedron_reference, min: 1, max: 5},
-                SimilarityFnTestBounds {f: &polyhedron, min: 1, max: 6}
+                SimilarityFnTestBounds {f: &polyhedron_reference, max: 5},
+                SimilarityFnTestBounds {f: &polyhedron, max: 6}
             ].into()
         } else {
             [
-                SimilarityFnTestBounds {f: &polyhedron_reference, min: 1, max: 7},
-                SimilarityFnTestBounds {f: &polyhedron, min: 1, max: 8}
+                SimilarityFnTestBounds {f: &polyhedron_reference, max: 7},
+                SimilarityFnTestBounds {f: &polyhedron, max: 8}
             ].into()
         }
     }
 
     #[test]
-    fn try_all_similarities() {
+    fn stochastic_similarities_tests() {
         for shape in SHAPES.iter() {
             let shape_size = shape.size();
             let case = Case::random(shape);
 
             for bounds in similarity_fn_bounds() {
-                if bounds.min <= shape_size && shape_size <= bounds.max {
-                    case.assert_postconditions_with(bounds.f);
+                if shape_size <= bounds.max {
+                    if !case.can_find_bijection_with(bounds.f) {
+                        println!("Couldn't find {} in {}", case.bijection, shape.name);
+                        assert!(false);
+                    }
                 }
             }
         }
     }
 
     #[test]
-    fn pyramid_exhaustive() {
+    fn polyhedron_reference_all_bijections() {
         let test_shape: &Shape = {
             if cfg!(debug_assertions) { &TRIGONALPYRAMID } else { &SQUAREPYRAMID }
         };
@@ -472,14 +539,63 @@ mod tests {
         let index_bound = Permutation::group_order(test_shape.size());
         for i in 0..index_bound {
             let case = Case::indexed(test_shape, i);
-
-            for bounds in similarity_fn_bounds() {
-                case.assert_postconditions_with(bounds.f);
+            if !case.can_find_bijection_with(&polyhedron_reference) {
+                println!("Couldn't find {} in {}", case.bijection, test_shape.name);
+                assert!(false);
             }
         }
     }
 
-    // for v in cloud.column_iter_mut() {
-    //     v += Vector3::new_random().normalize().scale(0.1);
-    // }
+    #[test]
+    fn polyhedron_all_bijections() {
+        let test_shape: &Shape = {
+            if cfg!(debug_assertions) { &TRIGONALPYRAMID } else { &SQUAREPYRAMID }
+        };
+
+        let index_bound = Permutation::group_order(test_shape.size());
+        for i in 0..index_bound {
+            let case = Case::indexed(test_shape, i);
+            if !case.can_find_bijection_with(&polyhedron) {
+                println!("Couldn't find {} in {}", case.bijection, test_shape.name);
+                assert!(false);
+            }
+        }
+    }
+
+    #[test]
+    fn skips_recoverable_by_rotation() {
+        for shape in SHAPES.iter().filter(|s| s.size() < 7) {
+            let rotations = shape.generate_rotations();
+
+            let mut recovered_bijections = HashSet::new();
+            for rotationally_unique in SkipsBijectionGenerator::new(shape.name) {
+                // Need to invert since the centroid is only last in vertex -> column
+                // and need to remove it to rotate in shape vertex space
+                let mut inverted = rotationally_unique.inverse();
+                let centroid_vertex = inverted.permutation.sigma.pop().unwrap();
+                for rotation in rotations.iter() {
+                    let mut rotated = rotation.compose(&inverted).unwrap();
+                    rotated.permutation.sigma.push(centroid_vertex);
+
+                    // no need to re-invert
+                    recovered_bijections.insert(rotated);
+                }
+            }
+
+            assert_eq!(recovered_bijections.len(), Permutation::group_order(shape.size() + 1));
+        }
+    }
+
+    #[test]
+    fn skip_generator() {
+        for shape in SHAPES.iter().filter(|s| s.size() < 7) {
+            let skips = skip_vertices(shape.name);
+
+            itertools::assert_equal(
+                bijections(shape.size() + 1)
+                    .filter(|b| !skips[(b.permutation[0] as usize, b.permutation[1] as usize)]),
+                SkipsBijectionGenerator::new(shape.name)
+            );
+        }
+    }
 }

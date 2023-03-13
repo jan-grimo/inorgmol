@@ -338,6 +338,10 @@ impl Permutation {
     pub fn random(n: usize) -> Permutation {
         Permutation::from_index(n, random_discrete(Permutation::group_order(n)))
     }
+
+    pub fn is_fixed_point(&self, i: u8) -> bool {
+        self.sigma[i as usize] == i
+    }
 }
 
 /// Implements indexing, letting Permutation behave as a container directly
@@ -504,5 +508,13 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn range_equal() {
+        itertools::assert_equal(
+            permutations(4),
+            (0..4).permutations(4).map(|p| Permutation {sigma: p})
+        );
     }
 }

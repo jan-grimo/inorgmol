@@ -64,6 +64,10 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     pub fn group_order(n: usize) -> usize {
         Permutation::group_order(n)
     }
+
+    pub fn is_fixed_point(&self, key: Key) -> bool {
+        return self.permutation.is_fixed_point(key.get().to_u8().unwrap());
+    }
 }
 
 impl<Key, Value> std::fmt::Display for Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {

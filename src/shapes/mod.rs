@@ -220,10 +220,10 @@ impl Shape {
         Self::union_to_groups(sets)
     }
 
-    pub fn vertex_groups_holding(&self, held: Vertex, rotations: &HashSet<Rotation>) -> Vec<Vec<Vertex>> {
+    pub fn vertex_groups_holding(&self, held: &Vec<Vertex>, rotations: &HashSet<Rotation>) -> Vec<Vec<Vertex>> {
         let shape_size = self.size();
         let mut sets = UnionFind::new(shape_size);
-        for rotation in rotations.iter().filter(|rot| rot.get(&held) == Some(held)) {
+        for rotation in rotations.iter().filter(|rot| held.iter().all(|v| rot.is_fixed_point(*v))) {
             for v in 0..shape_size {
                 sets.union(v, rotation.permutation[v] as usize);
             }
@@ -247,7 +247,8 @@ pub mod similarity;
 #[cfg(test)]
 mod tests {
     use crate::shapes::*;
-    use crate::strong::matrix::AsNewTypeIndexedMatrix;
+    use crate::shapes::similarity::unit_sphere_normalize;
+    use crate::strong::matrix::{AsNewTypeIndexedMatrix, StrongPoints};
 
     fn tetrahedron_volume(tetrahedron: &[Vertex; 4], points: &Matrix3N) -> f64 {
         let coords = AsNewTypeIndexedMatrix::<Vertex>::new(points);
@@ -279,6 +280,19 @@ mod tests {
                 }
             }
             assert!(pass);
+        }
+    }
+
+    #[test]
+    fn rotations_are_rotations() {
+        for shape in SHAPES.iter() {
+            let strong_coords = StrongPoints::new(unit_sphere_normalize(shape.coordinates.clone()));
+            // Apply each rotation and quaternion fit without a mapping
+            for rotation in shape.rotation_basis.iter() {
+                let rotated_coords = strong_coords.apply_bijection(&rotation);
+                let fit = strong_coords.quaternion_fit_with_rotor(&rotated_coords);
+                assert!(fit.msd < 1e-6);
+            }
         }
     }
 
