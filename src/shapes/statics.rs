@@ -3,6 +3,8 @@ use crate::permutation::Permutation;
 
 const FRAC_1_SQRT_2: f64 = std::f64::consts::FRAC_1_SQRT_2;
 const SQRT_FRAC_1_3: f64 = 0.5773502691896257;
+const SQRT_2: f64 = std::f64::consts::SQRT_2;
+const SQRT_3: f64 = 1.7320508075688772;
 
 fn make_rotation(slice: &[u8]) -> Rotation {
     Rotation::new(Permutation {sigma: slice.to_vec()})
@@ -84,10 +86,10 @@ lazy_static! {
     pub static ref TETRAHEDRON: Shape = Shape {
         name: Name::Tetrahedron,
         coordinates: Matrix3N::from_column_slice(&[
-            0.0, 1.0, 0.0,
-            0.0, -0.333807, 0.942641,
-            0.816351, -0.333807, -0.471321,
-            -0.816351, -0.333807, -0.471321
+            -SQRT_2 / 3.0,  SQRT_2 / SQRT_3, -1.0 / 3.0,
+            0.0, 0.0, 1.0,
+            2.0 * SQRT_2 / 3.0, 0.0, -1.0 / 3.0,
+            -SQRT_2 / 3.0, -SQRT_2 / SQRT_3, -1.0 / 3.0
         ]),
         rotation_basis: vec![
             make_rotation(&[0, 3, 1, 2]),

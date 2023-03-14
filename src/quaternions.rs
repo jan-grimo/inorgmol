@@ -53,7 +53,7 @@ pub fn quaternion_decomposition(mat: Matrix4) -> Fit {
     // Eigenvalues are unsorted here, we seek the minimum value
     // NOTE: Best inverted fit uses eigenvector of largest eigenvector l_3 
     // with msd of 0.5 * (l_0 + l_1 + l_2 - l_3), so can check if inversion
-    // better quite easily
+    // better quite easily if desired
     let (min_eigenvalue_index, msd) = decomposition.eigenvalues
         .iter()
         .enumerate()
@@ -156,7 +156,6 @@ mod tests {
             let quaternion = random_rotation();
             let rotor = Rotor::from(quaternion.to_rotation_matrix() * stator.matrix.clone());
 
-
             Case {stator, rotor, quaternion}
         }
     }
@@ -184,7 +183,7 @@ mod tests {
         let distorted_rotor = Rotor::from(case.rotor.matrix + 0.01 * random_cloud(v));
         let distorted_fit = case.stator.fit(&distorted_rotor);
         let rotated_rotor = distorted_fit.quaternion.inverse().to_rotation_matrix() * distorted_rotor.matrix;
-        let msd: f64 = (case.stator.matrix.clone() - rotated_rotor)
+        let msd: f64 = (case.stator.matrix - rotated_rotor)
             .column_iter()
             .map(|col| col.norm_squared())
             .sum();

@@ -175,7 +175,7 @@ impl Shape {
         rotations
     }
 
-    pub fn is_rotation<T: NewTypeIndex>(&self, a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
+    pub fn is_rotation<T: NewTypeIndex>(a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
         rotations.iter().any(|r| r.compose(a).expect("Bad occupations") == *b)
     }
 
@@ -273,7 +273,7 @@ mod tests {
         for shape in SHAPES.iter() {
             let mut pass = true;
             for tetrahedron in shape.tetrahedra.iter() {
-                let volume = tetrahedron_volume(&tetrahedron, &shape.coordinates);
+                let volume = tetrahedron_volume(tetrahedron, &shape.coordinates);
                 if volume < 0.0 {
                     pass = false;
                     println!("Shape {} tetrahedron {:?} does not have positive volume.", shape.name, tetrahedron);
@@ -289,7 +289,7 @@ mod tests {
             let strong_coords = StrongPoints::new(unit_sphere_normalize(shape.coordinates.clone()));
             // Apply each rotation and quaternion fit without a mapping
             for rotation in shape.rotation_basis.iter() {
-                let rotated_coords = strong_coords.apply_bijection(&rotation);
+                let rotated_coords = strong_coords.apply_bijection(rotation);
                 let fit = strong_coords.quaternion_fit_with_rotor(&rotated_coords);
                 assert!(fit.msd < 1e-6);
             }
@@ -335,5 +335,39 @@ mod tests {
         vertex_group_correct(&SQUAREPYRAMID, 2);
         vertex_group_correct(&OCTAHEDRON, 1);
         vertex_group_correct(&PENTAGONALPYRAMID, 2);
+    }
+
+    #[test]
+    fn names_correct() {
+        assert!(SHAPES.iter().all(|s| std::ptr::eq(shape_from_name(s.name), *s)));
+    }
+
+    fn print_total_unit_sphere_deviations() {
+        let mut shape_deviations: Vec<(Name, f64)> = SHAPES.iter()
+            .map(|s| (s.name, s.coordinates.column_iter()
+                      .map(|v| (v.norm() - 1.0).abs())
+                      .sum())
+            ).collect();
+        shape_deviations.sort_by(|(_, a), (_, b)| a.partial_cmp(b).expect("No NaNs"));
+        shape_deviations.reverse();
+
+        for (name, deviation) in shape_deviations {
+            println!("{}: {:e}", name, deviation);
+        }
+    }
+
+    #[test]
+    fn shape_coordinates_on_unit_sphere() {
+        // TODO tighten the threshold here by improving shape coordinates
+        for shape in SHAPES.iter() {
+            let mut pass = true;
+            for (i, col) in shape.coordinates.column_iter().enumerate() {
+                if (col.norm() - 1.0).abs() > 1e-6 {
+                    pass = false;
+                    println!("Column {} of {} coordinates are not precisely on the unit sphere", i, shape.name);
+                }
+            }
+            assert!(pass);
+        }
     }
 }

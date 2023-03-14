@@ -509,7 +509,7 @@ mod tests {
         let occupation: Bijection<Vertex, Column> = Bijection::from_index(4, 23);
         for rot in &tetr_rotations {
             let rotated_occupation = rot.compose(&occupation).expect("fine");
-            assert!(TETRAHEDRON.is_rotation(&occupation, &rotated_occupation, &tetr_rotations));
+            assert!(Shape::is_rotation(&occupation, &rotated_occupation, &tetr_rotations));
         }
     }
 
@@ -558,7 +558,7 @@ mod tests {
             let found_bijection = pop_centroid(similarity.bijection);
 
 
-            let is_rotation_of_reference = shape.is_rotation(&reference_bijection, &found_bijection, &rotations);
+            let is_rotation_of_reference = Shape::is_rotation(&reference_bijection, &found_bijection, &rotations);
             let zero_csm = similarity.csm < 1e-6;
 
             is_rotation_of_reference && zero_csm
@@ -599,11 +599,9 @@ mod tests {
             let case = Case::random(shape);
 
             for bounds in similarity_fn_bounds() {
-                if shape_size <= bounds.max {
-                    if !case.can_find_bijection_with(bounds.f) {
-                        println!("Couldn't find {} in {} with {}", case.bijection, shape.name, bounds.name);
-                        assert!(false);
-                    }
+                if shape_size <= bounds.max && !case.can_find_bijection_with(bounds.f) {
+                    println!("Couldn't find {} in {} with {}", case.bijection, shape.name, bounds.name);
+                    assert!(false);
                 }
             }
         }
