@@ -27,6 +27,10 @@ criterion = "0.4"
 name = "similarities"
 harness = false
 
+[[bench]]
+name = "linear_assignment"
+harness = false
+
 # Disable bench so criterion's cargo bench -- --quick works
 [lib]
 bench = false

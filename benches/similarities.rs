@@ -5,14 +5,32 @@ use strong::bijection::Bijection;
 
 use itertools::Itertools;
 
-fn similarities(c: &mut Criterion) {
-    let size_limit = { if cfg!(debug_assertions) { 7 } else { 9 } };
+// TODO
+// - Better line colors
 
+fn similarities(c: &mut Criterion) {
     let mut bench_group = c.benchmark_group("similarities");
-    for shape in shapes::SHAPES.iter().unique_by(|s| s.size()) {
+    let plot_config = criterion::PlotConfiguration::default()
+        .summary_scale(criterion::AxisScale::Logarithmic);
+    bench_group.plot_config(plot_config);
+
+    let mut shapes = Vec::new();
+    for (size, shape_group) in &shapes::SHAPES.iter().group_by(|s| s.size()) {
+        if size < 4 {
+            continue;
+        }
+
+        let most_symmetric = shape_group
+            .max_by_key(|s| s.generate_rotations().len())
+            .unwrap();
+
+        shapes.push(*most_symmetric);
+    }
+
+    for shape in shapes {
         let size = shape.size();
-        if size < 5 || size > size_limit {
-            // Up to and including size == 5 the algorithms are identical
+
+        if size < 4 {
             continue;
         }
 
@@ -27,18 +45,47 @@ fn similarities(c: &mut Criterion) {
         let cloud = shape_rotated.apply_bijection(&bijection);
 
         bench_group.throughput(Throughput::Elements(size as u64));
-        bench_group.bench_with_input(
-            BenchmarkId::new("reference", size as u64),
-            &(size as u64),
-            |b, _| b.iter(|| shapes::similarity::polyhedron_reference(black_box(&cloud.matrix), black_box(shape.name)))
-        );
-        bench_group.bench_with_input(
-            BenchmarkId::new("shortcut", size as u64),
-            &(size as u64),
-            |b, _| b.iter(|| shapes::similarity::polyhedron(black_box(&cloud.matrix), black_box(shape.name)))
-        );
-    }
 
+        if size <= 7 {
+            bench_group.bench_with_input(
+                BenchmarkId::new("reference", size as u64),
+                &(size as u64),
+                |b, _| b.iter(|| shapes::similarity::polyhedron_reference_base::<false>(black_box(&cloud.matrix), black_box(shape.name)))
+            );
+        }
+
+        if size <= 8 {
+            bench_group.bench_with_input(
+                BenchmarkId::new("skip", size as u64),
+                &(size as u64),
+                |b, _| b.iter(|| shapes::similarity::polyhedron_reference(black_box(&cloud.matrix), black_box(shape.name)))
+            );
+        }
+
+        if size > 5 && size <= 10 {
+            bench_group.bench_with_input(
+                BenchmarkId::new("prematch", size as u64),
+                &(size as u64),
+                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, false, false>(black_box(&cloud.matrix), black_box(shape.name)))
+            );
+        }
+
+        if size > 5 {
+            bench_group.bench_with_input(
+                BenchmarkId::new("prematch, skip", size as u64),
+                &(size as u64),
+                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, true, false>(black_box(&cloud.matrix), black_box(shape.name)))
+            );
+        }
+
+        if size > 7 {
+            bench_group.bench_with_input(
+                BenchmarkId::new("prematch, skip, jv", size as u64),
+                &(size as u64),
+                |b, _| b.iter(|| shapes::similarity::polyhedron(black_box(&cloud.matrix), black_box(shape.name)))
+            );
+        }
+    }
 }
 
 criterion_group!(benches, similarities);

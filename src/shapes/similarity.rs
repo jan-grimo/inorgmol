@@ -1,9 +1,11 @@
 // TODO
-// - Add lapjv linear assignment variation
 // - "Horn [13] considered including a scaling in the transfor-
 //   mation T in eq. (11). This is quite easily accommodated." 
 //   from https://arxiv.org/pdf/physics/0506177.pdf
 //   -> Should simplify the scaling optimization step, prospective 3-5%
+// - Ensure complete correctness with more detailed tests
+// - Add binary generating graphs of distortion vs correctness for shortcut algorithm
+// - Clippy lints
 
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
@@ -14,7 +16,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::strong::matrix::StrongPoints;
-use crate::strong::bijection::Bijection;
+use crate::strong::bijection::{Bijection, bijections};
 use crate::permutation::{Permutation, permutations, slice_next};
 use crate::quaternions::Fit;
 use crate::shapes::*;
@@ -216,7 +218,7 @@ pub struct Similarity {
 }
 
 /// Polyhedron similarity performing quaternion fits on all rotationally distinct bijections
-pub fn polyhedron_reference(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.size() + 1 {
@@ -236,10 +238,17 @@ pub fn polyhedron_reference(x: &Matrix3N, s: Name) -> Result<Similarity, Similar
         (p, fit)
     };
 
-    let (best_bijection, best_fit) = SkipsBijectionGenerator::new(s)
+    type BijectionGenerator = dyn Iterator<Item = Bijection<Column, Vertex>>;
+    let bijection_generator: Box<BijectionGenerator> = match USE_SKIPS {
+        true => Box::new(SkipsBijectionGenerator::new(s)),
+        false => Box::new(bijections(n))
+    };
+
+    let (best_bijection, best_fit) = bijection_generator
         .map(evaluate_permutation)
         .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("NaN in MSDs"))
-        .expect("Not a single permutation available to try");
+        .expect("Not a single permutation available to try")
+    ;
 
     let best_bijection = best_bijection.inverse();
 
@@ -256,9 +265,67 @@ pub fn polyhedron_reference(x: &Matrix3N, s: Name) -> Result<Similarity, Similar
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
+pub fn polyhedron_reference(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+    polyhedron_reference_base::<true>(x, s)
+}
+
+pub mod linear_assignment {
+    use std::convert::TryFrom;
+    use crate::shapes::similarity::{Permutation, permutations};
+
+    /// Brute force the linear assignment problem (factorial complexity)
+    pub fn brute_force(v: usize, cost_fn: &dyn Fn(usize, usize) -> f64) -> Permutation {
+        let costs = nalgebra::DMatrix::from_fn(v, v, cost_fn);
+        let (_, permutation) = permutations(v)
+            .map(|p| ((0..v).map(|i| costs[(i, p[i] as usize)]).sum(), p) )
+            .min_by(|(a, _): &(f64, Permutation), (b, _): &(f64, Permutation)| a.partial_cmp(b).expect("Encountered NaNs"))
+            .expect("At least one permutation present");
+
+        permutation
+    }
+
+    /// Use Jonker-Volgenant solution (cubic complexity)
+    pub fn jonker_volgenant(v: usize, cost_fn: &dyn Fn(usize, usize) -> f64) -> Permutation {
+        let costs_ndarray = lapjv::Matrix::from_shape_fn((v, v), |(i, j)| cost_fn(i, j));
+        let (forward_sigma, _) = lapjv::lapjv(&costs_ndarray).expect("lapjv doesn't fail");
+        Permutation::try_from(forward_sigma).expect("lapjv yields valid permutations")
+    }
+
+    /// Switch depending on matrix size
+    pub fn optimal(v: usize, cost_fn: &dyn Fn(usize, usize) -> f64) -> Permutation {
+        if v > 3 {
+            jonker_volgenant(v, cost_fn)
+        } else {
+            brute_force(v, cost_fn)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use crate::shapes::similarity::linear_assignment::*;
+        
+        #[test]
+        fn jv_yields_forward_permutations() {
+            let mat = nalgebra::DMatrix::from_row_slice(5, 5, &[
+                1.8532, 0.7544, 0.3690, 2.3446, 3.4903, 
+                1.7034, 0.1503, 2.2695, 0.6570, 2.8954, 
+                3.4626, 3.5621, 3.3862, 1.3924, 0.0061, 
+                0.0682, 1.0255, 1.6610, 2.5187, 3.3430, 
+                0.9999, 0.9999, 0.9999, 1.0000, 1.0000 
+            ]);
+            let cost_fn = |i, j| mat[(i, j)];
+
+            assert_eq!(brute_force(5, &cost_fn), jonker_volgenant(5, &cost_fn));
+        }
+    }
+}
+
 /// Polyhedron similarity performing quaternion fits only on a limited number of 
 /// vertices before assigning the rest by brute force linear assignment
-pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_JV: bool>(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+    const MIN_PREMATCH: usize = 2;
+    assert!(MIN_PREMATCH <= PREMATCH); // TODO trigger compilation failure? static assert?
+
     type Occupation = Bijection<Vertex, Column>;
     let shape = shape_from_name(s);
     let n = x.ncols();
@@ -266,9 +333,8 @@ pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> 
         return Err(SimilarityError::PositionNumberMismatch);
     }
 
-    let n_prematch = 5;
-    if n <= n_prematch {
-        return polyhedron_reference(x, s);
+    if n <= PREMATCH {
+        return polyhedron_reference_base::<USE_SKIPS>(x, s);
     }
 
     let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x.clone()));
@@ -285,11 +351,22 @@ pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> 
         msd: f64,
         mapping: PartialPermutation,
     }
-    let left_free: Vec<Column> = (n_prematch..n).map(|i| Column::from(i as u8)).collect();
+    let left_free: Vec<Column> = (PREMATCH..n).map(|i| Column::from(i as u8)).collect();
+
+    let skips = match USE_SKIPS {
+        true => Some(skip_vertices(s)),
+        false => None
+    };
 
     let narrow = (0..n)
         .map(|i| Vertex::from(i as u8))
-        .permutations(n_prematch)
+        .permutations(PREMATCH)
+        .filter(|vertices| {
+            match USE_SKIPS {
+                true => !skips.as_ref().unwrap()[(vertices[0].get() as usize, vertices[1].get() as usize)],
+                false => true
+            }
+        })
         .fold(
             PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new()},
             |best, vertices| -> PartialMsd {
@@ -322,13 +399,10 @@ pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> 
                 }
 
                 let cost_fn = |i, j| (cloud.column(left_free[i]) - prematch_rotated_shape.column(right_free[j])).norm_squared();
-                let costs = na::DMatrix::from_fn(v, v, cost_fn);
-                
-                // Brute-force the costs matrix linear assignment permutation
-                let (_, sub_permutation) = permutations(v)
-                    .map(|permutation| ((0..v).map(|i| costs[(i, permutation[i] as usize)]).sum(), permutation) )
-                    .min_by(|(a, _): &(f64, Permutation), (b, _): &(f64, Permutation)| a.partial_cmp(b).expect("Encountered NaNs"))
-                    .expect("At least one permutation present");
+                let sub_permutation = match LAP_JV {
+                    true => linear_assignment::optimal(v, &cost_fn),
+                    false => linear_assignment::brute_force(v, &cost_fn)
+                };
 
                 // Fuse pre-match and best subpermutation
                 for (i, j) in sub_permutation.iter_pairs() {
@@ -360,7 +434,7 @@ pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> 
     /* Given the best permutation for the rotational fit, we still have to
      * minimize over the isotropic scaling factor. It is cheaper to reorder the
      * positions once here for the minimization so that memory access is in-order
-     * during the repeated scaling minimization function call.
+     * during the repeated scaling minimization function calls.
      *
      * NOTE: The bijection gets inverted here
      */
@@ -382,6 +456,10 @@ pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> 
 
     let csm = scaling::minimize(&cloud.matrix, &rotated_shape);
     Ok(Similarity {bijection: best_bijection, csm})
+}
+
+pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+    polyhedron_base::<5, true, true>(&x, s)
 }
 
 #[cfg(test)]
@@ -497,18 +575,19 @@ mod tests {
     struct SimilarityFnTestBounds<'a> {
         f: &'a dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>,
         max: usize,
+        name: &'static str
     }
 
     fn similarity_fn_bounds() -> Vec<SimilarityFnTestBounds<'static>> {
         if cfg!(debug_assertions) {
             [
-                SimilarityFnTestBounds {f: &polyhedron_reference, max: 5},
-                SimilarityFnTestBounds {f: &polyhedron, max: 6}
+                SimilarityFnTestBounds {f: &polyhedron_reference, max: 5, name: "polyhedron reference"},
+                SimilarityFnTestBounds {f: &polyhedron, max: 6, name: "polyhedron"}
             ].into()
         } else {
             [
-                SimilarityFnTestBounds {f: &polyhedron_reference, max: 7},
-                SimilarityFnTestBounds {f: &polyhedron, max: 8}
+                SimilarityFnTestBounds {f: &polyhedron_reference, max: 7, name: "polyhedron reference"},
+                SimilarityFnTestBounds {f: &polyhedron, max: 8, name: "polyhedron"}
             ].into()
         }
     }
@@ -522,7 +601,7 @@ mod tests {
             for bounds in similarity_fn_bounds() {
                 if shape_size <= bounds.max {
                     if !case.can_find_bijection_with(bounds.f) {
-                        println!("Couldn't find {} in {}", case.bijection, shape.name);
+                        println!("Couldn't find {} in {} with {}", case.bijection, shape.name, bounds.name);
                         assert!(false);
                     }
                 }
@@ -540,7 +619,7 @@ mod tests {
         for i in 0..index_bound {
             let case = Case::indexed(test_shape, i);
             if !case.can_find_bijection_with(&polyhedron_reference) {
-                println!("Couldn't find {} in {}", case.bijection, test_shape.name);
+                println!("Couldn't find {} in {} with polyhedron reference", case.bijection, test_shape.name);
                 assert!(false);
             }
         }
@@ -556,7 +635,7 @@ mod tests {
         for i in 0..index_bound {
             let case = Case::indexed(test_shape, i);
             if !case.can_find_bijection_with(&polyhedron) {
-                println!("Couldn't find {} in {}", case.bijection, test_shape.name);
+                println!("Couldn't find {} in {} with polyhedron", case.bijection, test_shape.name);
                 assert!(false);
             }
         }
