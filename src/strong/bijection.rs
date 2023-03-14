@@ -66,7 +66,7 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     }
 
     pub fn is_fixed_point(&self, key: Key) -> bool {
-        return self.permutation.is_fixed_point(key.get().to_u8().unwrap());
+        self.permutation.is_fixed_point(key.get().to_u8().unwrap())
     }
 }
 

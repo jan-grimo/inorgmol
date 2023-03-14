@@ -71,7 +71,7 @@ mod scaling {
         type Output = f64;
 
         fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
-            Ok(evaluate_msd(&self.cloud, &self.rotated_shape, *p))
+            Ok(evaluate_msd(self.cloud, self.rotated_shape, *p))
         }
     }
 
@@ -99,7 +99,7 @@ mod scaling {
             }
         }
 
-        normalize(&cloud, result.state.best_cost)
+        normalize(cloud, result.state.best_cost)
     }
 
     // TODO Untested, maybe faster?
@@ -108,7 +108,7 @@ mod scaling {
     pub fn direct(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
         let factor = (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
             / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt();
-        normalize(&cloud, evaluate_msd(&cloud, &shape, factor))
+        normalize(cloud, evaluate_msd(cloud, shape, factor))
     }
 }
 
@@ -122,7 +122,7 @@ pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
     let rotations = shape.generate_rotations();
     let viable_vertices: Vec<Vertex> = shape.vertex_groups().iter().map(|g| *g.first().unwrap()).collect();
     for i in viable_vertices.iter() {
-        let vertex_groups = shape.vertex_groups_holding(&[*i].to_vec(), &rotations);
+        let vertex_groups = shape.vertex_groups_holding(&[*i], &rotations);
         for group in vertex_groups {
             let j = group.first().expect("Vertex groups shouldn't be empty");
             skips[(i.get() as usize, j.get() as usize)] = false;
@@ -459,7 +459,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
 }
 
 pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
-    polyhedron_base::<5, true, true>(&x, s)
+    polyhedron_base::<5, true, true>(x, s)
 }
 
 #[cfg(test)]

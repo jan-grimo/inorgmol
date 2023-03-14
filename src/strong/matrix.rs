@@ -26,7 +26,7 @@ impl<'a, I> AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
     }
 
     pub fn quaternion_fit_with_rotor(&self, rotor: AsNewTypeIndexedMatrix<I>) -> quaternions::Fit {
-        quaternions::fit(&self.matrix, &rotor.matrix)
+        quaternions::fit(self.matrix, rotor.matrix)
     }
 
     pub fn quaternion_fit_with_map<J>(&self, rotor: AsNewTypeIndexedMatrix<J>, map: &HashMap<I, J>) -> quaternions::Fit where J: NewTypeIndex {
@@ -44,7 +44,7 @@ impl<'a, I> AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
     }
 
     pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
-        StrongPoints::new(apply_permutation(&self.matrix, &bijection.permutation))
+        StrongPoints::new(apply_permutation(self.matrix, &bijection.permutation))
     }
 }
 
@@ -71,11 +71,11 @@ impl<I> StrongPoints<I> where I: NewTypeIndex {
     }
 
     pub fn quaternion_fit_with_map<J>(&self, rotor: &StrongPoints<J>, map: &HashMap<I, J>) -> quaternions::Fit where J: NewTypeIndex {
-        self.raise().quaternion_fit_with_map(rotor.raise(), &map)
+        self.raise().quaternion_fit_with_map(rotor.raise(), map)
     }
 
     pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
-        self.raise().apply_bijection(&bijection)
+        self.raise().apply_bijection(bijection)
     }
 }
 

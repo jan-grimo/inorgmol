@@ -1,6 +1,9 @@
 use crate::shapes::{Shape, Name, Vertex, Rotation, Mirror, Matrix3N};
 use crate::permutation::Permutation;
 
+const FRAC_1_SQRT_2: f64 = std::f64::consts::FRAC_1_SQRT_2;
+const SQRT_FRAC_1_3: f64 = 0.5773502691896257;
+
 fn make_rotation(slice: &[u8]) -> Rotation {
     Rotation::new(Permutation {sigma: slice.to_vec()})
 }
@@ -70,8 +73,8 @@ lazy_static! {
         name: Name::T,
         coordinates: Matrix3N::from_column_slice(&[
             -1.0, -0.0, -0.0,
-            0.0, 1.0, 0.0,
-            1.0, 0.0, 0.0,
+             0.0,  1.0,  0.0,
+             1.0,  0.0,  0.0,
         ]),
         rotation_basis: vec![Rotation::new(Permutation {sigma: vec![2, 1, 0]})],
         tetrahedra: vec![],
@@ -99,8 +102,8 @@ lazy_static! {
     pub static ref SQUARE: Shape = Shape {
         name: Name::Square,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
+             1.0,  0.0,  0.0,
+             0.0,  1.0,  0.0,
             -1.0, -0.0, -0.0,
             -0.0, -1.0, -0.0
         ]),
@@ -412,14 +415,14 @@ lazy_static! {
     pub static ref CUBE: Shape = Shape {
         name: Name::Cube,
         coordinates: Matrix3N::from_column_slice(&[
-              0.577350,  0.577350,  0.577350,
-              0.577350, -0.577350,  0.577350,
-              0.577350, -0.577350, -0.577350,
-              0.577350,  0.577350, -0.577350,
-             -0.577350,  0.577350,  0.577350,
-             -0.577350, -0.577350,  0.577350,
-             -0.577350, -0.577350, -0.577350,
-             -0.577350,  0.577350, -0.577350
+              SQRT_FRAC_1_3,  SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
+              SQRT_FRAC_1_3, -SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
+              SQRT_FRAC_1_3, -SQRT_FRAC_1_3, -SQRT_FRAC_1_3,
+              SQRT_FRAC_1_3,  SQRT_FRAC_1_3, -SQRT_FRAC_1_3,
+             -SQRT_FRAC_1_3,  SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
+             -SQRT_FRAC_1_3, -SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
+             -SQRT_FRAC_1_3, -SQRT_FRAC_1_3, -SQRT_FRAC_1_3,
+             -SQRT_FRAC_1_3,  SQRT_FRAC_1_3, -SQRT_FRAC_1_3
         ]),
         rotation_basis: vec![
             make_rotation(&[3, 0, 1, 2, 7, 4, 5, 6]), // C4
@@ -654,18 +657,18 @@ lazy_static! {
     pub static ref CUBOCTAHEDRON: Shape = Shape {
         name: Name::Cuboctahedron,
         coordinates: Matrix3N::from_column_slice(&[
-             0.707107,  0.000000,  0.707107,
-             0.707107,  0.000000, -0.707107,
-            -0.707107,  0.000000,  0.707107,
-            -0.707107,  0.000000, -0.707107,
-             0.707107,  0.707107,  0.000000,
-             0.707107, -0.707107,  0.000000,
-            -0.707107,  0.707107,  0.000000,
-            -0.707107, -0.707107,  0.000000,
-             0.000000,  0.707107,  0.707107,
-             0.000000,  0.707107, -0.707107,
-             0.000000, -0.707107,  0.707107,
-             0.000000, -0.707107, -0.707107
+             FRAC_1_SQRT_2,            0.0,  FRAC_1_SQRT_2,
+             FRAC_1_SQRT_2,            0.0, -FRAC_1_SQRT_2,
+            -FRAC_1_SQRT_2,            0.0,  FRAC_1_SQRT_2,
+            -FRAC_1_SQRT_2,            0.0, -FRAC_1_SQRT_2,
+             FRAC_1_SQRT_2,  FRAC_1_SQRT_2,            0.0,
+             FRAC_1_SQRT_2, -FRAC_1_SQRT_2,            0.0,
+            -FRAC_1_SQRT_2,  FRAC_1_SQRT_2,            0.0,
+            -FRAC_1_SQRT_2, -FRAC_1_SQRT_2,            0.0,
+                       0.0,  FRAC_1_SQRT_2,  FRAC_1_SQRT_2,
+                       0.0,  FRAC_1_SQRT_2, -FRAC_1_SQRT_2,
+                       0.0, -FRAC_1_SQRT_2,  FRAC_1_SQRT_2,
+                       0.0, -FRAC_1_SQRT_2, -FRAC_1_SQRT_2
         ]),
         rotation_basis: vec![
             make_rotation(&[10, 11, 8, 9, 5, 7, 4, 6, 0, 1, 2, 3]), // C4 ccw 0-8-2-10

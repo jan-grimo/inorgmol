@@ -220,7 +220,7 @@ impl Shape {
         Self::union_to_groups(sets)
     }
 
-    pub fn vertex_groups_holding(&self, held: &Vec<Vertex>, rotations: &HashSet<Rotation>) -> Vec<Vec<Vertex>> {
+    pub fn vertex_groups_holding(&self, held: &[Vertex], rotations: &HashSet<Rotation>) -> Vec<Vec<Vertex>> {
         let shape_size = self.size();
         let mut sets = UnionFind::new(shape_size);
         for rotation in rotations.iter().filter(|rot| held.iter().all(|v| rot.is_fixed_point(*v))) {
