@@ -247,66 +247,6 @@ pub mod similarity;
 #[cfg(test)]
 mod tests {
     use crate::shapes::*;
-    use crate::shapes::similarity::unit_sphere_normalize;
-    use crate::strong::matrix::{AsNewTypeIndexedMatrix, StrongPoints};
-
-    fn tetrahedron_volume(tetrahedron: &[Vertex; 4], points: &Matrix3N) -> f64 {
-        let coords = AsNewTypeIndexedMatrix::<Vertex>::new(points);
-        let zero = Matrix3N::zeros(1);
-        let r = |v: Vertex| {
-            if v == ORIGIN {
-                zero.column(0)
-            } else {
-                coords.column(v)
-            }
-        };
-
-        (r(tetrahedron[0]) - r(tetrahedron[3])).dot(
-            &(r(tetrahedron[1]) - r(tetrahedron[3])).cross(
-                &(r(tetrahedron[2]) - r(tetrahedron[3]))
-            )
-        )
-    }
-
-    #[test]
-    fn all_tetrahedra_positive_volume() {
-        for shape in SHAPES.iter() {
-            let mut pass = true;
-            for tetrahedron in shape.tetrahedra.iter() {
-                let volume = tetrahedron_volume(tetrahedron, &shape.coordinates);
-                if volume < 0.0 {
-                    pass = false;
-                    println!("Shape {} tetrahedron {:?} does not have positive volume.", shape.name, tetrahedron);
-                }
-            }
-            assert!(pass);
-        }
-    }
-
-    #[test]
-    fn rotations_are_rotations() {
-        for shape in SHAPES.iter() {
-            let strong_coords = StrongPoints::new(unit_sphere_normalize(shape.coordinates.clone()));
-            // Apply each rotation and quaternion fit without a mapping
-            for rotation in shape.rotation_basis.iter() {
-                let rotated_coords = strong_coords.apply_bijection(rotation);
-                let fit = strong_coords.quaternion_fit_with_rotor(&rotated_coords);
-                assert!(fit.msd < 1e-6);
-            }
-        }
-    }
-
-    #[test]
-    fn mirrors_are_not_a_rotation() {
-        for shape in SHAPES.iter() {
-            if let Some(mirror) = &shape.mirror {
-                let rotations = shape.generate_rotations();
-                assert!(!rotations.contains(mirror));
-
-                // Mirrors might only be composed of 2-cycles and fixed points
-            }
-        }
-    }
 
     fn vertex_group_correct(shape: &Shape, expected_len: usize) {
         let vertex_groups = shape.vertex_groups();
@@ -340,34 +280,5 @@ mod tests {
     #[test]
     fn names_correct() {
         assert!(SHAPES.iter().all(|s| std::ptr::eq(shape_from_name(s.name), *s)));
-    }
-
-    fn print_total_unit_sphere_deviations() {
-        let mut shape_deviations: Vec<(Name, f64)> = SHAPES.iter()
-            .map(|s| (s.name, s.coordinates.column_iter()
-                      .map(|v| (v.norm() - 1.0).abs())
-                      .sum())
-            ).collect();
-        shape_deviations.sort_by(|(_, a), (_, b)| a.partial_cmp(b).expect("No NaNs"));
-        shape_deviations.reverse();
-
-        for (name, deviation) in shape_deviations {
-            println!("{}: {:e}", name, deviation);
-        }
-    }
-
-    #[test]
-    fn shape_coordinates_on_unit_sphere() {
-        // TODO tighten the threshold here by improving shape coordinates
-        for shape in SHAPES.iter() {
-            let mut pass = true;
-            for (i, col) in shape.coordinates.column_iter().enumerate() {
-                if (col.norm() - 1.0).abs() > 1e-6 {
-                    pass = false;
-                    println!("Column {} of {} coordinates are not precisely on the unit sphere", i, shape.name);
-                }
-            }
-            assert!(pass);
-        }
     }
 }

@@ -1,10 +1,18 @@
 use crate::shapes::{Shape, Name, Vertex, Rotation, Mirror, Matrix3N};
 use crate::permutation::Permutation;
 
-const FRAC_1_SQRT_2: f64 = std::f64::consts::FRAC_1_SQRT_2;
+// TODO improve coordinates and tighten MAX_COLUMN_DEVIATION
+
+use std::f64::consts::{FRAC_1_SQRT_2, SQRT_2};
+
 const SQRT_FRAC_1_3: f64 = 0.5773502691896257;
-const SQRT_2: f64 = std::f64::consts::SQRT_2;
 const SQRT_3: f64 = 1.7320508075688772;
+const PENTAGON_X1: f64 = 0.309016994374947;
+const PENTAGON_Y1: f64 = 0.951056516295154;
+const PENTAGON_X2: f64 = -0.809016994374947;
+const PENTAGON_Y2: f64 = 0.587785252292473;
+const ICO_1: f64 = 0.5257311121191336;
+const ICO_2: f64 = 0.85065080835204;
 
 fn make_rotation(slice: &[u8]) -> Rotation {
     Rotation::new(Permutation {sigma: slice.to_vec()})
@@ -32,8 +40,8 @@ lazy_static! {
     pub static ref BENT: Shape = Shape {
         name: Name::Bent,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            -0.292372, 0.956305, 0.0
+                           1.0,               0.0, 0.0,
+            -0.292371704722737, 0.956304755963036, 0.0
         ]),
         rotation_basis: vec![make_rotation(&[1, 0])],
         tetrahedra: vec![],
@@ -43,9 +51,9 @@ lazy_static! {
     pub static ref EQUILATERAL_TRIANGLE: Shape = Shape {
         name: Name::EquilateralTriangle,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            -0.5, 0.866025, 0.0,
-            -0.5, -0.866025, 0.0
+             1.0,           0.0, 0.0,
+            -0.5,  SQRT_3 / 2.0, 0.0,
+            -0.5, -SQRT_3 / 2.0, 0.0
         ]),
         rotation_basis: vec![
             make_rotation(&[1, 2, 0]),
@@ -86,10 +94,10 @@ lazy_static! {
     pub static ref TETRAHEDRON: Shape = Shape {
         name: Name::Tetrahedron,
         coordinates: Matrix3N::from_column_slice(&[
-            -SQRT_2 / 3.0,  SQRT_2 / SQRT_3, -1.0 / 3.0,
-            0.0, 0.0, 1.0,
-            2.0 * SQRT_2 / 3.0, 0.0, -1.0 / 3.0,
-            -SQRT_2 / 3.0, -SQRT_2 / SQRT_3, -1.0 / 3.0
+                 -SQRT_2 / 3.0,  SQRT_2 / SQRT_3, -1.0 / 3.0,
+                           0.0,              0.0,        1.0,
+            2.0 * SQRT_2 / 3.0,              0.0, -1.0 / 3.0,
+                 -SQRT_2 / 3.0, -SQRT_2 / SQRT_3, -1.0 / 3.0
         ]),
         rotation_basis: vec![
             make_rotation(&[0, 3, 1, 2]),
@@ -106,8 +114,8 @@ lazy_static! {
         coordinates: Matrix3N::from_column_slice(&[
              1.0,  0.0,  0.0,
              0.0,  1.0,  0.0,
-            -1.0, -0.0, -0.0,
-            -0.0, -1.0, -0.0
+            -1.0,  0.0,  0.0,
+             0.0, -1.0,  0.0
         ]),
         rotation_basis: vec![
             make_rotation(&[3, 0, 1, 2]),
@@ -122,10 +130,10 @@ lazy_static! {
     pub static ref SEESAW: Shape = Shape {
         name: Name::Seesaw,
         coordinates: Matrix3N::from_column_slice(&[
-            0.0, 1.0, 0.0,
-            1.0, 0.0, 0.0,
-            -0.5, 0.0, -0.866025,
-            -0.0, -1.0, -0.0
+             0.0,  1.0,           0.0,
+             1.0,  0.0,           0.0,
+            -0.5,  0.0, -SQRT_3 / 2.0,
+             0.0, -1.0,           0.0
         ]),
         rotation_basis: vec![make_rotation(&[3, 2, 1, 0])],
         tetrahedra: vec![
@@ -140,10 +148,10 @@ lazy_static! {
     pub static ref TRIGONALPYRAMID: Shape = Shape {
         name: Name::TrigonalPyramid,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            -0.5, 0.866025, 0.0,
-            -0.5, -0.866025, 0.0,
-            0.0, 0.0, 1.0
+             1.0,           0.0, 0.0,
+            -0.5,  SQRT_3 / 2.0, 0.0,
+            -0.5, -SQRT_3 / 2.0, 0.0,
+             0.0,           0.0, 1.0
         ]),
         rotation_basis: vec![make_rotation(&[2, 0, 1, 3])],
         tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(3), Vertex(2)]],
@@ -154,11 +162,11 @@ lazy_static! {
     pub static ref SQUAREPYRAMID: Shape = Shape {
         name: Name::SquarePyramid,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            -1.0, 0.0, 0.0,
-            0.0, -1.0, 0.0,
-            0.0, 0.0, 1.0,
+             1.0,  0.0, 0.0,
+             0.0,  1.0, 0.0,
+            -1.0,  0.0, 0.0,
+             0.0, -1.0, 0.0,
+             0.0,  0.0, 1.0,
         ]),
         rotation_basis: vec![make_rotation(&[3, 0, 1, 2, 4])],
         tetrahedra: vec![
@@ -174,11 +182,11 @@ lazy_static! {
     pub static ref TRIGONALBIPYRAMID: Shape = Shape {
         name: Name::TrigonalBipyramid,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            -0.5, 0.866025, 0.0,
-            -0.5, -0.866025, 0.0,
-            0.0, 0.0, 1.0,
-            0.0, 0.0, -1.0
+             1.0,           0.0, 0.0,
+            -0.5,  SQRT_3 / 2.0, 0.0,
+            -0.5, -SQRT_3 / 2.0, 0.0,
+             0.0,           0.0, 1.0,
+             0.0,           0.0, -1.0
         ]),
         rotation_basis: vec![
             make_rotation(&[2, 0, 1, 3, 4]), // C3
@@ -194,11 +202,11 @@ lazy_static! {
     pub static ref PENTAGON: Shape = Shape {
         name: Name::Pentagon,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.309017, 0.951057, 0.0,
-            -0.809017, 0.587785, 0.0,
-            -0.809017, -0.587785, 0.0,
-            0.309017, -0.951057, 0.0
+                    1.0,          0.0, 0.0,
+            PENTAGON_X1,  PENTAGON_Y1, 0.0,
+            PENTAGON_X2,  PENTAGON_Y2, 0.0,
+            PENTAGON_X2, -PENTAGON_Y2, 0.0,
+            PENTAGON_X1, -PENTAGON_Y1, 0.0
         ]),
         rotation_basis: vec![
             make_rotation(&[4, 0, 1, 2, 3]),
@@ -261,12 +269,12 @@ lazy_static! {
     pub static ref PENTAGONALPYRAMID: Shape = Shape {
         name: Name::PentagonalPyramid,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.309017, 0.951057, 0.0,
-            -0.809017, 0.587785, 0.0,
-            -0.809017, -0.587785, 0.0,
-            0.309017, -0.951057, 0.0,
-            0.0, 0.0, 1.0
+                    1.0,          0.0, 0.0,
+            PENTAGON_X1,  PENTAGON_Y1, 0.0,
+            PENTAGON_X2,  PENTAGON_Y2, 0.0,
+            PENTAGON_X2, -PENTAGON_Y2, 0.0,
+            PENTAGON_X1, -PENTAGON_Y1, 0.0,
+                    0.0,          0.0, 1.0
         ]),
         rotation_basis: vec![
             make_rotation(&[4, 0, 1, 2, 3, 5]),
@@ -285,12 +293,12 @@ lazy_static! {
     pub static ref HEXAGON: Shape = Shape {
         name: Name::Hexagon,
         coordinates: Matrix3N::from_column_slice(&[
-             1.000000,  0.000000,  0.000000,
-             0.500000,  0.866025,  0.000000,
-            -0.500000,  0.866025,  0.000000,
-            -1.000000,  0.000000,  0.000000,
-            -0.500000, -0.866025,  0.000000,
-             0.500000, -0.866025,  0.000000
+             1.0,           0.0,  0.0,
+             0.5,  SQRT_3 / 2.0,  0.0,
+            -0.5,  SQRT_3 / 2.0,  0.0,
+            -1.0,           0.0,  0.0,
+            -0.5, -SQRT_3 / 2.0,  0.0,
+             0.5, -SQRT_3 / 2.0,  0.0
         ]),
         rotation_basis: vec![
             make_rotation(&[5, 0, 1, 2, 3, 4]),
@@ -304,13 +312,13 @@ lazy_static! {
     pub static ref PENTAGONALBIPYRAMID: Shape = Shape {
         name: Name::PentagonalBipyramid,
         coordinates: Matrix3N::from_column_slice(&[
-            1.0, 0.0, 0.0,
-            0.309017, 0.951057, 0.0,
-            -0.809017, 0.587785, 0.0,
-            -0.809017, -0.587785, 0.0,
-            0.309017, -0.951057, 0.0,
-            0.0, 0.0, 1.0,
-            0.0, 0.0, -1.0
+                    1.0,          0.0,  0.0,
+            PENTAGON_X1,  PENTAGON_Y1,  0.0,
+            PENTAGON_X2,  PENTAGON_Y2,  0.0,
+            PENTAGON_X2, -PENTAGON_Y2,  0.0,
+            PENTAGON_X1, -PENTAGON_Y1,  0.0,
+                    0.0,          0.0,  1.0,
+                    0.0,          0.0, -1.0
         ]),
         rotation_basis: vec![
             make_rotation(&[4, 0, 1, 2, 3, 5, 6]),
@@ -466,14 +474,14 @@ lazy_static! {
     pub static ref HEXAGONALBIPYRAMID: Shape = Shape {
         name: Name::HexagonalBipyramid,
         coordinates: Matrix3N::from_column_slice(&[
-             1.000000,  0.000000,  0.000000,
-             0.500000,  0.866025,  0.000000,
-            -0.500000,  0.866025,  0.000000,
-            -1.000000,  0.000000,  0.000000,
-            -0.500000, -0.866025,  0.000000,
-             0.500000, -0.866025,  0.000000,
-             0.000000,  0.000000,  1.000000,
-             0.000000,  0.000000, -1.000000
+             1.0,           0.0,  0.0,
+             0.5,  SQRT_3 / 2.0,  0.0,
+            -0.5,  SQRT_3 / 2.0,  0.0,
+            -1.0,           0.0,  0.0,
+            -0.5, -SQRT_3 / 2.0,  0.0,
+             0.5, -SQRT_3 / 2.0,  0.0,
+             0.0,           0.0,  1.0,
+             0.0,           0.0, -1.0
         ]),
         rotation_basis: vec![
             make_rotation(&[5, 0, 1, 2, 3, 4, 6, 7]), // axial C6
@@ -629,18 +637,18 @@ lazy_static! {
     pub static ref ICOSAHEDRON: Shape = Shape {
         name: Name::Icosahedron,
         coordinates: Matrix3N::from_column_slice(&[
-             0.525731,  0.000000,  0.850651,
-             0.525731,  0.000000, -0.850651,
-            -0.525731,  0.000000,  0.850651,
-            -0.525731,  0.000000, -0.850651,
-             0.850651,  0.525731,  0.000000,
-             0.850651, -0.525731,  0.000000,
-            -0.850651,  0.525731,  0.000000,
-            -0.850651, -0.525731,  0.000000,
-             0.000000,  0.850651,  0.525731,
-             0.000000,  0.850651, -0.525731,
-             0.000000, -0.850651,  0.525731,
-             0.000000, -0.850651, -0.525731
+             ICO_1,    0.0,  ICO_2,
+             ICO_1,    0.0, -ICO_2,
+            -ICO_1,    0.0,  ICO_2,
+            -ICO_1,    0.0, -ICO_2,
+             ICO_2,  ICO_1,    0.0,
+             ICO_2, -ICO_1,    0.0,
+            -ICO_2,  ICO_1,    0.0,
+            -ICO_2, -ICO_1,    0.0,
+               0.0,  ICO_2,  ICO_1,
+               0.0,  ICO_2, -ICO_1,
+               0.0, -ICO_2,  ICO_1,
+               0.0, -ICO_2, -ICO_1
         ]),
         rotation_basis: vec![
             make_rotation(&[0, 11, 8, 3, 5, 10, 9, 6, 4, 1, 2, 7]), // C5 around 0-3
@@ -689,3 +697,106 @@ lazy_static! {
     pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID, &SQUAREPYRAMID, &TRIGONALBIPYRAMID, &PENTAGON, &OCTAHEDRON, &TRIGONALPRISM, &PENTAGONALPYRAMID, &HEXAGON, &PENTAGONALBIPYRAMID, &CAPPEDOCTAHEDRON, &CAPPEDTRIGONALPRISM, &SQUAREANTIPRISM, &CUBE, &TRIGONALDODECAHEDRON, &HEXAGONALBIPYRAMID, &TRICAPPEDTRIGONALPRISM, &CAPPEDSQUAREANTIPRISM, &HEPTAGONALBIPYRAMID, &BICAPPEDSQUAREANTIPRISM, &EDGECONTRACTEDICOSAHEDRON, &ICOSAHEDRON, &CUBOCTAHEDRON];
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::shapes::*;
+    use crate::shapes::similarity::unit_sphere_normalize;
+    use crate::strong::matrix::{AsNewTypeIndexedMatrix, StrongPoints};
+
+    fn tetrahedron_volume(tetrahedron: &[Vertex; 4], points: &Matrix3N) -> f64 {
+        let coords = AsNewTypeIndexedMatrix::<Vertex>::new(points);
+        let zero = Matrix3N::zeros(1);
+        let r = |v: Vertex| {
+            if v == ORIGIN {
+                zero.column(0)
+            } else {
+                coords.column(v)
+            }
+        };
+
+        (r(tetrahedron[0]) - r(tetrahedron[3])).dot(
+            &(r(tetrahedron[1]) - r(tetrahedron[3])).cross(
+                &(r(tetrahedron[2]) - r(tetrahedron[3]))
+            )
+        )
+    }
+
+    #[test]
+    fn all_tetrahedra_positive_volume() {
+        for shape in SHAPES.iter() {
+            let mut pass = true;
+            for tetrahedron in shape.tetrahedra.iter() {
+                let volume = tetrahedron_volume(tetrahedron, &shape.coordinates);
+                if volume < 0.0 {
+                    pass = false;
+                    println!("Shape {} tetrahedron {:?} does not have positive volume.", shape.name, tetrahedron);
+                }
+            }
+            assert!(pass);
+        }
+    }
+
+    #[test]
+    fn rotations_are_rotations() {
+        for shape in SHAPES.iter() {
+            let strong_coords = StrongPoints::new(unit_sphere_normalize(shape.coordinates.clone()));
+            // Apply each rotation and quaternion fit without a mapping
+            for rotation in shape.rotation_basis.iter() {
+                let rotated_coords = strong_coords.apply_bijection(rotation);
+                let fit = strong_coords.quaternion_fit_with_rotor(&rotated_coords);
+                assert!(fit.msd < 1e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn mirrors_are_not_a_rotation() {
+        for shape in SHAPES.iter() {
+            if let Some(mirror) = &shape.mirror {
+                let rotations = shape.generate_rotations();
+                assert!(!rotations.contains(mirror));
+
+                // Mirrors might only be composed of 2-cycles and fixed points
+            }
+        }
+    }
+
+    fn print_total_unit_sphere_deviations() {
+        let mut shape_deviations: Vec<(Name, f64)> = SHAPES.iter()
+            .map(|s| (s.name, s.coordinates.column_iter()
+                      .map(|v| (v.norm() - 1.0).abs())
+                      .sum())
+            ).collect();
+        shape_deviations.sort_by(|(_, a), (_, b)| a.partial_cmp(b).expect("No NaNs"));
+        shape_deviations.reverse();
+
+        for (name, deviation) in shape_deviations {
+            if deviation > 1e-12 {
+                println!("- {}: {:e}", name, deviation);
+            }
+        }
+    }
+
+    const MAX_COLUMN_DEVIATION: f64 = 1e-6;
+
+    #[test]
+    fn shape_coordinates_on_unit_sphere() {
+        // TODO tighten the threshold here by improving shape coordinates
+        for shape in SHAPES.iter() {
+            let mut pass = true;
+            for (i, col) in shape.coordinates.column_iter().enumerate() {
+                let deviation = (col.norm() - 1.0).abs();
+                if deviation > MAX_COLUMN_DEVIATION {
+                    pass = false;
+                    println!("Column {} of {} coordinates are not precisely on the unit sphere, deviation {:e}", i, shape.name, deviation);
+                }
+            }
+            if !pass {
+                println!("Total unit sphere deviations: ");
+                print_total_unit_sphere_deviations();
+
+                panic!("Shape coordinates not on unit sphere");
+            }
+        }
+    }
+}

@@ -3,9 +3,7 @@
 //   mation T in eq. (11). This is quite easily accommodated." 
 //   from https://arxiv.org/pdf/physics/0506177.pdf
 //   -> Should simplify the scaling optimization step, prospective 3-5%
-// - Ensure complete correctness with more detailed tests
 // - Add binary generating graphs of distortion vs correctness for shortcut algorithm
-// - Clippy lints
 
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
@@ -592,49 +590,44 @@ mod tests {
         }
     }
 
-    #[test]
-    fn stochastic_similarities_tests() {
-        for shape in SHAPES.iter() {
-            let shape_size = shape.size();
-            let case = Case::random(shape);
+    const MAX_SHAPE_SIZE_EXHAUSTIVE: usize = if cfg!(debug_assertions) { 4 } else { 6 };
 
-            for bounds in similarity_fn_bounds() {
-                if shape_size <= bounds.max && !case.can_find_bijection_with(bounds.f) {
-                    println!("Couldn't find {} in {} with {}", case.bijection, shape.name, bounds.name);
-                    assert!(false);
+    #[test]
+    fn polyhedron_reference_all_bijections() {
+        for shape in SHAPES.iter().filter(|s| s.size() <= MAX_SHAPE_SIZE_EXHAUSTIVE) {
+            let index_bound = Permutation::group_order(shape.size());
+            for i in 0..index_bound {
+                let case = Case::indexed(shape, i);
+                if !case.can_find_bijection_with(&polyhedron_reference) {
+                    panic!("Couldn't find {} in {} with polyhedron reference", case.bijection, shape.name);
                 }
             }
         }
     }
 
     #[test]
-    fn polyhedron_reference_all_bijections() {
-        let test_shape: &Shape = {
-            if cfg!(debug_assertions) { &TRIGONALPYRAMID } else { &SQUAREPYRAMID }
-        };
-
-        let index_bound = Permutation::group_order(test_shape.size());
-        for i in 0..index_bound {
-            let case = Case::indexed(test_shape, i);
-            if !case.can_find_bijection_with(&polyhedron_reference) {
-                println!("Couldn't find {} in {} with polyhedron reference", case.bijection, test_shape.name);
-                assert!(false);
+    fn polyhedron_all_bijections() {
+        for shape in SHAPES.iter().filter(|s| s.size() <= MAX_SHAPE_SIZE_EXHAUSTIVE) {
+            let index_bound = Permutation::group_order(shape.size());
+            for i in 0..index_bound {
+                let case = Case::indexed(shape, i);
+                if !case.can_find_bijection_with(&polyhedron) {
+                    panic!("Couldn't find {} in {} with polyhedron", case.bijection, shape.name);
+                }
             }
         }
     }
 
     #[test]
-    fn polyhedron_all_bijections() {
-        let test_shape: &Shape = {
-            if cfg!(debug_assertions) { &TRIGONALPYRAMID } else { &SQUAREPYRAMID }
-        };
+    fn stochastic_similarities_tests() {
+        for shape in SHAPES.iter().filter(|s| s.size() > MAX_SHAPE_SIZE_EXHAUSTIVE) {
+            let shape_size = shape.size();
+            let case = Case::random(shape);
 
-        let index_bound = Permutation::group_order(test_shape.size());
-        for i in 0..index_bound {
-            let case = Case::indexed(test_shape, i);
-            if !case.can_find_bijection_with(&polyhedron) {
-                println!("Couldn't find {} in {} with polyhedron", case.bijection, test_shape.name);
-                assert!(false);
+            for bounds in similarity_fn_bounds() {
+                if shape_size <= bounds.max && !case.can_find_bijection_with(bounds.f) {
+                    panic!("Couldn't find {} in {} with {}", case.bijection, shape.name, bounds.name);
+                }
             }
         }
     }
