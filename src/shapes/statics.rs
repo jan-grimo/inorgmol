@@ -1,7 +1,8 @@
 use crate::shapes::{Shape, Name, Vertex, Rotation, Mirror, Matrix3N};
 use crate::permutation::Permutation;
 
-// TODO improve coordinates and tighten MAX_COLUMN_DEVIATION
+// TODO 
+// - Improve coordinates and tighten MAX_COLUMN_DEVIATION
 
 use std::f64::consts::{FRAC_1_SQRT_2, SQRT_2};
 
@@ -721,15 +722,18 @@ mod tests {
         )
     }
 
+    const MIN_TETRAHEDRON_VOLUME: f64 = 0.4;
+
     #[test]
     fn all_tetrahedra_positive_volume() {
         for shape in SHAPES.iter() {
             let mut pass = true;
             for tetrahedron in shape.tetrahedra.iter() {
                 let volume = tetrahedron_volume(tetrahedron, &shape.coordinates);
-                if volume < 0.0 {
+                println!("- {:e} in {}", volume, shape.name);
+                if volume < MIN_TETRAHEDRON_VOLUME {
                     pass = false;
-                    println!("Shape {} tetrahedron {:?} does not have positive volume.", shape.name, tetrahedron);
+                    println!("Shape {} tetrahedron {:?} does not have significant positive volume at V = {:e}", shape.name, tetrahedron, volume);
                 }
             }
             assert!(pass);

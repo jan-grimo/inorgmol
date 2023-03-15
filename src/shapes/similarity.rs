@@ -3,7 +3,8 @@
 //   mation T in eq. (11). This is quite easily accommodated." 
 //   from https://arxiv.org/pdf/physics/0506177.pdf
 //   -> Should simplify the scaling optimization step, prospective 3-5%
-// - Add binary generating graphs of distortion vs correctness for shortcut algorithm
+// - Add shape detection via probability distributions
+// - Consider trying to homogenize all the Case implementations
 
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
