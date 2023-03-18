@@ -1,10 +1,6 @@
 // TODO
-// - "Horn [13] considered including a scaling in the transfor-
-//   mation T in eq. (11). This is quite easily accommodated." 
-//   from https://arxiv.org/pdf/physics/0506177.pdf
-//   -> Should simplify the scaling optimization step, prospective 3-5%
 // - Consider trying to homogenize all the Case implementations
-// - Add centroid prematching
+// - Add (automatic?) centroid prematching
 
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
@@ -17,7 +13,6 @@ use std::collections::HashMap;
 use crate::strong::matrix::StrongPoints;
 use crate::strong::bijection::{Bijection, bijections};
 use crate::permutation::{Permutation, permutations, slice_next};
-use crate::quaternions::Fit;
 use crate::shapes::*;
 
 use std::convert::TryFrom;
@@ -232,17 +227,10 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -
     }
 
     let cloud = StrongPoints::new(unit_sphere_normalize(x.clone()));
-    // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = StrongPoints::new(unit_sphere_normalize(shape_coordinates));
-
-    let evaluate_permutation = |p: Bijection<Column, Vertex>| -> (Bijection<Column, Vertex>, Fit) {
-        let permuted_cloud = cloud.apply_bijection(&p);
-        let fit = shape_coordinates.quaternion_fit_with_rotor(&permuted_cloud);
-        (p, fit)
-    };
 
     type BijectionGenerator = dyn Iterator<Item = Bijection<Column, Vertex>>;
     let bijection_generator: Box<BijectionGenerator> = match USE_SKIPS {
@@ -251,7 +239,10 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -
     };
 
     let (best_bijection, best_fit) = bijection_generator
-        .map(evaluate_permutation)
+        .map(|p| {
+            let fit = shape_coordinates.quaternion_fit_with_rotor(&cloud.apply_bijection(&p));
+            (p, fit)
+        })
         .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("NaN in MSDs"))
         .expect("Not a single permutation available to try")
     ;
@@ -262,12 +253,6 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -
     let rotated_shape = best_fit.rotate_stator(&permuted_shape.matrix);
 
     let csm = scaling::minimize_csm(&cloud.matrix, &rotated_shape);
-    if cfg!(debug_assertions) {
-        let direct = scaling::direct_csm(&cloud.matrix, &rotated_shape);
-        if (direct - csm).abs() > 1e-6 {
-            println!("- CSM from minimization: {:.2e}, direct: {:.2e}, delta {:.2e}", csm, direct, (csm - direct).abs());
-        }
-    }
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
