@@ -3,7 +3,6 @@
 //   mation T in eq. (11). This is quite easily accommodated." 
 //   from https://arxiv.org/pdf/physics/0506177.pdf
 //   -> Should simplify the scaling optimization step, prospective 3-5%
-// - Add shape detection via probability distributions
 // - Consider trying to homogenize all the Case implementations
 // - Add centroid prematching
 
@@ -52,10 +51,10 @@ mod scaling {
     use crate::shapes::Matrix3N;
 
     use argmin::core::{CostFunction, Error, Executor};
-    use argmin::solver::goldensectionsearch::GoldenSectionSearch;
+    use argmin::solver::brent::BrentOpt;
 
-    fn evaluate_msd(cloud: &Matrix3N, rotated_shape: &Matrix3N, factor: f64) -> f64 {
-        (cloud.clone() - rotated_shape.scale(factor))
+    fn msd(cloud: &Matrix3N, shape: &Matrix3N, factor: f64) -> f64 {
+        (shape.scale(factor) - cloud)
             .column_iter()
             .map(|col| col.norm_squared())
             .sum()
@@ -63,7 +62,7 @@ mod scaling {
 
     struct CoordinateScalingProblem<'a> {
         pub cloud: &'a Matrix3N,
-        pub rotated_shape: &'a Matrix3N
+        pub shape: &'a Matrix3N
     }
 
     impl CostFunction for CoordinateScalingProblem<'_> {
@@ -71,44 +70,51 @@ mod scaling {
         type Output = f64;
 
         fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
-            Ok(evaluate_msd(self.cloud, self.rotated_shape, *p))
+            Ok(msd(self.cloud, self.shape, *p))
         }
     }
 
-    fn normalize(cloud: &Matrix3N, msd: f64) -> f64 {
+    fn csm_from_msd(cloud: &Matrix3N, msd: f64) -> f64 {
         100.0 * msd / cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
     }
 
-    pub fn minimize(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
-        let phi_sectioning = GoldenSectionSearch::new(0.5, 1.1).expect("yup");
-        let scaling_problem = CoordinateScalingProblem {
-            cloud,
-            rotated_shape: shape 
-        };
+    pub struct Minimum {
+        pub factor: f64,
+        pub msd: f64
+    }
+
+    pub fn minimize(cloud: &Matrix3N, shape: &Matrix3N) -> Minimum {
+        const DEFAULT_MIN: f64 = 0.3;
+        const DEFAULT_MAX: f64 = 1.8;
+        let precondition = direct_factor(cloud, shape);
+        assert!(DEFAULT_MIN <= precondition && precondition <= DEFAULT_MAX);
+
+        let phi_sectioning = BrentOpt::new(DEFAULT_MIN, DEFAULT_MAX);
+        let scaling_problem = CoordinateScalingProblem { cloud, shape };
         let result = Executor::new(scaling_problem, phi_sectioning)
-            .configure(|state| state.param(1.0).max_iters(100))
+            .configure(|state| state.param(precondition).max_iters(100))
             .run()
             .unwrap();
 
-        // if cfg!(debug_assertions) {
-        //     let scale = result.state.best_param.expect("present");
-        //     let direct = (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
-        //         / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt();
-        //     if (scale - direct).abs() > 1e-6 {
-        //         println!("-- Scaling {:e} vs direct {:e}", scale, direct);
-        //     }
-        // }
-
-        normalize(cloud, result.state.best_cost)
+        Minimum {factor: result.state.best_param.unwrap(), msd: result.state.best_cost}
     }
 
-    // TODO Untested, maybe faster?
+    pub fn minimize_csm(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
+        csm_from_msd(cloud, minimize(cloud, shape).msd)
+    }
+
     // Final scale formula of section 2E in "Closed-form solution of absolute orientation with
     // quaternions" by Berthold K.P. Horn in J. Opt. Soc. Am. A, 1986
-    pub fn direct(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
-        let factor = (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
-            / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt();
-        normalize(cloud, evaluate_msd(cloud, shape, factor))
+    //
+    // Works (empirically) only for undistorted cases, but useful for 
+    // preconditioning the minimization
+    pub fn direct_factor(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
+        (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
+            / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt()
+    }
+
+    pub fn direct_csm(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
+        csm_from_msd(cloud, msd(cloud, shape, direct_factor(cloud, shape)))
     }
 }
 
@@ -255,13 +261,13 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -
     let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
     let rotated_shape = best_fit.rotate_stator(&permuted_shape.matrix);
 
-    let csm = scaling::minimize(&cloud.matrix, &rotated_shape);
-    // if cfg!(debug_assertions) {
-    //     let direct = scaling::direct(&cloud.matrix, &rotated_shape);
-    //     if (direct - csm).abs() > 1e-6 {
-    //         println!("- minimization: {:e}, direct: {:e}", csm, direct);
-    //     }
-    // }
+    let csm = scaling::minimize_csm(&cloud.matrix, &rotated_shape);
+    if cfg!(debug_assertions) {
+        let direct = scaling::direct_csm(&cloud.matrix, &rotated_shape);
+        if (direct - csm).abs() > 1e-6 {
+            println!("- CSM from minimization: {:.2e}, direct: {:.2e}, delta {:.2e}", csm, direct, (csm - direct).abs());
+        }
+    }
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
@@ -454,7 +460,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
     let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
-    let csm = scaling::minimize(&cloud.matrix, &rotated_shape);
+    let csm = scaling::minimize_csm(&cloud.matrix, &rotated_shape);
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
@@ -504,13 +510,23 @@ mod tests {
     }
 
     #[test]
-    fn is_rotation_works() {
-        let tetr_rotations = TETRAHEDRON.generate_rotations();
-        let occupation: Bijection<Vertex, Column> = Bijection::from_index(4, 23);
-        for rot in &tetr_rotations {
-            let rotated_occupation = rot.compose(&occupation).expect("fine");
-            assert!(Shape::is_rotation(&occupation, &rotated_occupation, &tetr_rotations));
-        }
+    fn scaling_minimization() {
+        let cloud = random_cloud(6);
+        let factor = 0.5 + 0.5 * rand::random::<f64>();
+        assert!(factor <= 1.0);
+
+        let result = scaling::minimize(&cloud.scale(factor), &cloud);
+        approx::assert_relative_eq!(factor, result.factor);
+        approx::assert_relative_eq!(0.0, result.msd);
+    }
+
+    #[test]
+    fn scaling_direct() {
+        let cloud = random_cloud(6);
+        let factor = 0.5 + 0.5 * rand::random::<f64>();
+        assert!(factor <= 1.0);
+
+        approx::assert_relative_eq!(factor, scaling::direct_factor(&cloud.scale(factor), &cloud));
     }
 
     struct Case {

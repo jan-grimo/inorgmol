@@ -282,4 +282,14 @@ mod tests {
     fn names_correct() {
         assert!(SHAPES.iter().all(|s| std::ptr::eq(shape_from_name(s.name), *s)));
     }
+
+    #[test]
+    fn is_rotation_works() {
+        let tetr_rotations = TETRAHEDRON.generate_rotations();
+        let occupation: Bijection<Vertex, Column> = Bijection::from_index(4, 23);
+        for rot in &tetr_rotations {
+            let rotated_occupation = rot.compose(&occupation).expect("fine");
+            assert!(Shape::is_rotation(&occupation, &rotated_occupation, &tetr_rotations));
+        }
+    }
 }

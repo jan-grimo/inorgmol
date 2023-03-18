@@ -2,7 +2,7 @@
 name = "molassembler"
 version = "0.1.0"
 authors = ["Jan-Grimo Sobez <jan-grimo.sobez@phys.chem.ethz.ch>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 rand = "0.8"
@@ -39,6 +39,8 @@ bench = false
 
 [[bin]]
 name = "similarity_error_rates"
+test = false
 
 [[bin]]
 name = "similarity_distributions"
+test = false
