@@ -5,6 +5,7 @@
 //   -> Should simplify the scaling optimization step, prospective 3-5%
 // - Add shape detection via probability distributions
 // - Consider trying to homogenize all the Case implementations
+// - Add centroid prematching
 
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
@@ -89,14 +90,14 @@ mod scaling {
             .run()
             .unwrap();
 
-        if cfg!(debug_assertions) {
-            let scale = result.state.best_param.expect("present");
-            let direct = (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
-                / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt();
-            if (scale - direct).abs() > 1e-6 {
-                println!("-- Scaling {:e} vs direct {:e}", scale, direct);
-            }
-        }
+        // if cfg!(debug_assertions) {
+        //     let scale = result.state.best_param.expect("present");
+        //     let direct = (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
+        //         / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt();
+        //     if (scale - direct).abs() > 1e-6 {
+        //         println!("-- Scaling {:e} vs direct {:e}", scale, direct);
+        //     }
+        // }
 
         normalize(cloud, result.state.best_cost)
     }
@@ -255,12 +256,12 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -
     let rotated_shape = best_fit.rotate_stator(&permuted_shape.matrix);
 
     let csm = scaling::minimize(&cloud.matrix, &rotated_shape);
-    if cfg!(debug_assertions) {
-        let direct = scaling::direct(&cloud.matrix, &rotated_shape);
-        if (direct - csm).abs() > 1e-6 {
-            println!("- minimization: {:e}, direct: {:e}", csm, direct);
-        }
-    }
+    // if cfg!(debug_assertions) {
+    //     let direct = scaling::direct(&cloud.matrix, &rotated_shape);
+    //     if (direct - csm).abs() > 1e-6 {
+    //         println!("- minimization: {:e}, direct: {:e}", csm, direct);
+    //     }
+    // }
     Ok(Similarity {bijection: best_bijection, csm})
 }
 

@@ -1,3 +1,4 @@
 /target/
 /index-derive/target/
 Cargo.lock
+*.csv

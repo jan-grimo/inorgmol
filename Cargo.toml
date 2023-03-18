@@ -19,6 +19,8 @@ delegate = "0.8.0"
 petgraph = "0.6"
 memoize = "0.4"
 lapjv = "0.2"
+statrs = "0.16"
+csv = "1.2"
 
 [dev-dependencies]
 criterion = "0.4"
@@ -37,3 +39,6 @@ bench = false
 
 [[bin]]
 name = "similarity_error_rates"
+
+[[bin]]
+name = "similarity_distributions"

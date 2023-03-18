@@ -243,6 +243,7 @@ pub fn shape_from_name(name: Name) -> &'static Shape {
 }
 
 pub mod similarity;
+pub mod recognition;
 
 #[cfg(test)]
 mod tests {
