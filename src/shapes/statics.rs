@@ -699,11 +699,129 @@ lazy_static! {
         mirror: make_mirror(&[8, 9, 10, 11, 4, 6, 5, 7, 0, 1, 2, 3])
     };
 
+    /// Coordinates are solution to Thomson problem with 13 particles,
+    /// from https://www.mathpages.com/home/kmath005/kmath005.htm
+    // pub static ref THIRTEEN: Shape = Shape {
+    //     name: Name::Thirteen,
+    //     coordinates: Matrix3N::from_column_slice(&[
+    //          0.05292425965854, -0.83790881423107, -0.54323829188807,
+    //          0.47276350840958,  0.34260952805535,  0.81185797797518,
+    //         -0.07135658514504,  0.93119822473295,  0.35746063281239,
+    //          0.08831940925803, -0.44700081209818,  0.89016288168620,
+    //         -0.75587432031132,  0.61343840827196, -0.22879539145416,
+    //          0.90782799944293,  0.41932997135609,  0.00327086379254,
+    //         -0.36478531288162, -0.88910676226719,  0.27644319632902,
+    //         -0.92626033119856, -0.32604057007372, -0.18904852687585,
+    //          0.19113378437734,  0.77892379819239, -0.59728183722523,
+    //          0.77477170458192, -0.60567004279921,  0.18136318544520,
+    //         -0.34356905502620, -0.00742104646959, -0.93909809524762,
+    //          0.65967130965493, -0.12653736664967, -0.74082525473928,
+    //         -0.68634538101074,  0.15812819553012,  0.70987709622413
+    //     ]),
+    //     rotation_basis: vec![],
+    //     tetrahedra: vec![],
+    //     mirror: None
+    // };
+    // pub static ref BICAPPEDHEXAGONALANTIPRISM: Shape = Shape {
+    //     name: Name::BicappedHexagonalAntiprism,
+    //     coordinates: Matrix3N::from_column_slice(&[
+    //         -0.42027653889173, -0.73294377291920, -0.53494023647147,
+    //         -0.50070830812184,  0.86341968659613,  0.06162495416629,
+    //          0.19126621672024, -0.47768209343689,  0.85745965033422,
+    //         -0.45701676134932, -0.81745234619531,  0.35058143354372,
+    //          0.91302963719075,  0.03110530949505, -0.40670547246446,
+    //          0.26474666022720, -0.30866494517054, -0.91358368939108,
+    //          0.50070830812184, -0.86341968659613, -0.06162495416629,
+    //         -0.64471674338173,  0.09942497610529,  0.75792809350869,
+    //          0.87628941583669, -0.05340326568397,  0.47881619741491,
+    //         -0.99779111814822, -0.04795042333682, -0.04597435639945,
+    //          0.12506793692344,  0.54054891782736,  0.83196446954746,
+    //         -0.58108081276487,  0.24579811887291, -0.77584043062672,
+    //          0.54177824120079,  0.83429746194425,  0.10209839545631,
+    //          0.18870386643677,  0.68692206249789, -0.70180405445214
+    //     ]),
+    //     rotation_basis: vec![],
+    //     tetrahedra: vec![],
+    //     mirror: None
+    // };
+    // pub static ref FIFTEEN: Shape = Shape {
+    //     name: Name::Fifteen,
+    //     coordinates: Matrix3N::from_column_slice(&[
+    //          0.30884515058659,  0.90510471121471,  0.29223301438421,
+    //         -0.61383434989807,  0.72422572535659,  0.31417270667092,
+    //          0.63477771492650, -0.04898298339339,  0.77114066159850,
+    //         -0.29735090362312, -0.14633261355766, -0.94348778811593,
+    //         -0.09410711734564,  0.31505831863336,  0.94439510075223,
+    //          0.62160124792603, -0.21150788488163, -0.75423889001410,
+    //         -0.75741390123109, -0.18650603918766,  0.62573131579651,
+    //         -0.40186767615877,  0.73155149465663, -0.55075836945470,
+    //         -0.64700942364219, -0.75847143186698, -0.07810181022134,
+    //         -0.95328547093427,  0.04827912785151, -0.29818775414077,
+    //          0.42276756545429,  0.64811731361761, -0.63341260911743,
+    //          0.08543893689411, -0.88727271212461, -0.45326297265654,
+    //          0.74459248211787, -0.65987690652190,  0.10071992758454,
+    //          0.95833999151096,  0.28538597927538,  0.01180269053264,
+    //         -0.01149424657101, -0.75877209911729,  0.65125477648682
+    //     ]),
+    //     rotation_basis: vec![],
+    //     tetrahedra: vec![],
+    //     mirror: None
+    // };
+    // pub static ref TRIANGULARFACESIXTEEN: Shape = Shape {
+    //     name: Name::TriangularFaceSixteen,
+    //     coordinates: Matrix3N::from_column_slice(&[
+    //          0.61026321033395,  0.33480593525292, -0.71797200490849,
+    //         -0.30745797233437, -0.86445060249846, -0.39773703761164,
+    //          0.13519452447863,  0.96060560805202, -0.24281537498687,
+    //         -0.06496508402285, -0.23406462029950, -0.97004808714927,
+    //         -0.86368521730477,  0.07569250868284,  0.49831565251205,
+    //         -0.54649919936684, -0.74316205772186,  0.38606836318716,
+    //          0.63126441254231, -0.06531961737248,  0.77281213049739,
+    //          0.98880060742958, -0.14553013925446, -0.03308076957205,
+    //         -0.40290229799000,  0.49522153591843, -0.76969173611061,
+    //         -0.16339703052807, -0.19583729824622,  0.96692769276210,
+    //         -0.06858361396705,  0.68493018941426,  0.72537364407881,
+    //          0.54926790083381, -0.66759720285613, -0.50261192569645,
+    //         -0.67438329095859,  0.73743483342630,  0.03737704275866,
+    //          0.36535987282490, -0.85058647444670,  0.37817299324212,
+    //          0.71876264722102,  0.64700705216914,  0.25448404940828,
+    //         -0.90703946919163, -0.16914965022007, -0.38557463241114
+    //     ]),
+    //     rotation_basis: vec![],
+    //     tetrahedra: vec![],
+    //     mirror: None
+    // };
+    // pub static ref OPPOSINGSQUARESSIXTEEN: Shape = Shape {
+    //     name: Name::OpposingSquaresSixteen,
+    //     coordinates: Matrix3N::from_column_slice(&[
+    //         -0.11564934688362, -0.45611058279735, -0.88237654367376,
+    //         -0.21185951021077,  0.97352308270011, -0.08583912501494,
+    //          0.63823805374955, -0.76812271983004,  0.05137775809515,
+    //          0.64117067366140,  0.71497983188846, -0.27875438513023,
+    //         -0.84380809002015,  0.47133611793058,  0.25657390972325,
+    //         -0.01268589797089, -0.72495319505908,  0.68868129999754,
+    //         -0.77215247737937, -0.40813759573353,  0.48703619436932,
+    //          0.32121938264953,  0.75289718550532,  0.57442487434687,
+    //          0.14366770349070,  0.41811095882347, -0.89696310798462,
+    //         -0.85570268070890, -0.37605299181287, -0.35546739593976,
+    //          0.70814947952590, -0.25701684285194, -0.65762197130085,
+    //          0.53061198011097, -0.09328858116665,  0.84246552878241,
+    //         -0.66159378590018,  0.40013081720988, -0.63418372068133,
+    //         -0.18556077245003, -0.96721645976412, -0.17337681416241,
+    //          0.98668448540003,  0.06921075410141,  0.14718558960577,
+    //         -0.31072919707585,  0.25071022088539,  0.91683790891749
+    //     ]),
+    //     rotation_basis: vec![],
+    //     tetrahedra: vec![],
+    //     mirror: None
+    // };
+
     pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID, &SQUAREPYRAMID, &TRIGONALBIPYRAMID, &PENTAGON, &OCTAHEDRON, &TRIGONALPRISM, &PENTAGONALPYRAMID, &HEXAGON, &PENTAGONALBIPYRAMID, &CAPPEDOCTAHEDRON, &CAPPEDTRIGONALPRISM, &SQUAREANTIPRISM, &CUBE, &TRIGONALDODECAHEDRON, &HEXAGONALBIPYRAMID, &TRICAPPEDTRIGONALPRISM, &CAPPEDSQUAREANTIPRISM, &HEPTAGONALBIPYRAMID, &BICAPPEDSQUAREANTIPRISM, &EDGECONTRACTEDICOSAHEDRON, &ICOSAHEDRON, &CUBOCTAHEDRON];
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::shapes::statics::make_rotation;
     use crate::shapes::*;
     use crate::shapes::similarity::unit_sphere_normalize;
     use crate::strong::matrix::{AsNewTypeIndexedMatrix, StrongPoints};
@@ -804,6 +922,121 @@ mod tests {
                 print_total_unit_sphere_deviations();
 
                 panic!("Shape coordinates not on unit sphere");
+            }
+        }
+    }
+
+    fn annotated_rotation_basis(name: Name) -> Option<Vec<Rotation>> {
+        match name {
+            Name::Line => Some(vec![make_rotation(&[1, 0])]),
+            Name::Bent => Some(vec![make_rotation(&[1, 0])]),
+            Name::EquilateralTriangle => Some(vec![
+                make_rotation(&[1, 2, 0]),
+                make_rotation(&[0, 2, 1])
+            ]),
+            Name::VacantTetrahedron => Some(vec![make_rotation(&[2, 0, 1])]),
+            Name::T => Some(vec![make_rotation(&[2, 1, 0])]),
+            Name::Tetrahedron => Some(vec![
+                make_rotation(&[0, 3, 1, 2]),
+                make_rotation(&[2, 1, 3, 0]),
+                make_rotation(&[3, 0, 2, 1]),
+                make_rotation(&[1, 2, 0, 3])
+            ]),
+            Name::Square => Some(vec![
+                make_rotation(&[3, 0, 1, 2]),
+                make_rotation(&[1, 0, 3, 2]),
+                make_rotation(&[3, 2, 1, 0]),
+            ]),
+            Name::Seesaw => Some(vec![make_rotation(&[3, 2, 1, 0])]),
+            Name::TrigonalPyramid => Some(vec![make_rotation(&[2, 0, 1, 3])]),
+            Name::SquarePyramid => Some(vec![make_rotation(&[3, 0, 1, 2, 4])]),
+            Name::TrigonalBipyramid => Some(vec![
+                make_rotation(&[2, 0, 1, 3, 4]), // C3
+                make_rotation(&[0, 2, 1, 4, 3]), // C2 on 0
+            ]),
+            Name::Pentagon => Some(vec![
+                make_rotation(&[4, 0, 1, 2, 3]),
+                make_rotation(&[0, 4, 3, 2, 1]),
+            ]),
+            Name::Octahedron => Some(vec![
+                make_rotation(&[3, 0, 1, 2, 4, 5]),
+                make_rotation(&[0, 5, 2, 4, 1, 3]),
+                make_rotation(&[4, 1, 5, 3, 2, 0]), // TODO maybe unnecessary?
+            ]),
+            Name::TrigonalPrism => Some(vec![
+                make_rotation(&[2, 0, 1, 5, 3, 4]), // C3 axial
+                make_rotation(&[3, 5, 4, 0, 2, 1]), // C2 between 0, 3
+            ]),
+            Name::PentagonalPyramid => Some(vec![make_rotation(&[4, 0, 1, 2, 3, 5])]),
+            Name::Hexagon => Some(vec![
+                make_rotation(&[5, 0, 1, 2, 3, 4]),
+                make_rotation(&[0, 5, 4, 3, 2, 1]),
+            ]),
+            Name::PentagonalBipyramid => Some(vec![
+                make_rotation(&[4, 0, 1, 2, 3, 5, 6]),
+                make_rotation(&[1, 0, 4, 3, 2, 6, 5]),
+            ]),
+            Name::CappedOctahedron => Some(vec![
+                make_rotation(&[0, 3, 1, 2, 6, 4, 5]), // C3 axial
+            ]),
+            Name::CappedTrigonalPrism => Some(vec![
+                make_rotation(&[0, 3, 4, 1, 2, 6, 5]), // C2 axial
+            ]),
+            Name::SquareAntiprism => Some(vec![
+                make_rotation(&[3, 0, 1, 2, 7, 4, 5, 6]), // C4 axial
+                make_rotation(&[5, 4, 7, 6, 1, 0, 3, 2]), // C2'-ish
+            ]),
+            Name::Cube => Some(vec![
+                make_rotation(&[3, 0, 1, 2, 7, 4, 5, 6]), // C4
+                make_rotation(&[4, 5, 1, 0, 7, 6, 2, 3]), // C4'
+            ]),
+            Name::TrigonalDodecahedron => Some(vec![
+                make_rotation(&[1, 0, 3, 2, 5, 4, 7, 6]), // C2z between 01
+                make_rotation(&[2, 3, 0, 1, 6, 7, 4, 5]), // C2x + C4z
+            ]),
+            Name::HexagonalBipyramid => Some(vec![
+                make_rotation(&[5, 0, 1, 2, 3, 4, 6, 7]), // axial C6
+                make_rotation(&[0, 5, 4, 3, 2, 1, 7, 6]), // C2 around 0-3
+            ]),
+            Name::TricappedTrigonalPrism => Some(vec![
+                make_rotation(&[7, 8, 3, 4, 2, 1, 0, 6, 5]), // C3 ccw between 2-4-3
+                make_rotation(&[2, 5, 0, 6, 7, 1, 3, 4, 8]), // C2 at 8
+            ]),
+            Name::CappedSquareAntiprism => Some(vec![
+                make_rotation(&[2, 3, 1, 0, 5, 7, 4, 6, 8]),
+            ]),
+            Name::HeptagonalBipyramid => Some(vec![
+                make_rotation(&[6, 0, 1, 2, 3, 4, 5, 7, 8]), // axial C7
+                make_rotation(&[0, 6, 5, 4, 3, 2, 1, 8, 7]), // C2 around 1 and between 4 and 5
+            ]),
+            Name::BicappedSquareAntiprism => Some(vec![
+                make_rotation(&[0, 7, 6, 1, 5, 2, 4, 8, 3, 9]), // C4z
+                make_rotation(&[9, 5, 3, 2, 7, 1, 8, 4, 6, 0]), // C2x + C8z
+            ]),
+            Name::EdgeContractedIcosahedron => Some(vec![
+                make_rotation(&[1, 0, 9, 5, 7, 3, 10, 4, 8, 2, 6]), // C2
+            ]),
+            Name::Icosahedron => Some(vec![
+                make_rotation(&[0, 11, 8, 3, 5, 10, 9, 6, 4, 1, 2, 7]), // C5 around 0-3
+                make_rotation(&[8, 5, 6, 11, 4, 0, 3, 7, 9, 1, 2, 10]), // C5 around 4-7
+                make_rotation(&[2, 3, 0, 1, 7, 6, 5, 4, 10, 11, 8, 9]),// C2 between 0-2 / 1-3
+            ]),
+            Name::Cuboctahedron => Some(vec![
+                make_rotation(&[10, 11, 8, 9, 5, 7, 4, 6, 0, 1, 2, 3]), // C4 ccw 0-8-2-10
+                make_rotation(&[2, 0, 3, 1, 8, 10, 9, 11, 6, 4, 7, 5]), // C4 ccw 4-9-6-8
+                make_rotation(&[7, 6, 5, 4, 3, 2, 1, 0, 11, 9, 10, 8]), // C2 along 9-10
+            ]),
+        }
+    }
+
+    #[test]
+    fn find_rotations() {
+        for shape in SHAPES.iter() {
+            if let Some(annotated_basis) = annotated_rotation_basis(shape.name) {
+                let expanded_annotation = shape.expand_rotation_basis(annotated_basis.as_slice());
+                let basis = shape.find_rotation_basis();
+                let expanded_basis = shape.expand_rotation_basis(basis.as_slice());
+                assert_eq!(expanded_annotation, expanded_basis);
             }
         }
     }

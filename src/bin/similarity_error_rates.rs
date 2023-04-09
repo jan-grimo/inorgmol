@@ -49,6 +49,9 @@ impl Case {
     pub fn new(shape: &Shape, distortion_norm: f64) -> Case {
         let coords = shape.coordinates.clone().insert_column(shape.size(), 0.0);
         let distorted = Self::distort(Self::rotate(coords), distortion_norm);
+        // The bijection with which the distorted version is generated is not
+        // important, since it's possible the distorted version could have a
+        // better bijection!
         let (distorted, _) = Self::permute(distorted);
         let cloud = unit_sphere_normalize(distorted);
 
@@ -95,7 +98,7 @@ impl<'a> Statistics<'a> {
 
 fn main() {
     let shape = &OCTAHEDRON;
-    const REPETITIONS: usize = 100;
+    const REPETITIONS: usize = 10;
 
     let mut stats = [
         Statistics::new(&similarity::polyhedron_reference),

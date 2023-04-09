@@ -5,3 +5,4 @@ pub mod permutation;
 pub mod shapes;
 pub mod quaternions;
 pub mod strong;
+pub mod geometry;

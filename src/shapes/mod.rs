@@ -1,10 +1,15 @@
 extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
+type Vector3 = na::Vector3<f64>;
 
 use std::collections::{HashSet, HashMap};
+use itertools::Itertools;
+use petgraph::unionfind::UnionFind;
 
 use crate::strong::{Index, NewTypeIndex};
-use petgraph::unionfind::UnionFind;
+use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
+use crate::permutation::{Permutation, permutations};
+use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Name {
@@ -48,7 +53,16 @@ pub enum Name {
     EdgeContractedIcosahedron,
     // 12
     Icosahedron,
-    Cuboctahedron
+    Cuboctahedron,
+    // 13
+    // Thirteen,
+    // 14
+    // BicappedHexagonalAntiprism,
+    // 15
+    // Fifteen,
+    // 16
+    // TriangularFaceSixteen,
+    // OpposingSquaresSixteen,
 }
 
 impl Name {
@@ -83,7 +97,12 @@ impl Name {
             Name::BicappedSquareAntiprism => "bicapped square antiprism",
             Name::EdgeContractedIcosahedron => "edge contracted icosahedron",
             Name::Icosahedron => "icosahedron",
-            Name::Cuboctahedron => "cuboctahedron"
+            Name::Cuboctahedron => "cuboctahedron",
+            // Name::Thirteen => "thirteen",
+            // Name::BicappedHexagonalAntiprism => "bicapped hexagonal antiprism",
+            // Name::Fifteen => "fifteen",
+            // Name::TriangularFaceSixteen => "triangular sixteen",
+            // Name::OpposingSquaresSixteen => "opposing square sixteen",
         }
     }
 }
@@ -117,10 +136,51 @@ pub struct Shape {
     pub mirror: Option<Mirror>
 }
 
+pub struct VertexPlane {
+    pub vertices: Vec<usize>,
+    pub plane: Plane
+}
+
 impl Shape {
     /// Number of vertices of the shape
     pub fn size(&self) -> usize {
         self.coordinates.ncols()
+    }
+
+    fn expand_rotation_basis(&self, basis: &[Rotation]) -> HashSet<Rotation> {
+        let mut rotations: HashSet<Rotation> = HashSet::new();
+        rotations.insert(Rotation::identity(self.size()));
+        let max_basis_idx = basis.len() - 1;
+
+        struct Frame {
+            permutation: Rotation,
+            next_basis: usize
+        }
+
+        let mut stack = Vec::<Frame>::new();
+        stack.push(Frame {permutation: Rotation::identity(self.size()), next_basis: 0});
+
+        // Tree-like traversal, while tracking rotations applied to get new rotations and pruning
+        // if rotations have been seen before
+        while stack.first().unwrap().next_basis <= max_basis_idx {
+            let latest = stack.last().unwrap();
+            let next_rotation = &basis[latest.next_basis];
+            let generated = latest.permutation.compose(next_rotation).unwrap();
+
+            if rotations.insert(generated.clone()) {
+                // Continue finding new things from this structure
+                stack.push(Frame {permutation: generated, next_basis: 0});
+            } else {
+                // Try to pop unincrementable stack frames
+                while stack.len() > 1 && stack.last().unwrap().next_basis == max_basis_idx {
+                    stack.pop();
+                }
+
+                stack.last_mut().unwrap().next_basis += 1;
+            }
+        }
+
+        rotations
     }
 
     /// Generate a full set of rotations from a shape's rotational basis
@@ -140,39 +200,7 @@ impl Shape {
     ///
     /// ```
     pub fn generate_rotations(&self) -> HashSet<Rotation> {
-        let mut rotations: HashSet<Rotation> = HashSet::new();
-        rotations.insert(Rotation::identity(self.size()));
-        let max_basis_idx = self.rotation_basis.len() - 1;
-
-        struct Frame {
-            permutation: Rotation,
-            next_basis: usize
-        }
-
-        let mut stack = Vec::<Frame>::new();
-        stack.push(Frame {permutation: Rotation::identity(self.size()), next_basis: 0});
-
-        // Tree-like traversal, while tracking rotations applied to get new rotations and pruning
-        // if rotations have been seen before
-        while stack.first().unwrap().next_basis <= max_basis_idx {
-            let latest = stack.last().unwrap();
-            let next_rotation = &self.rotation_basis[latest.next_basis];
-            let generated = latest.permutation.compose(next_rotation).unwrap();
-
-            if rotations.insert(generated.clone()) {
-                // Continue finding new things from this structure
-                stack.push(Frame {permutation: generated, next_basis: 0});
-            } else {
-                // Try to pop unincrementable stack frames
-                while stack.len() > 1 && stack.last().unwrap().next_basis == max_basis_idx {
-                    stack.pop();
-                }
-
-                stack.last_mut().unwrap().next_basis += 1;
-            }
-        }
-
-        rotations
+        self.expand_rotation_basis(self.rotation_basis.as_slice())
     }
 
     pub fn is_rotation<T: NewTypeIndex>(a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
@@ -230,6 +258,320 @@ impl Shape {
         }
 
         Self::union_to_groups(sets)
+    }
+
+    /// Collect coplanar vertices and their joint plane
+    pub fn coplanar_vertex_groups(&self) -> HashMap<Vec<usize>, Plane> {
+        let mut groups = HashMap::new();
+
+        let n = self.size();
+        for mut vertex_triple in (0..n).combinations(3) {
+            let mut plane = Plane::fit_matrix_points(&self.coordinates, &vertex_triple);
+            let mut coplanar_vertices: Vec<usize> = (0..n)
+                .filter(|v| !vertex_triple.contains(v) && plane.signed_distance(&self.coordinates.column(*v)).abs() < 1e-3)
+                .collect();
+
+            if !coplanar_vertices.is_empty() {
+                coplanar_vertices.append(&mut vertex_triple);
+                coplanar_vertices.sort();
+                let mut updated_centroid = Vector3::zeros();
+                for &v in coplanar_vertices.iter() {
+                    updated_centroid += self.coordinates.column(v);
+                }
+                updated_centroid /= coplanar_vertices.len() as f64;
+                plane.offset = updated_centroid;
+
+                groups.insert(coplanar_vertices, plane);
+            } else {
+                groups.insert(vertex_triple, plane);
+            }
+
+        }
+
+        groups
+    }
+
+    /// Collect groups of vertices that are coplanar
+    pub fn parallel_vertex_planes(&self) -> Vec<Vec<VertexPlane>> {
+        let groups = self.coplanar_vertex_groups();
+        // Group the planes by normal vector collinearity (should be coaxial)
+        let flat: Vec<VertexPlane> = groups.into_iter().map(|(vertices, plane)| VertexPlane {vertices, plane}).collect();
+        let f = flat.len();
+        let mut parallel_plane_set_finder: UnionFind<usize> = UnionFind::new(f);
+        for (i, a) in flat.iter().enumerate() {
+            for (j, b) in flat.iter().enumerate().skip(i + 1) {
+                if a.plane.parallel(&b.plane) {
+                    parallel_plane_set_finder.union(i, j);
+                }
+            }
+        }
+
+        let parallel_labels = parallel_plane_set_finder.into_labeling();
+
+        let mut planes = Vec::new();
+        let mut label_map = HashMap::new();
+        let mut unused_group = 0;
+        for (vertex_plane, label) in flat.into_iter().zip(parallel_labels.into_iter()) {
+            let group = {
+                if let Some(target) = label_map.get(&label) {
+                    &mut planes[*target]
+                } else {
+                    let target = unused_group;
+                    label_map.insert(label, unused_group);
+                    unused_group += 1;
+                    planes.push(Vec::new());
+                    &mut planes[target]
+                }
+            };
+            group.push(vertex_plane);
+        }
+
+        planes
+    }
+
+    /// Test whether a permutation is a rotation by quaternion fit
+    fn permutation_is_rotation(&self, permutation: &Permutation) -> bool {
+        let normalized_points = unit_sphere_normalize(self.coordinates.clone());
+        let permuted = unit_sphere_normalize(apply_permutation(&normalized_points, permutation));
+        let fit = crate::quaternions::fit(&normalized_points, &permuted);
+        fit.msd < 1e-6
+    }
+
+    /// Finds proper rotations containing at least one coplanar set of at least three
+    /// vertices. I.e. can find rotations of order two if it also happens to rotate a coplanar
+    /// vertex group of four vertices, but cannot find all rotations of order two generally. Mostly
+    /// finds rotations of order three and above.
+    pub fn try_parallel_vertex_plane_axis(&self, planes: &[VertexPlane]) -> Option<Permutation> {
+        let minimal_order = planes.iter()
+            .map(|p| p.vertices.len())
+            .min()
+            .expect("At least one per group");
+        let order_compatible = planes.iter()
+            .all(|p| p.vertices.len() % minimal_order == 0);
+
+        if !order_compatible {
+            return None;
+        }
+
+        let axis = planes.first().expect("At least one per group").plane.normal;
+        let n = self.size();
+        let mut remaining_vertices: Vec<usize> = (0..n)
+            .filter(|v| !planes.iter().any(|p| p.vertices.contains(v)))
+            .collect();
+
+        // TODO remove axial vertices first? Fails faster
+
+        // If the minimal order is two, look for axis-perpendicular dipoles
+        // Those are neither in the plane vertex triples nor are axial
+        let mut dipoles: Vec<(usize, usize)> = Vec::new();
+        if minimal_order % 2 == 0 {
+            'outer: for (i, &a) in remaining_vertices.iter().enumerate() {
+                let component_a = axis_perpendicular_component(&axis, &self.coordinates.column(a));
+                if component_a.norm_squared() < 1e-3 {
+                    continue;
+                }
+
+                for &b in remaining_vertices.iter().skip(i + 1) {
+                    let component_b = axis_perpendicular_component(&axis, &self.coordinates.column(b));
+                    if component_b.norm_squared() < 1e-3 {
+                        continue;
+                    }
+
+                    // Must be antiparallel!
+                    if component_a.cross(&-component_b).norm() < 1e-6 {
+                        dipoles.push((a, b));
+                        // a can't be a dipole w/ anything else
+                        continue 'outer;
+                    }
+                }
+            }
+            // Remove found dipoles from remaining_vertices
+            remaining_vertices.retain(|v| !dipoles.iter().any(|(a, b)| a == v || b == v));
+        }
+
+        // The remaining vertices must be along the axis
+        let remainder_axial = remaining_vertices.iter()
+            .all(|v| axis_distance(&axis, &self.coordinates.column(*v)) < 1e-3);
+
+        if !remainder_axial {
+            return None;
+        }
+
+        // Try lowest order rotation (proper and improper)
+        let mut proper = Permutation::identity(n);
+        for p in planes.iter() {
+            let anchor = p.vertices.first().expect("Guaranteed three vertices per group");
+            let positive_signed_angle = |v| {
+                let a = self.coordinates.column(*anchor);
+                let b = self.coordinates.column(v);
+                let mut angle = a.cross(&b).dot(&axis).atan2(a.dot(&b));
+                if angle < 0.0 {
+                    angle += std::f64::consts::TAU;
+                }
+                angle
+            };
+            let mut with_signed_angles: Vec<(usize, f64)> = p.vertices.iter().skip(1)
+                .map(|&v| (v, positive_signed_angle(v))).collect();
+            with_signed_angles.sort_by(|(_, alpha), (_, beta)| alpha.partial_cmp(beta).expect("No NaN angles"));
+
+            let mut ordered_vertices: Vec<usize> = with_signed_angles.into_iter()
+                .map(|(v, _)| v)
+                .collect();
+            ordered_vertices.push(*anchor);
+
+            for (&i, &j) in ordered_vertices.iter().circular_tuple_windows() {
+                proper.sigma[i] = j as u8;
+            }
+        }
+        for (i, j) in dipoles.into_iter() {
+            proper.sigma[i] = j as u8;
+            proper.sigma[j] = i as u8;
+        }
+
+        // TODO maybe unnecessary to test
+        if self.permutation_is_rotation(&proper) && proper.index() != 0 {
+            Some(proper)
+        } else {
+            None
+        }
+    }
+
+    /// Test whether a vector is a suitable c2 axis
+    pub fn try_c2_axis(&self, axis: Vector3) -> Option<Permutation> {
+        let rotated = nalgebra::Rotation3::from_axis_angle(
+            &nalgebra::Unit::new_normalize(axis),
+            std::f64::consts::PI
+        ) * self.coordinates.clone();
+
+        let n = self.size();
+        let mut proper = Permutation::identity(n);
+        'outer: for i in 0..n {
+            if proper[i] != i as u8 {
+                continue;
+            }
+
+            for j in i..n {
+                if proper[j] != j as u8 {
+                    continue;
+                }
+
+                let distance = (rotated.column(i) - self.coordinates.column(j)).norm();
+                if distance < 0.1 {
+                    proper.sigma[i] = j as u8;
+                    proper.sigma[j] = i as u8;
+
+                    continue 'outer;
+                }
+            }
+
+            return None;
+        }
+
+        if proper.index() != 0 && self.permutation_is_rotation(&proper) {
+            Some(proper)
+        } else {
+            None
+        }
+    }
+
+    /// Try to find all c2 axes in a shape
+    pub fn find_c2_axes(&self) -> Vec<Permutation> {
+        let mut rotations: Vec<Permutation> = Vec::new();
+        for (i, col_i) in self.coordinates.column_iter().enumerate() {
+            // Try each particle position
+            if let Some(rotation) = self.try_c2_axis(col_i.into()) {
+                rotations.push(rotation);
+            }
+
+            // Try each sum of two particle positions, if they don't cancel
+            for col_j in self.coordinates.column_iter().skip(i + 1) {
+                let sum = col_i + col_j;
+                // Canceling vectors give wild new normalized points, avoid:
+                if sum.norm_squared() > 1e-6 {
+                    if let Some(rotation) = self.try_c2_axis(sum.normalize()) {
+                        rotations.push(rotation);
+                    }
+                }
+            }
+        }
+
+        rotations
+    }
+
+    /// Reduce a set of rotations to a basis that generates all
+    fn reduce_to_basis(&self, mut rotations: HashSet<Rotation>) -> Vec<Rotation> {
+        // Find minimal rotations necessary to generate the most rotations
+        let min_fixed_rot = rotations.iter()
+            .max_by_key(|r| r.permutation.cycles().iter().map(|c| c.len()).sum::<usize>())
+            .unwrap()
+            .clone();
+        rotations.remove(&min_fixed_rot);
+        let mut basis = vec![min_fixed_rot];
+        let mut basis_size = self.expand_rotation_basis(basis.as_slice()).len();
+
+        loop {
+            let maybe_next_best = rotations.iter()
+                .fold(
+                    None,
+                    |best, r| {
+                        basis.push(r.clone());
+                        let new_basis_size = self.expand_rotation_basis(basis.as_slice()).len();
+                        let r_copy = basis.pop().expect("Just pushed, definitely there");
+                        let delta = new_basis_size - basis_size;
+                        let best_delta = best.as_ref().map_or_else(|| 0, |(_, delta)| *delta);
+                        if delta > 0 && delta > best_delta {
+                            return Some((r_copy, delta));
+                        }
+
+                        best
+                    }
+                );
+
+            if let Some((best_rotation, delta)) = maybe_next_best {
+                rotations.remove(&best_rotation);
+                basis.push(best_rotation);
+                basis_size += delta;
+            } else {
+                break;
+            }
+        }
+
+        basis
+    }
+
+    /// Find rotations exhaustively by permutational quaternion fit
+    pub fn stupid_find_rotations(&self) -> Vec<Rotation> {
+        // TODO this is really very stupid, as 
+        // - repeated applications of true rotations aren't excluded / skipped
+        // - combinations of found rotations aren't excluded / skipped
+        permutations(self.size())
+            .filter(|p| self.permutation_is_rotation(p))
+            .map(Rotation::new)
+            .collect()
+    }
+
+    /// Find rotation basis of a shape
+    pub fn find_rotation_basis(&self) -> Vec<Rotation> {
+        let plane_axes: Vec<Permutation> = self.parallel_vertex_planes().into_iter()
+            .filter_map(|v| self.try_parallel_vertex_plane_axis(v.as_slice()))
+            .collect();
+        let c2_axes = self.find_c2_axes();
+
+        // plane axes and c2 axes may have overlapping rotations, avoid duplicates
+        let mut rotations = plane_axes.into_iter()
+            .chain(c2_axes.into_iter())
+            .map(Rotation::new)
+            .collect::<HashSet<Rotation>>();
+
+        if rotations.is_empty() {
+            if self.size() > 4 {
+                panic!("No rotations found heuristically for {}, too large to use exhaustive search", self.name);
+            }
+
+            rotations = HashSet::from_iter(self.stupid_find_rotations().into_iter());
+        }
+
+        self.reduce_to_basis(rotations)
     }
 }
 

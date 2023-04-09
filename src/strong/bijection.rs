@@ -6,7 +6,7 @@ use delegate::delegate;
 use crate::permutation::{Permutation, PermutationError};
 use crate::strong::NewTypeIndex;
 
-#[derive(PartialEq, Eq, PartialOrd, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
     pub permutation: Permutation,
     key_type: PhantomData<Key>,

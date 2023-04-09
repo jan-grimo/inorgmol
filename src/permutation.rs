@@ -102,7 +102,7 @@ fn random_discrete(n: usize) -> usize {
     (float * n as f32) as usize
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct Permutation {
     // One-line representation
     pub sigma: Vec<u8>
@@ -335,12 +335,47 @@ impl Permutation {
         self.sigma.iter().enumerate()
     }
 
+    /// Generate a random permutation (identity inclusive)
     pub fn random(n: usize) -> Permutation {
         Permutation::from_index(n, random_discrete(Permutation::group_order(n)))
     }
 
+    /// Fixed points are values that the permutation does not permute
     pub fn is_fixed_point(&self, i: u8) -> bool {
         self.sigma[i as usize] == i
+    }
+
+    /// Derangements permute all elements, i.e. there are no fixed points
+    pub fn is_derangement(&self) -> bool {
+        self.iter_pairs().all(|(i, &v)| i as u8 != v)
+    }
+
+    /// Destructure a permutation into cycles, not including fixed points
+    pub fn cycles(&self) -> Vec<Vec<u8>> {
+        let n = self.set_size();
+        let mut element_found = vec![false; n];
+        let mut cycles = Vec::new();
+
+        for i in 0..n {
+            if element_found[i] {
+                continue;
+            }
+
+            let mut cycle = vec![i as u8];
+            element_found[i] = true;
+            let mut item = self.sigma[i] as usize;
+            while !element_found[item] {
+                cycle.push(item as u8);
+                element_found[item] = true;
+                item = self.sigma[item] as usize;
+            }
+
+            if cycle.len() > 1 {
+                cycles.push(cycle);
+            }
+        }
+
+        cycles
     }
 }
 
@@ -516,5 +551,12 @@ mod tests {
             permutations(4),
             (0..4).permutations(4).map(|p| Permutation {sigma: p})
         );
+    }
+
+    #[test]
+    fn cycles_correct() {
+        let perm = Permutation {sigma: vec![1, 4, 3, 2, 0]};
+        let expected_cycles = vec![vec![0, 1, 4], vec![2, 3]];
+        assert!(perm.cycles() == expected_cycles);
     }
 }

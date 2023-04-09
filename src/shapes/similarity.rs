@@ -121,9 +121,12 @@ pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
     let s = shape.size();
     let mut skips = na::DMatrix::<bool>::from_element(s + 1, s + 1, true);
     let rotations = shape.generate_rotations();
-    let viable_vertices: Vec<Vertex> = shape.vertex_groups().iter().map(|g| *g.first().unwrap()).collect();
-    for i in viable_vertices.iter() {
-        let vertex_groups = shape.vertex_groups_holding(&[*i], &rotations);
+    let viable_vertices: Vec<Vertex> = shape.vertex_groups()
+        .iter()
+        .map(|g| *g.first().unwrap())
+        .collect();
+    for i in viable_vertices {
+        let vertex_groups = shape.vertex_groups_holding(&[i], &rotations);
         for group in vertex_groups {
             let j = group.first().expect("Vertex groups shouldn't be empty");
             skips[(i.get() as usize, j.get() as usize)] = false;
