@@ -1040,4 +1040,19 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn find_mirror() {
+        for shape in SHAPES.iter().filter(|s| s.name == Name::Tetrahedron) {
+            let maybe_annotated_mirror = shape.mirror.clone();
+            let maybe_found_mirror = dbg!(shape.find_mirror());
+            // Either both no mirror, or both Somes
+            assert!(maybe_annotated_mirror.as_ref().xor(maybe_found_mirror.as_ref()).is_none());
+
+            if let Some((annotated_mirror, found_mirror)) = maybe_annotated_mirror.zip(maybe_found_mirror) {
+                let rotations = shape.generate_rotations();
+                assert!(Shape::is_rotation(&annotated_mirror, &found_mirror, &rotations));
+            }
+        }
+    }
 }

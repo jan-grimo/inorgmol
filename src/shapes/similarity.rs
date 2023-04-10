@@ -82,7 +82,7 @@ mod scaling {
         const DEFAULT_MIN: f64 = 0.3;
         const DEFAULT_MAX: f64 = 1.8;
         let precondition = direct_factor(cloud, shape);
-        assert!(DEFAULT_MIN <= precondition && precondition <= DEFAULT_MAX);
+        assert!((DEFAULT_MIN..=DEFAULT_MAX).contains(&precondition));
 
         let phi_sectioning = BrentOpt::new(DEFAULT_MIN, DEFAULT_MAX);
         let scaling_problem = CoordinateScalingProblem { cloud, shape };
@@ -106,10 +106,6 @@ mod scaling {
     pub fn direct_factor(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
         (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
             / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt()
-    }
-
-    pub fn direct_csm(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
-        csm_from_msd(cloud, msd(cloud, shape, direct_factor(cloud, shape)))
     }
 }
 
@@ -213,7 +209,7 @@ impl Iterator for SkipsBijectionGenerator {
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum SimilarityError {
     #[error("Number of positions does not match shape size")]
-    PositionNumberMismatch
+    PositionNumberMismatch,
 }
 
 pub struct Similarity {
@@ -247,8 +243,7 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -
             (p, fit)
         })
         .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("NaN in MSDs"))
-        .expect("Not a single permutation available to try")
-    ;
+        .expect("There is always at least one permutation available to try");
 
     let best_bijection = best_bijection.inverse();
 
@@ -273,7 +268,7 @@ pub mod linear_assignment {
         let (_, permutation) = permutations(v)
             .map(|p| ((0..v).map(|i| costs[(i, p[i] as usize)]).sum(), p) )
             .min_by(|(a, _): &(f64, Permutation), (b, _): &(f64, Permutation)| a.partial_cmp(b).expect("Encountered NaNs"))
-            .expect("At least one permutation present");
+            .expect("Always at least one permutation available to try");
 
         permutation
     }
@@ -345,13 +340,9 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
         msd: f64,
         mapping: PartialPermutation,
     }
-    let left_free: Vec<Column> = (PREMATCH..n).map(|i| Column::from(i as u8)).collect();
+    let left_free: Vec<Column> = ((PREMATCH as u8)..(n as u8)).map(Column::from).collect();
 
-    let skips = match USE_SKIPS {
-        true => Some(skip_vertices(s)),
-        false => None
-    };
-
+    let skips = USE_SKIPS.then(|| skip_vertices(s));
     let narrow = (0..n)
         .map(|i| Vertex::from(i as u8))
         .permutations(PREMATCH)

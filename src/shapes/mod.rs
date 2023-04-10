@@ -261,7 +261,7 @@ impl Shape {
     }
 
     /// Collect coplanar vertices and their joint plane
-    pub fn coplanar_vertex_groups(&self) -> HashMap<Vec<usize>, Plane> {
+    fn coplanar_vertex_groups(&self) -> HashMap<Vec<usize>, Plane> {
         let mut groups = HashMap::new();
 
         let n = self.size();
@@ -292,7 +292,7 @@ impl Shape {
     }
 
     /// Collect groups of vertices that are coplanar
-    pub fn parallel_vertex_planes(&self) -> Vec<Vec<VertexPlane>> {
+    fn parallel_vertex_planes(&self) -> Vec<Vec<VertexPlane>> {
         let groups = self.coplanar_vertex_groups();
         // Group the planes by normal vector collinearity (should be coaxial)
         let flat: Vec<VertexPlane> = groups.into_iter().map(|(vertices, plane)| VertexPlane {vertices, plane}).collect();
@@ -341,7 +341,7 @@ impl Shape {
     /// vertices. I.e. can find rotations of order two if it also happens to rotate a coplanar
     /// vertex group of four vertices, but cannot find all rotations of order two generally. Mostly
     /// finds rotations of order three and above.
-    pub fn try_parallel_vertex_plane_axis(&self, planes: &[VertexPlane]) -> Option<Permutation> {
+    fn try_parallel_vertex_plane_axis(&self, planes: &[VertexPlane]) -> Option<Permutation> {
         let minimal_order = planes.iter()
             .map(|p| p.vertices.len())
             .min()
@@ -437,7 +437,7 @@ impl Shape {
     }
 
     /// Test whether a vector is a suitable c2 axis
-    pub fn try_c2_axis(&self, axis: Vector3) -> Option<Permutation> {
+    fn try_c2_axis(&self, axis: Vector3) -> Option<Permutation> {
         let rotated = nalgebra::Rotation3::from_axis_angle(
             &nalgebra::Unit::new_normalize(axis),
             std::f64::consts::PI
@@ -475,7 +475,7 @@ impl Shape {
     }
 
     /// Try to find all c2 axes in a shape
-    pub fn find_c2_axes(&self) -> Vec<Permutation> {
+    fn find_c2_axes(&self) -> Vec<Permutation> {
         let mut rotations: Vec<Permutation> = Vec::new();
         for (i, col_i) in self.coordinates.column_iter().enumerate() {
             // Try each particle position
@@ -540,7 +540,7 @@ impl Shape {
     }
 
     /// Find rotations exhaustively by permutational quaternion fit
-    pub fn stupid_find_rotations(&self) -> Vec<Rotation> {
+    fn stupid_find_rotations(&self) -> Vec<Rotation> {
         // TODO this is really very stupid, as 
         // - repeated applications of true rotations aren't excluded / skipped
         // - combinations of found rotations aren't excluded / skipped
@@ -572,6 +572,23 @@ impl Shape {
         }
 
         self.reduce_to_basis(rotations)
+    }
+
+    pub fn find_mirror(&self) -> Option<Mirror> {
+        let inverted = -1.0 * self.coordinates.clone();
+
+        // if the quaternion fit onto the original coordinates fails, there is a mirror element
+        // the mirror is the permutation from similarity-fitting the inverted coordinates onto the
+        // original ones
+        //
+        // TODO Is there a better (faster) way?
+        // TODO this fails because a centroid is expected :(
+        let similarity = similarity::polyhedron(&inverted, self.name).ok()?;
+        if dbg!(similarity.csm) < 1e-6 {
+            Some(Mirror::new(similarity.bijection.permutation))
+        } else {
+            None
+        }
     }
 }
 
