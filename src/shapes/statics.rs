@@ -19,15 +19,15 @@ const PENTAGON_Y2: f64 = 0.587785252292473;
 const ICO_1: f64 = 0.5257311121191336;
 const ICO_2: f64 = 0.85065080835204;
 
-fn make_rotation(slice: &[u8]) -> Rotation {
+fn make_rotation(slice: &[usize]) -> Rotation {
     Rotation::new(Permutation {sigma: slice.to_vec()})
 }
 
-fn make_mirror(slice: &[u8]) -> Option<Mirror> {
+fn make_mirror(slice: &[usize]) -> Option<Mirror> {
     Some(make_rotation(slice))
 }
 
-pub static ORIGIN: Vertex = Vertex(u8::MAX);
+pub static ORIGIN: Vertex = Vertex(usize::MAX);
 
 lazy_static! {
     pub static ref LINE: Shape = Shape {

@@ -32,7 +32,7 @@ impl Case {
     fn permute(mat: Matrix3N) -> (Matrix3N, Bijection<Vertex, Column>) {
         let bijection: Bijection<Vertex, Column> = {
             let mut p = Permutation::random(mat.ncols() - 1);
-            p.sigma.push(p.set_size() as u8);
+            p.sigma.push(p.set_size());
             Bijection::new(p)
         };
 

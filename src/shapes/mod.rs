@@ -116,13 +116,13 @@ impl std::fmt::Display for Name {
 use crate::strong::bijection::Bijection;
 
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Vertex(u8);
+pub struct Vertex(usize);
 
 type Rotation = Bijection<Vertex, Vertex>;
 type Mirror = Bijection<Vertex, Vertex>;
 
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Column(u8);
+pub struct Column(usize);
 
 pub struct Shape {
     pub name: Name,
@@ -230,7 +230,7 @@ impl Shape {
         let mut groups: Vec<Vec<Vertex>> = Vec::new();
         groups.resize(num_groups, Vec::<Vertex>::new());
         for (v, g) in group_injection.iter().enumerate() {
-            groups[*g].push(Vertex::from(v as u8));
+            groups[*g].push(Vertex::from(v));
         }
 
         groups
@@ -420,12 +420,12 @@ impl Shape {
             ordered_vertices.push(*anchor);
 
             for (&i, &j) in ordered_vertices.iter().circular_tuple_windows() {
-                proper.sigma[i] = j as u8;
+                proper.sigma[i] = j;
             }
         }
         for (i, j) in dipoles.into_iter() {
-            proper.sigma[i] = j as u8;
-            proper.sigma[j] = i as u8;
+            proper.sigma[i] = j;
+            proper.sigma[j] = i;
         }
 
         // TODO maybe unnecessary to test
@@ -446,19 +446,19 @@ impl Shape {
         let n = self.size();
         let mut proper = Permutation::identity(n);
         'outer: for i in 0..n {
-            if proper[i] != i as u8 {
+            if proper[i] != i {
                 continue;
             }
 
             for j in i..n {
-                if proper[j] != j as u8 {
+                if proper[j] != j {
                     continue;
                 }
 
                 let distance = (rotated.column(i) - self.coordinates.column(j)).norm();
                 if distance < 0.1 {
-                    proper.sigma[i] = j as u8;
-                    proper.sigma[j] = i as u8;
+                    proper.sigma[i] = j;
+                    proper.sigma[j] = i;
 
                     continue 'outer;
                 }

@@ -39,7 +39,7 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
 pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
     assert_eq!(x.ncols(), p.set_size());
     let inverse = p.inverse();
-    Matrix3N::from_fn(x.ncols(), |i, j| x[(i, inverse[j] as usize)])
+    Matrix3N::from_fn(x.ncols(), |i, j| x[(i, inverse[j])])
 }
 
 mod scaling {
@@ -125,11 +125,11 @@ pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
         let vertex_groups = shape.vertex_groups_holding(&[i], &rotations);
         for group in vertex_groups {
             let j = group.first().expect("Vertex groups shouldn't be empty");
-            skips[(i.get() as usize, j.get() as usize)] = false;
+            skips[(i.get(), j.get())] = false;
         }
 
         // Centroid is always a valid second match
-        skips[(i.get() as usize, s)] = false;
+        skips[(i.get(), s)] = false;
     }
 
     // If matching centroid first, reuse viable_vertices for second match
@@ -152,7 +152,7 @@ impl SkipsBijectionGenerator {
 
         let mut pairs: Vec<(Vertex, Vertex)> = (0..s).cartesian_product(0..s)
             .filter(|(i, j)| !skips[(*i, *j)] && i != j)
-            .map(|(i, j)| (Vertex(i as u8), Vertex(j as u8)))
+            .map(|(i, j)| (Vertex(i), Vertex(j)))
             .collect();
 
         pairs.reverse();
@@ -174,7 +174,7 @@ impl SkipsBijectionGenerator {
             let previous = self.maybe_next.as_ref();
             let s = previous.expect("As long as there's pairs, this should be set").set_size();
 
-            for i in 0u8..(s as u8) {
+            for i in 0..s {
                 if i != a.get() && i != b.get() {
                     initial.push(i);
                 }
@@ -266,7 +266,7 @@ pub mod linear_assignment {
     pub fn brute_force(v: usize, cost_fn: &dyn Fn(usize, usize) -> f64) -> Permutation {
         let costs = nalgebra::DMatrix::from_fn(v, v, cost_fn);
         let (_, permutation) = permutations(v)
-            .map(|p| ((0..v).map(|i| costs[(i, p[i] as usize)]).sum(), p) )
+            .map(|p| ((0..v).map(|i| costs[(i, p[i])]).sum(), p) )
             .min_by(|(a, _): &(f64, Permutation), (b, _): &(f64, Permutation)| a.partial_cmp(b).expect("Encountered NaNs"))
             .expect("Always at least one permutation available to try");
 
@@ -340,15 +340,15 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
         msd: f64,
         mapping: PartialPermutation,
     }
-    let left_free: Vec<Column> = ((PREMATCH as u8)..(n as u8)).map(Column::from).collect();
+    let left_free: Vec<Column> = (PREMATCH..n).map(Column::from).collect();
 
     let skips = USE_SKIPS.then(|| skip_vertices(s));
     let narrow = (0..n)
-        .map(|i| Vertex::from(i as u8))
+        .map(Vertex::from)
         .permutations(PREMATCH)
         .filter(|vertices| {
             match USE_SKIPS {
-                true => !skips.as_ref().unwrap()[(vertices[0].get() as usize, vertices[1].get() as usize)],
+                true => !skips.as_ref().unwrap()[(vertices[0].get(), vertices[1].get())],
                 false => true
             }
         })
@@ -356,7 +356,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
             PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new()},
             |best, vertices| -> PartialMsd {
                 let mut partial_map = PartialPermutation::with_capacity(n);
-                vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c as u8), *v); });
+                vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c), *v); });
                 let partial_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
 
                 // If the msd caused only by the partial map is already worse, skip
@@ -366,7 +366,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
 
                 // Assemble cost matrix of matching each pair of unmatched vertices
                 let right_free: Vec<Vertex> = (0..n)
-                    .map(|i| Vertex::from(i as u8))
+                    .map(Vertex::from)
                     .filter(|v| !vertices.contains(v))
                     .collect();
                 debug_assert_eq!(left_free.len(), right_free.len());
@@ -391,18 +391,18 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
 
                 // Fuse pre-match and best subpermutation
                 for (i, j) in sub_permutation.iter_pairs() {
-                    partial_map.insert(left_free[i], right_free[*j as usize]);
+                    partial_map.insert(left_free[i], right_free[*j]);
                 }
 
                 if cfg!(debug_assertions) {
                     assert_eq!(partial_map.len(), n);
                     assert!(itertools::equal(
                         partial_map.keys().copied().sorted(), 
-                        (0..n).map(|i| Column::from(i as u8))
+                        (0..n).map(Column::from)
                     ));
                     assert!(itertools::equal(
                         partial_map.values().copied().sorted(), 
-                        (0..n).map(|i| Vertex::from(i as u8))
+                        (0..n).map(Vertex::from)
                     ));
                 }
 
@@ -425,7 +425,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
      */
     let best_bijection = {
         let mut p = Permutation::identity(n);
-        narrow.mapping.iter().for_each(|(c, v)| { p.sigma[v.get() as usize] = c.get(); });
+        narrow.mapping.iter().for_each(|(c, v)| { p.sigma[v.get()] = c.get(); });
         Occupation::new(p)
     };
 
@@ -468,7 +468,7 @@ mod tests {
         let permuted = apply_permutation(&stator, &permutation);
 
         for i in 0..n {
-            assert_eq!(stator.column(i), permuted.column(permutation[i] as usize));
+            assert_eq!(stator.column(i), permuted.column(permutation[i]));
         }
 
         let reconstituted = apply_permutation(&permuted, &permutation.inverse());
@@ -524,7 +524,7 @@ mod tests {
         fn random(shape: &Shape) -> Case {
             let bijection = {
                 let mut p = Permutation::random(shape.size());
-                p.sigma.push(p.set_size() as u8);
+                p.sigma.push(p.set_size());
                 Bijection::new(p)
             };
 
@@ -535,7 +535,7 @@ mod tests {
         fn indexed(shape: &Shape, index: usize) -> Case {
             let bijection = {
                 let mut p = Permutation::from_index(shape.size(), index);
-                p.sigma.push(p.set_size() as u8);
+                p.sigma.push(p.set_size());
                 Bijection::new(p)
             };
 
@@ -563,7 +563,7 @@ mod tests {
     fn pop_centroid<T>(mut p: Bijection<Vertex, T>) -> Bijection<Vertex, T> where T: NewTypeIndex {
         let maybe_centroid = p.permutation.sigma.pop();
         // Ensure centroid was at end of permutation
-        assert_eq!(maybe_centroid, Some(p.set_size() as u8));
+        assert_eq!(maybe_centroid, Some(p.set_size()));
         p
     }
 
@@ -660,7 +660,7 @@ mod tests {
 
             itertools::assert_equal(
                 bijections(shape.size() + 1)
-                    .filter(|b| !skips[(b.permutation[0] as usize, b.permutation[1] as usize)]),
+                    .filter(|b| !skips[(b.permutation[0], b.permutation[1])]),
                 SkipsBijectionGenerator::new(shape.name)
             );
         }

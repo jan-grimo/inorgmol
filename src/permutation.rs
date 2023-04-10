@@ -105,7 +105,7 @@ fn random_discrete(n: usize) -> usize {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct Permutation {
     // One-line representation
-    pub sigma: Vec<u8>
+    pub sigma: Vec<usize>
 }
 
 impl std::fmt::Display for Permutation {
@@ -118,8 +118,6 @@ impl std::fmt::Display for Permutation {
 pub enum PermutationError {
     #[error("Mismatched lengths between permutation and argument")]
     LengthMismatch,
-    #[error("More than u8::MAX elements")]
-    NotRepresentable,
     #[error("Invalid elements of one-line representation set")]
     InvalidSetElements
 }
@@ -135,7 +133,7 @@ impl Permutation {
     /// assert_eq!(Permutation::identity(3).sigma, vec![0, 1, 2])
     /// ```
     pub fn identity(n: usize) -> Permutation {
-        Permutation {sigma: (0..n as u8).collect()}
+        Permutation {sigma: (0..n).collect()}
     }
 
     /// Initialize the i-th permutation by lexicographic order of size n
@@ -157,7 +155,7 @@ impl Permutation {
 
         for k in 0..n {
             let fac = factorials[n - 1 - k];
-            sigma.push((i / fac) as u8);
+            sigma.push(i / fac);
             i %= fac;
         }
 
@@ -278,7 +276,7 @@ impl Permutation {
         let n = self.sigma.len();
         let mut inverse = Permutation::identity(n);
         for i in 0..n {
-            inverse.sigma[self.sigma[i] as usize] = i as u8;
+            inverse.sigma[self.sigma[i] as usize] = i;
         }
         inverse
     }
@@ -331,7 +329,7 @@ impl Permutation {
         Ok(Permutation {sigma: self.inverse().apply(&other.sigma)?})
     }
 
-    pub fn iter_pairs(&self) -> std::iter::Enumerate<std::slice::Iter<u8>> {
+    pub fn iter_pairs(&self) -> std::iter::Enumerate<std::slice::Iter<usize>> {
         self.sigma.iter().enumerate()
     }
 
@@ -341,17 +339,17 @@ impl Permutation {
     }
 
     /// Fixed points are values that the permutation does not permute
-    pub fn is_fixed_point(&self, i: u8) -> bool {
-        self.sigma[i as usize] == i
+    pub fn is_fixed_point(&self, i: usize) -> bool {
+        self.sigma[i] == i
     }
 
     /// Derangements permute all elements, i.e. there are no fixed points
     pub fn is_derangement(&self) -> bool {
-        self.iter_pairs().all(|(i, &v)| i as u8 != v)
+        self.iter_pairs().all(|(i, &v)| i != v)
     }
 
     /// Destructure a permutation into cycles, not including fixed points
-    pub fn cycles(&self) -> Vec<Vec<u8>> {
+    pub fn cycles(&self) -> Vec<Vec<usize>> {
         let n = self.set_size();
         let mut element_found = vec![false; n];
         let mut cycles = Vec::new();
@@ -361,11 +359,11 @@ impl Permutation {
                 continue;
             }
 
-            let mut cycle = vec![i as u8];
+            let mut cycle = vec![i];
             element_found[i] = true;
             let mut item = self.sigma[i] as usize;
             while !element_found[item] {
-                cycle.push(item as u8);
+                cycle.push(item);
                 element_found[item] = true;
                 item = self.sigma[item] as usize;
             }
@@ -381,7 +379,7 @@ impl Permutation {
 
 /// Implements indexing, letting Permutation behave as a container directly
 impl Index<usize> for Permutation {
-    type Output = u8;
+    type Output = usize;
 
     fn index(&self, i: usize) -> &Self::Output {
         &self.sigma[i]
@@ -403,12 +401,6 @@ impl<I: PrimInt> TryFrom<Vec<I>> for Permutation {
 
     fn try_from(integer_sigma: Vec<I>) -> Result<Permutation, Self::Error> {
         // Every number in 0..n must be present exactly once
-        let n = integer_sigma.len();
-        if n > u8::MAX as usize {
-            return Err(PermutationError::NotRepresentable);
-        }
-
-        // Check to ensure values match expected
         let has_correct_set_elements = integer_sigma.iter()
             .sorted()
             .enumerate()
@@ -418,7 +410,7 @@ impl<I: PrimInt> TryFrom<Vec<I>> for Permutation {
             return Err(PermutationError::InvalidSetElements);
         }
 
-        let sigma = integer_sigma.iter().map(|v| v.to_u8().unwrap()).collect();
+        let sigma = integer_sigma.iter().map(|v| v.to_usize().unwrap()).collect();
         Ok(Permutation {sigma})
     }
 }

@@ -36,12 +36,12 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     pub fn get(&self, key: &Key) -> Option<Value> {
         let index = key.get().to_usize()?;
         let value = self.permutation.sigma.get(index)?;
-        Some(Value::from(<Value::Type as FromPrimitive>::from_u8(*value)?))
+        Some(Value::from(<Value::Type as FromPrimitive>::from_usize(*value)?))
     }
 
     /// Find the key to a corresponding value
     pub fn inverse_of(&self, value: &Value) -> Option<Key> {
-        let v = value.get().to_u8()?;
+        let v = value.get().to_usize()?;
         let v_position = self.permutation.sigma.iter().position(|x| *x == v)?;
         Some(Key::from(<Key::Type as FromPrimitive>::from_usize(v_position)?))
     }
@@ -66,7 +66,7 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     }
 
     pub fn is_fixed_point(&self, key: Key) -> bool {
-        self.permutation.is_fixed_point(key.get().to_u8().unwrap())
+        self.permutation.is_fixed_point(key.get().to_usize().unwrap())
     }
 }
 
@@ -117,13 +117,13 @@ mod tests {
     use crate::strong::Index;
 
     #[derive(Index, Debug, Copy, Clone, PartialEq)]
-    struct Foo(u8);
+    struct Foo(usize);
 
     #[derive(Index, Debug, Copy, Clone, PartialEq)]
-    struct Bar(u8);
+    struct Bar(usize);
 
     #[derive(Index, Debug, Copy, Clone, PartialEq)]
-    struct Baz(u8);
+    struct Baz(usize);
 
     #[test]
     fn basics() {
