@@ -583,7 +583,7 @@ impl Shape {
         //
         // TODO Is there a better (faster) way?
         // TODO this fails because a centroid is expected :(
-        let similarity = similarity::polyhedron(&inverted, self.name).ok()?;
+        let similarity = similarity::polyhedron(inverted, self.name).ok()?;
         if dbg!(similarity.csm) < 1e-6 {
             Some(Mirror::new(similarity.bijection.permutation))
         } else {

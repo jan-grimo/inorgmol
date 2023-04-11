@@ -5,6 +5,8 @@ use csv::Writer;
 use std::error::Error;
 use statrs::statistics::Statistics;
 
+// TODO runtime arg parsing to switch modes
+
 const SAMPLES: usize = 100;
 
 enum Mode {

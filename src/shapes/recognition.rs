@@ -23,7 +23,7 @@ pub fn sample(s: Name) -> f64 {
     // add centroid and normalize
     cloud = unit_sphere_normalize(cloud.insert_column(n, 0.0));
 
-    polyhedron(&cloud, s).expect("No algorithm failures").csm
+    polyhedron(cloud, s).expect("No algorithm failures").csm
 }
 
 fn beta_parameters(samples: &Vec<f64>) -> (f64, f64) {
@@ -133,7 +133,7 @@ pub fn goodness_of_fit(samples: &[f64], beta: Beta) -> f64 {
 
 pub fn least_likely_random(cloud: &Matrix3N) -> (Name, f64) {
     let likelihood_random = |name: Name| {
-        let csm = polyhedron(cloud, name).expect("Similarities worked fine").csm;
+        let csm = polyhedron(cloud.clone(), name).expect("Similarities worked fine").csm;
         embedded_distribution(name).cdf(csm / CSM_RESCALE)
     };
 

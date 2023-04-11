@@ -7,6 +7,7 @@ use itertools::Itertools;
 
 // TODO
 // - Better line colors
+// - Fairly certain it would be more valid benchmarking if it wasn't the same input every time
 
 fn similarities(c: &mut Criterion) {
     let mut bench_group = c.benchmark_group("similarities");

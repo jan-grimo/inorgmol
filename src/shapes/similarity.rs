@@ -208,8 +208,8 @@ impl Iterator for SkipsBijectionGenerator {
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum SimilarityError {
-    #[error("Number of positions does not match shape size")]
-    PositionNumberMismatch,
+    #[error("Number of particles does not match shape size")]
+    ParticleNumberMismatch,
 }
 
 pub struct Similarity {
@@ -218,14 +218,14 @@ pub struct Similarity {
 }
 
 /// Polyhedron similarity performing quaternion fits on all rotationally distinct bijections
-pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.size() + 1 {
-        return Err(SimilarityError::PositionNumberMismatch);
+        return Err(SimilarityError::ParticleNumberMismatch);
     }
 
-    let cloud = StrongPoints::new(unit_sphere_normalize(x.clone()));
+    let cloud = StrongPoints::new(unit_sphere_normalize(x));
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
@@ -254,7 +254,7 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: &Matrix3N, s: Name) -
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
-pub fn polyhedron_reference(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+pub fn polyhedron_reference(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     polyhedron_reference_base::<true>(x, s)
 }
 
@@ -311,7 +311,7 @@ pub mod linear_assignment {
 
 /// Polyhedron similarity performing quaternion fits only on a limited number of 
 /// vertices before assigning the rest by brute force linear assignment
-pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_JV: bool>(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_JV: bool>(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     const MIN_PREMATCH: usize = 2;
     assert!(MIN_PREMATCH <= PREMATCH); // TODO trigger compilation failure? static assert?
 
@@ -319,14 +319,14 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.size() + 1 {
-        return Err(SimilarityError::PositionNumberMismatch);
+        return Err(SimilarityError::ParticleNumberMismatch);
     }
 
     if n <= PREMATCH {
         return polyhedron_reference_base::<USE_SKIPS>(x, s);
     }
 
-    let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x.clone()));
+    let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x));
     // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
     // Add centroid to shape coordinates and normalize
@@ -443,7 +443,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
-pub fn polyhedron(x: &Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+pub fn polyhedron(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     polyhedron_base::<5, true, true>(x, s)
 }
 
@@ -543,8 +543,8 @@ mod tests {
             Case { shape_name: shape.name, bijection, cloud }
         }
 
-        fn can_find_bijection_with(&self, f: &dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>) -> bool {
-            let similarity = f(&self.cloud.matrix, self.shape_name).expect("Fine");
+        fn can_find_bijection_with(&self, f: &dyn Fn(Matrix3N, Name) -> Result<Similarity, SimilarityError>) -> bool {
+            let similarity = f(self.cloud.matrix.clone(), self.shape_name).expect("Fine");
 
             // Found bijection must be a rotation of the original bijection
             let shape = shape_from_name(self.shape_name);
@@ -568,7 +568,7 @@ mod tests {
     }
 
     struct SimilarityFnTestBounds<'a> {
-        f: &'a dyn Fn(&Matrix3N, Name) -> Result<Similarity, SimilarityError>,
+        f: &'a dyn Fn(Matrix3N, Name) -> Result<Similarity, SimilarityError>,
         max: usize,
         name: &'static str
     }
