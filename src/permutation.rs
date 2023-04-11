@@ -180,7 +180,7 @@ impl Permutation {
     /// ```
     pub fn ordering<T: Ord>(container: &Vec<T>) -> Permutation {
         let mut p = Permutation::identity(container.len());
-        p.sigma.sort_by(|i, j| container[*i as usize].cmp(&container[*j as usize]));
+        p.sigma.sort_by(|i, j| container[*i].cmp(&container[*j]));
         p
     }
 
@@ -276,7 +276,7 @@ impl Permutation {
         let n = self.sigma.len();
         let mut inverse = Permutation::identity(n);
         for i in 0..n {
-            inverse.sigma[self.sigma[i] as usize] = i;
+            inverse.sigma[self.sigma[i]] = i;
         }
         inverse
     }
@@ -343,6 +343,10 @@ impl Permutation {
         self.sigma[i] == i
     }
 
+    pub fn is_identity(&self) -> bool {
+        self.sigma.iter().enumerate().all(|(i, &v)| i == v)
+    }
+
     /// Derangements permute all elements, i.e. there are no fixed points
     pub fn is_derangement(&self) -> bool {
         self.iter_pairs().all(|(i, &v)| i != v)
@@ -361,11 +365,11 @@ impl Permutation {
 
             let mut cycle = vec![i];
             element_found[i] = true;
-            let mut item = self.sigma[i] as usize;
+            let mut item = self.sigma[i];
             while !element_found[item] {
                 cycle.push(item);
                 element_found[item] = true;
-                item = self.sigma[item] as usize;
+                item = self.sigma[item];
             }
 
             if cycle.len() > 1 {
@@ -483,14 +487,14 @@ mod tests {
         assert_eq!(Permutation::identity(0).sigma.len(), 0);
         assert_eq!(Permutation::from_index(0, 0).index(), 0);
         assert_eq!(Permutation::from_index(0, 1).index(), 0);
-        assert_eq!(Permutation::identity(0).next_permutation(), false);
-        assert_eq!(Permutation::identity(0).prev_permutation(), false);
+        assert!(!Permutation::identity(0).next_permutation());
+        assert!(!Permutation::identity(0).prev_permutation());
 
         assert_eq!(Permutation::identity(1).sigma.len(), 1);
         assert_eq!(Permutation::from_index(1, 0).index(), 0);
         assert_eq!(Permutation::from_index(1, 1).index(), 0);
-        assert_eq!(Permutation::identity(1).next_permutation(), false);
-        assert_eq!(Permutation::identity(1).prev_permutation(), false);
+        assert!(!Permutation::identity(1).next_permutation());
+        assert!(!Permutation::identity(1).prev_permutation());
 
         assert_eq!(Permutation::identity(2).sigma.len(), 2);
         assert_eq!(Permutation::from_index(2, 0).index(), 0);

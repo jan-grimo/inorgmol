@@ -159,7 +159,7 @@ impl SkipsBijectionGenerator {
 
         let mut generator = SkipsBijectionGenerator {
             starting_pairs: pairs,
-            maybe_next: Some(Bijection::new(Permutation::identity(s)))
+            maybe_next: Some(Bijection::identity(s))
         };
         generator.reset_from_next_pair();
         generator
@@ -242,7 +242,7 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, s: Name) ->
             let fit = shape_coordinates.quaternion_fit_with_rotor(&cloud.apply_bijection(&p));
             (p, fit)
         })
-        .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("NaN in MSDs"))
+        .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("No NaNs in MSDs"))
         .expect("There is always at least one permutation available to try");
 
     let best_bijection = best_bijection.inverse();

@@ -1,4 +1,4 @@
-use crate::shapes::{Shape, Name, Vertex, Rotation, Mirror, Matrix3N};
+use crate::shapes::{Shape, Name, Vertex, Rotation, Matrix3N};
 use crate::permutation::Permutation;
 
 // TODO 
@@ -23,10 +23,6 @@ fn make_rotation(slice: &[usize]) -> Rotation {
     Rotation::new(Permutation {sigma: slice.to_vec()})
 }
 
-fn make_mirror(slice: &[usize]) -> Option<Mirror> {
-    Some(make_rotation(slice))
-}
-
 pub static ORIGIN: Vertex = Vertex(usize::MAX);
 
 lazy_static! {
@@ -38,7 +34,6 @@ lazy_static! {
         ]),
         rotation_basis: vec![make_rotation(&[1, 0])],
         tetrahedra: vec![],
-        mirror: None
     };
 
     /// Bent at 107°
@@ -50,7 +45,6 @@ lazy_static! {
         ]),
         rotation_basis: vec![make_rotation(&[1, 0])],
         tetrahedra: vec![],
-        mirror: None
     };
 
     pub static ref EQUILATERAL_TRIANGLE: Shape = Shape {
@@ -65,7 +59,6 @@ lazy_static! {
             make_rotation(&[0, 2, 1])
         ],
         tetrahedra: vec![],
-        mirror: None
     };
 
     /// Monovacant tetrahedron. 
@@ -81,7 +74,6 @@ lazy_static! {
         ]),
         rotation_basis: vec![make_rotation(&[2, 0, 1])],
         tetrahedra: vec![[ORIGIN, Vertex(0), Vertex(1), Vertex(2)]],
-        mirror: make_mirror(&[0, 2, 1])
     };
 
     pub static ref TSHAPE: Shape = Shape {
@@ -93,7 +85,6 @@ lazy_static! {
         ]),
         rotation_basis: vec![Rotation::new(Permutation {sigma: vec![2, 1, 0]})],
         tetrahedra: vec![],
-        mirror: None
     };
 
     pub static ref TETRAHEDRON: Shape = Shape {
@@ -111,7 +102,6 @@ lazy_static! {
             make_rotation(&[1, 2, 0, 3])
         ],
         tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(2), Vertex(3)]],
-        mirror: make_mirror(&[0, 2, 1, 3])
     };
 
     pub static ref SQUARE: Shape = Shape {
@@ -128,7 +118,6 @@ lazy_static! {
             make_rotation(&[3, 2, 1, 0]),
         ],
         tetrahedra: vec![],
-        mirror: None
     };
 
     /// Equatorially monovacant trigonal bipyramid or edge-centered tetragonal disphenoid
@@ -145,7 +134,6 @@ lazy_static! {
             [Vertex(0), ORIGIN, Vertex(1), Vertex(2)],
             [ORIGIN, Vertex(3), Vertex(1), Vertex(2)]
         ],
-        mirror: make_mirror(&[0, 2, 1, 3])
     };
 
     /// Face-centered trigonal pyramid = trig. pl. + axial ligand 
@@ -160,7 +148,6 @@ lazy_static! {
         ]),
         rotation_basis: vec![make_rotation(&[2, 0, 1, 3])],
         tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(3), Vertex(2)]],
-        mirror: make_mirror(&[0, 2, 1, 3])
     };
 
     /// J1 solid (central position is square-face centered)
@@ -180,7 +167,6 @@ lazy_static! {
             [Vertex(2), Vertex(3), Vertex(4), ORIGIN],
             [Vertex(3), Vertex(0), Vertex(4), ORIGIN],
         ],
-        mirror: make_mirror(&[1, 0, 3, 2, 4])
     };
 
     /// J12 solid
@@ -201,7 +187,6 @@ lazy_static! {
             [Vertex(0), Vertex(1), Vertex(3), Vertex(2)], 
             [Vertex(0), Vertex(1), Vertex(2), Vertex(4)]
         ],
-        mirror: make_mirror(&[0, 2, 1, 3, 4])
     };
 
     pub static ref PENTAGON: Shape = Shape {
@@ -218,7 +203,6 @@ lazy_static! {
             make_rotation(&[0, 4, 3, 2, 1]),
         ],
         tetrahedra: vec![],
-        mirror: None
     };
 
     pub static ref OCTAHEDRON: Shape = Shape {
@@ -246,7 +230,6 @@ lazy_static! {
             [Vertex(1), Vertex(2), ORIGIN, Vertex(5)],
             [Vertex(2), Vertex(3), ORIGIN, Vertex(5)],
         ],
-        mirror: make_mirror(&[1, 0, 3, 2, 4, 5])
     };
 
     pub static ref TRIGONALPRISM: Shape = Shape {
@@ -267,7 +250,6 @@ lazy_static! {
             [ORIGIN, Vertex(0), Vertex(2), Vertex(1)],
             [Vertex(3), ORIGIN, Vertex(5), Vertex(4)]
         ],
-        mirror: make_mirror(&[0, 2, 1, 3, 5, 4])
     };
     
     /// J2 solid
@@ -292,7 +274,6 @@ lazy_static! {
             [Vertex(4), ORIGIN, Vertex(0), Vertex(5)],
 
         ],
-        mirror: make_mirror(&[0, 4, 3, 2, 1, 5])
     };
 
     pub static ref HEXAGON: Shape = Shape {
@@ -310,7 +291,6 @@ lazy_static! {
             make_rotation(&[0, 5, 4, 3, 2, 1]),
         ],
         tetrahedra: vec![],
-        mirror: None
     };
 
     /// J13 solid
@@ -337,7 +317,6 @@ lazy_static! {
             [Vertex(4), Vertex(0), Vertex(5), Vertex(6)],
 
         ],
-        mirror: make_mirror(&[0, 4, 3, 2, 1, 5, 6])
     };
 
     /// Capped octahedron
@@ -372,7 +351,6 @@ lazy_static! {
             [Vertex(0), Vertex(4), Vertex(5), Vertex(6)],
 
         ],
-        mirror: make_mirror(&[0, 3, 2, 1, 6, 5, 4])
     };
 
     /// Spherized J49 solid in C2v
@@ -398,7 +376,6 @@ lazy_static! {
             [Vertex(0), Vertex(3), Vertex(4), Vertex(6)],
 
         ],
-        mirror: make_mirror(&[0, 2, 1, 4, 3, 5, 6])
     };
 
     pub static ref SQUAREANTIPRISM: Shape = Shape {
@@ -424,7 +401,6 @@ lazy_static! {
             [Vertex(3), Vertex(0), Vertex(7), Vertex(4)],
 
         ],
-        mirror: make_mirror(&[2, 1, 0, 3, 5, 4, 7, 6])
     };
     
     pub static ref CUBE: Shape = Shape {
@@ -448,7 +424,6 @@ lazy_static! {
             [Vertex(2), Vertex(4), Vertex(6), Vertex(7)],
 
         ],
-        mirror: make_mirror(&[1, 0, 3, 2, 5, 4, 7, 6])
     };
 
     /// Snub disphenoid, spherized J84 solid in D2d
@@ -473,7 +448,6 @@ lazy_static! {
             [Vertex(0), Vertex(6), Vertex(7), Vertex(1)],
 
         ],
-        mirror: make_mirror(&[0, 1, 3, 2, 4, 5, 7, 6])
     };
 
     pub static ref HEXAGONALBIPYRAMID: Shape = Shape {
@@ -498,7 +472,6 @@ lazy_static! {
             [Vertex(6), Vertex(2), Vertex(3), Vertex(7)],
 
         ],
-        mirror: make_mirror(&[0, 5, 4, 3, 2, 1, 6, 7])
     };
 
     /// Spherized J50 solid in C4v
@@ -527,7 +500,6 @@ lazy_static! {
             [Vertex(5), Vertex(2), Vertex(3), Vertex(4)],
 
         ],
-        mirror: make_mirror(&[7, 5, 4, 3, 2, 1, 6, 0, 8])
     };
 
     /// Spherized J10 solid in C4v, to local minimum of Thomson potential
@@ -552,7 +524,6 @@ lazy_static! {
             [Vertex(7), Vertex(5), Vertex(1), Vertex(2)],
 
         ],
-        mirror: make_mirror(&[0, 1, 3, 2, 6, 7, 4, 5, 8])
     };
 
     pub static ref HEPTAGONALBIPYRAMID: Shape = Shape {
@@ -578,7 +549,6 @@ lazy_static! {
             [Vertex(8), Vertex(5), Vertex(4), Vertex(7)],
 
         ],
-        mirror: make_mirror(&[0, 6, 5, 4, 3, 2, 1, 7, 8])
     };
 
     /// Bicapped square antiprism shape, spherized J17 shape in D4h
@@ -608,7 +578,6 @@ lazy_static! {
             [Vertex(9), Vertex(2), Vertex(1), Vertex(5)],
 
         ],
-        mirror: make_mirror(&[0, 1, 5, 7, 6, 2, 4, 3, 8, 9])
     };
 
     /// Coordinates are solution to Thomson problem with 11 particles
@@ -636,7 +605,6 @@ lazy_static! {
             [Vertex(1), Vertex(2), Vertex(8), Vertex(7)],
 
         ],
-        mirror: make_mirror(&[2, 9, 0, 3, 4, 5, 10, 7, 8, 1, 6])
     };
 
     pub static ref ICOSAHEDRON: Shape = Shape {
@@ -666,7 +634,6 @@ lazy_static! {
             [Vertex(1), Vertex(4), Vertex(5), Vertex(0)],
             [Vertex(3), Vertex(7), Vertex(6), Vertex(2)]
         ],
-        mirror: make_mirror(&[0, 1, 2, 3, 5, 4, 7, 6, 10, 11, 8, 9])
     };
 
     pub static ref CUBOCTAHEDRON: Shape = Shape {
@@ -696,7 +663,6 @@ lazy_static! {
             [ORIGIN, Vertex(5), Vertex(11), Vertex(10)],
             [ORIGIN, Vertex(7),  Vertex(3),  Vertex(2)]
         ],
-        mirror: make_mirror(&[8, 9, 10, 11, 4, 6, 5, 7, 0, 1, 2, 3])
     };
 
     /// Coordinates are solution to Thomson problem with 13 particles,
@@ -720,7 +686,6 @@ lazy_static! {
     //     ]),
     //     rotation_basis: vec![],
     //     tetrahedra: vec![],
-    //     mirror: None
     // };
     // pub static ref BICAPPEDHEXAGONALANTIPRISM: Shape = Shape {
     //     name: Name::BicappedHexagonalAntiprism,
@@ -742,7 +707,6 @@ lazy_static! {
     //     ]),
     //     rotation_basis: vec![],
     //     tetrahedra: vec![],
-    //     mirror: None
     // };
     // pub static ref FIFTEEN: Shape = Shape {
     //     name: Name::Fifteen,
@@ -765,7 +729,6 @@ lazy_static! {
     //     ]),
     //     rotation_basis: vec![],
     //     tetrahedra: vec![],
-    //     mirror: None
     // };
     // pub static ref TRIANGULARFACESIXTEEN: Shape = Shape {
     //     name: Name::TriangularFaceSixteen,
@@ -789,7 +752,6 @@ lazy_static! {
     //     ]),
     //     rotation_basis: vec![],
     //     tetrahedra: vec![],
-    //     mirror: None
     // };
     // pub static ref OPPOSINGSQUARESSIXTEEN: Shape = Shape {
     //     name: Name::OpposingSquaresSixteen,
@@ -813,7 +775,6 @@ lazy_static! {
     //     ]),
     //     rotation_basis: vec![],
     //     tetrahedra: vec![],
-    //     mirror: None
     // };
 
     pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID, &SQUAREPYRAMID, &TRIGONALBIPYRAMID, &PENTAGON, &OCTAHEDRON, &TRIGONALPRISM, &PENTAGONALPYRAMID, &HEXAGON, &PENTAGONALBIPYRAMID, &CAPPEDOCTAHEDRON, &CAPPEDTRIGONALPRISM, &SQUAREANTIPRISM, &CUBE, &TRIGONALDODECAHEDRON, &HEXAGONALBIPYRAMID, &TRICAPPEDTRIGONALPRISM, &CAPPEDSQUAREANTIPRISM, &HEPTAGONALBIPYRAMID, &BICAPPEDSQUAREANTIPRISM, &EDGECONTRACTEDICOSAHEDRON, &ICOSAHEDRON, &CUBOCTAHEDRON];
@@ -871,18 +832,6 @@ mod tests {
                 let rotated_coords = strong_coords.apply_bijection(rotation);
                 let fit = strong_coords.quaternion_fit_with_rotor(&rotated_coords);
                 assert!(fit.msd < 1e-6);
-            }
-        }
-    }
-
-    #[test]
-    fn mirrors_are_not_a_rotation() {
-        for shape in SHAPES.iter() {
-            if let Some(mirror) = &shape.mirror {
-                let rotations = shape.generate_rotations();
-                assert!(!rotations.contains(mirror));
-
-                // Mirrors might only be composed of 2-cycles and fixed points
             }
         }
     }
@@ -1041,17 +990,60 @@ mod tests {
         }
     }
 
+    fn make_mirror(slice: &[usize]) -> Option<Mirror> {
+        Some(make_rotation(slice))
+    }
+
+    fn annotated_mirror(name: Name) -> Option<Option<Mirror>> {
+        match name {
+            Name::Line => Some(None),
+            Name::Bent => Some(None),
+            Name::EquilateralTriangle => Some(None),
+            Name::VacantTetrahedron => Some(make_mirror(&[0, 2, 1])),
+            Name::T => Some(None),
+            Name::Tetrahedron => Some(make_mirror(&[0, 2, 1, 3])),
+            Name::Square => Some(None),
+            Name::Seesaw => Some(make_mirror(&[0, 2, 1, 3])),
+            Name::TrigonalPyramid => Some(make_mirror(&[0, 2, 1, 3])),
+            Name::SquarePyramid => Some(make_mirror(&[1, 0, 3, 2, 4])),
+            Name::TrigonalBipyramid => Some(make_mirror(&[0, 2, 1, 3, 4])),
+            Name::Pentagon => Some(None),
+            Name::Octahedron => Some(make_mirror(&[1, 0, 3, 2, 4, 5])),
+            Name::TrigonalPrism => Some(make_mirror(&[0, 2, 1, 3, 5, 4])),
+            Name::PentagonalPyramid => Some(make_mirror(&[0, 4, 3, 2, 1, 5])),
+            Name::Hexagon => Some(None),
+            Name::PentagonalBipyramid => Some(make_mirror(&[0, 4, 3, 2, 1, 5, 6])),
+            Name::CappedOctahedron => Some(make_mirror(&[0, 1, 3, 2, 6, 5, 4])),
+            Name::CappedTrigonalPrism => Some(make_mirror(&[0, 2, 1, 4, 3, 5, 6])),
+            Name::SquareAntiprism => Some(make_mirror(&[0, 3, 2, 1, 5, 4, 7, 6])),
+            Name::Cube => Some(make_mirror(&[1, 0, 3, 2, 5, 4, 7, 6])),
+            Name::TrigonalDodecahedron => Some(make_mirror(&[0, 1, 3, 2, 4, 5, 7, 6])),
+            Name::HexagonalBipyramid => Some(make_mirror(&[0, 5, 4, 3, 2, 1, 6, 7])),
+            Name::TricappedTrigonalPrism => Some(make_mirror(&[7, 5, 4, 3, 2, 1, 6, 0, 8])),
+            Name::CappedSquareAntiprism => Some(make_mirror(&[0, 1, 3, 2, 6, 7, 4, 5, 8])),
+            Name::HeptagonalBipyramid => Some(make_mirror(&[0, 6, 5, 4, 3, 2, 1, 7, 8])),
+            Name::BicappedSquareAntiprism => Some(make_mirror(&[0, 1, 5, 7, 6, 2, 4, 3, 8, 9])),
+            Name::EdgeContractedIcosahedron => Some(make_mirror(&[2, 9, 0, 3, 4, 5, 10, 7, 8, 1, 6])),
+            Name::Icosahedron => Some(make_mirror(&[0, 1, 2, 3, 5, 4, 7, 6, 10, 11, 8, 9])),
+            Name::Cuboctahedron => Some(make_mirror(&[8, 9, 10, 11, 4, 6, 5, 7, 0, 1, 2, 3])),
+        }
+    }
+
     #[test]
     fn find_mirror() {
-        for shape in SHAPES.iter().filter(|s| s.name == Name::Tetrahedron) {
-            let maybe_annotated_mirror = shape.mirror.clone();
-            let maybe_found_mirror = dbg!(shape.find_mirror());
-            // Either both no mirror, or both Somes
-            assert!(maybe_annotated_mirror.as_ref().xor(maybe_found_mirror.as_ref()).is_none());
+        for shape in SHAPES.iter() {
+            if let Some(annotated_mirror_maybe) = annotated_mirror(shape.name) {
+                let maybe_found_mirror = shape.find_mirror();
+                // Either both no mirror, or both Somes
+                assert!(annotated_mirror_maybe.as_ref().xor(maybe_found_mirror.as_ref()).is_none());
 
-            if let Some((annotated_mirror, found_mirror)) = maybe_annotated_mirror.zip(maybe_found_mirror) {
-                let rotations = shape.generate_rotations();
-                assert!(Shape::is_rotation(&annotated_mirror, &found_mirror, &rotations));
+                if let Some((annotated_mirror, found_mirror)) = annotated_mirror_maybe.zip(maybe_found_mirror) {
+                    let rotations = shape.generate_rotations();
+                    assert!(Shape::is_rotation(&annotated_mirror, &found_mirror, &rotations));
+
+                    // Mirrors are not rotations
+                    assert!(!rotations.contains(&found_mirror));
+                }
             }
         }
     }

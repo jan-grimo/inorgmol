@@ -132,8 +132,6 @@ pub struct Shape {
     pub rotation_basis: Vec<Rotation>,
     /// Minimal set of tetrahedra required to distinguish volumes in DG
     pub tetrahedra: Vec<[Vertex; 4]>,
-    /// Mirror symmetry element expressed by vertex permutation, if present
-    pub mirror: Option<Mirror>
 }
 
 pub struct VertexPlane {
@@ -574,18 +572,22 @@ impl Shape {
         self.reduce_to_basis(rotations)
     }
 
+    /// Mirror symmetry element expressed by vertex permutation, if present
     pub fn find_mirror(&self) -> Option<Mirror> {
+        // Bit weird, this is actually an inversion
         let inverted = -1.0 * self.coordinates.clone();
+        let inverted = inverted.insert_column(self.size(), 0.0);
 
         // if the quaternion fit onto the original coordinates fails, there is a mirror element
         // the mirror is the permutation from similarity-fitting the inverted coordinates onto the
         // original ones
         //
         // TODO Is there a better (faster) way?
-        // TODO this fails because a centroid is expected :(
         let similarity = similarity::polyhedron(inverted, self.name).ok()?;
-        if dbg!(similarity.csm) < 1e-6 {
-            Some(Mirror::new(similarity.bijection.permutation))
+        if similarity.csm < 1e-6 && !similarity.bijection.permutation.is_identity() {
+            let mut permutation = similarity.bijection.permutation;
+            assert!(permutation.sigma.pop() == Some(self.size()));
+            Some(Mirror::new(permutation))
         } else {
             None
         }
