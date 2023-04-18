@@ -13,3 +13,8 @@
     multidentate ligands
 
 look through the GitLab issues again :D
+
+
+# TODOs
+- Recheck that all uses of new\_random realize that it generates values only in
+  [0, 1)

@@ -21,7 +21,7 @@ impl<'a, I> AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
         AsNewTypeIndexedMatrix {matrix, index_type: PhantomData}
     }
 
-    pub fn column(&self, index: I) -> na::VectorSlice3<'a, f64> {
+    pub fn column(&self, index: I) -> na::VectorView3<'a, f64> {
         self.matrix.column(index.get().to_usize().expect("Conversion failure"))
     }
 
@@ -62,7 +62,7 @@ impl<I> StrongPoints<I> where I: NewTypeIndex {
         StrongPoints {matrix, index_type: PhantomData}
     }
 
-    pub fn column(&self, index: I) -> na::VectorSlice3<f64> {
+    pub fn column(&self, index: I) -> na::VectorView3<f64> {
         self.raise().column(index)
     }
 

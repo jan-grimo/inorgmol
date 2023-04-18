@@ -435,6 +435,7 @@ impl<I: PrimInt, const N: usize> TryFrom<[I; N]> for Permutation {
 }
 
 /// Iterator adaptor for permutations
+#[derive(Clone)]
 pub struct PermutationIterator {
     permutation: Permutation,
     increment: bool

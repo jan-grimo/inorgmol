@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8"
-nalgebra = { version = "0.31", features = ["rand"] }
+nalgebra = { version = "0.32", features = ["rand"] }
 lazy_static = "1.4.0"
 thiserror = "1.0"
 approx = "0.5"

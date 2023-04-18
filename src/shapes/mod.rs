@@ -118,9 +118,40 @@ use crate::strong::bijection::Bijection;
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Vertex(usize);
 
+impl std::fmt::Display for Vertex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Vertex({})", self.get())
+    }
+}
+
 type Rotation = Bijection<Vertex, Vertex>;
 type Mirror = Bijection<Vertex, Vertex>;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Particle {
+    Vertex(Vertex),
+    Origin
+}
+
+impl From<Option<Vertex>> for Particle {
+    fn from(maybe_vertex: Option<Vertex>) -> Particle {
+        match maybe_vertex {
+            Some(v) => Particle::Vertex(v),
+            None => Particle::Origin
+        }
+    }
+}
+
+impl std::fmt::Display for Particle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Particle::Vertex(v) => write!(f, "{}", v),
+            Particle::Origin => write!(f, "origin")
+        }
+    }
+}
+
+// TODO move to where needed
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Column(usize);
 
@@ -130,8 +161,6 @@ pub struct Shape {
     pub coordinates: Matrix3N,
     /// Spatial rotational basis expressed by vertex permutations
     pub rotation_basis: Vec<Rotation>,
-    /// Minimal set of tetrahedra required to distinguish volumes in DG
-    pub tetrahedra: Vec<[Vertex; 4]>,
 }
 
 pub struct VertexPlane {
@@ -239,7 +268,7 @@ impl Shape {
         let mut sets = UnionFind::new(shape_size);
         for rotation in self.rotation_basis.iter() {
             for v in 0..shape_size {
-                sets.union(v, rotation.permutation[v] as usize);
+                sets.union(v, rotation.permutation[v]);
             }
         }
 
@@ -251,7 +280,7 @@ impl Shape {
         let mut sets = UnionFind::new(shape_size);
         for rotation in rotations.iter().filter(|rot| held.iter().all(|v| rot.is_fixed_point(*v))) {
             for v in 0..shape_size {
-                sets.union(v, rotation.permutation[v] as usize);
+                sets.union(v, rotation.permutation[v]);
             }
         }
 
@@ -578,9 +607,9 @@ impl Shape {
         let inverted = -1.0 * self.coordinates.clone();
         let inverted = inverted.insert_column(self.size(), 0.0);
 
-        // if the quaternion fit onto the original coordinates fails, there is a mirror element
-        // the mirror is the permutation from similarity-fitting the inverted coordinates onto the
-        // original ones
+        // if the quaternion fit onto the original coordinates fails, there is
+        // a mirror element the mirror is the permutation from
+        // similarity-fitting the inverted coordinates onto the original ones
         //
         // TODO Is there a better (faster) way?
         let similarity = similarity::polyhedron(inverted, self.name).ok()?;
@@ -591,6 +620,130 @@ impl Shape {
         } else {
             None
         }
+    }
+
+    /// Minimal set of tetrahedra required to distinguish volumes in DG
+    pub fn find_tetrahedra(&self) -> Vec<[Particle; 4]> {
+        // Requirements:
+        // - Need to have significant (positive, for norming) volumes to be
+        //   efficient in DG.
+        // - All vertices involved in non-zero volume quadruples need to be 
+        //   covered, but not the origin
+        //
+        // Idea: Find smallest set of positive volume tetrahedra covering 
+        // all vertices (not the origin) minimizing the overlap overlap between
+        // tetrahedra vertices
+        //
+        // Notes:
+        // - Regularity of tetrahedra would be great
+        // - Reducing volume overlap would be good, too, e.g.
+        //   2x origin-coplanar triple quads in trig. prism instead of two
+        //   overlapping tetrahedra between coplanar sets
+
+        const MIN_TETRAHEDRON_VOLUME: f64 = 0.4 / 6.0;
+
+        let zero = Vector3::zeros();
+        let particle_position = |p: &Particle| {
+            match p {
+                Particle::Vertex(v) => self.coordinates.column(v.get()),
+                Particle::Origin => zero.column(0)
+            }
+        };
+
+        let n = self.size();
+        let mut particles: Vec<Particle> = (0..n).map_into::<Vertex>().map(Particle::Vertex).collect();
+        particles.push(Particle::Origin);
+
+        // Find non-zero volume particle quads
+        type Quad<'a> = [&'a Particle; 4];
+        let mut quads: Vec<Quad> = Vec::new();
+        for particle_vec in particles.iter().combinations(4) {
+            let mut particle_quad: Quad = particle_vec.try_into().expect("Matched vec size");
+            let volume = crate::geometry::signed_tetrahedron_volume_with_array(particle_quad.map(particle_position));
+            if volume.abs() > MIN_TETRAHEDRON_VOLUME {
+                // Ensure positive volume
+                if volume < 0.0 {
+                    particle_quad.as_mut_slice().swap(2, 3);
+                }
+
+                quads.push(particle_quad);
+            }
+        }
+
+        if quads.is_empty() {
+            return Vec::new();
+        }
+
+        let quad_vertex_overlap = |a: Quad, b: Quad| -> usize {
+            let mut particles = Vec::from_iter(a.iter().chain(b.iter()));
+            particles.sort();
+            particles.iter().tuple_windows().filter(|(a, b)| a == b).count()
+        };
+
+        let quad_volume_overlap = |a: Quad, b: Quad| -> f64 {
+            let tet_a = na::Matrix3x4::from_columns(&a.map(particle_position));
+            let tet_b = na::Matrix3x4::from_columns(&b.map(particle_position));
+            if crate::geometry::tetrahedra_overlap(&tet_a, &tet_b) {
+                crate::geometry::approximate_tetrahedron_overlap_volume(&tet_a, &tet_b)
+            } else {
+                0.0
+            }
+        };
+
+        if quads.len() > 100 {
+            println!("Triggered quad reduction with {} quads", quads.len());
+            // Too many quads, limit to two-vertex overlap
+            let mut limited = Vec::new();
+            for q in quads {
+                if limited.iter().all(|&p| quad_vertex_overlap(p, q) <= 2) {
+                    limited.push(q);
+                }
+            }
+            quads = Vec::from_iter(limited.into_iter());
+        }
+
+        // Find selection of quads that covers all vertices with minimal overlap
+        let q = dbg!(quads.len());
+        let min_k = (self.size() as f32 / 4.0).ceil() as usize;
+        let (minimal_covering_quads, _) = (min_k..=q)
+            .map(|i| quads.iter().combinations(i))
+            .find_map(|combinations| combinations.fold(
+                None,
+                |maybe_best, quad_combination| {
+                    // Test cover, and return early if doesn't cover
+                    let mut covered_particles = quad_combination.iter().map(|q| q.iter()).flatten().map(|&&p| p).collect::<HashSet<Particle>>();
+                    covered_particles.remove(&Particle::Origin);
+                    let covers = covered_particles.len() == self.size();
+                    if !covers {
+                        return maybe_best;
+                    }
+
+                    let vertex_overlap: usize = quad_combination.iter()
+                        .combinations(2)
+                        .map(|quad_vec| quad_vertex_overlap(**quad_vec[0], **quad_vec[1]))
+                        .sum();
+
+                    let volume_overlap: f64 = quad_combination.iter()
+                        .combinations(2)
+                        .map(|quad_vec| quad_volume_overlap(**quad_vec[0], **quad_vec[1]))
+                        .sum();
+
+                    let overlap = (vertex_overlap, volume_overlap);
+
+                    if let Some((best_combination, best_overlap)) = maybe_best {
+                        if overlap < best_overlap {
+                            Some((quad_combination, overlap))
+                        } else {
+                            Some((best_combination, best_overlap))
+                        }
+                    } else {
+                        Some((quad_combination, overlap))
+                    }
+                }
+            )).expect("Can always find a covering combination");
+
+        // Un-ref particles by copying
+        minimal_covering_quads.into_iter().map(|arr| arr.map(|&p| p)).collect()
     }
 }
 
@@ -619,7 +772,7 @@ mod tests {
         counts.resize(shape.size(), 0);
         for group in vertex_groups.iter() {
             for v in group.iter() {
-                let usize_v = v.get() as usize;
+                let usize_v = v.get();
                 assert!(usize_v < shape.size());
                 counts[usize_v] += 1;
             }

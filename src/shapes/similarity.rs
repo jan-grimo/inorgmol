@@ -33,6 +33,18 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     x
 }
 
+pub fn apply_permutation_static<C: nalgebra::base::Dim, S>(x: &na::Matrix<f64, na::Const<3>, C, S>, p: &Permutation) -> na::Matrix<f64, na::Const<3>, C, <na::DefaultAllocator as na::allocator::Allocator<f64, na::Const<3>, C>>::Buffer>
+where 
+    S: na::RawStorage<f64, na::Const<3>, C>,
+    C: na::DimName,
+    na::DefaultAllocator: na::allocator::Allocator<f64, na::Const<3>, C>
+{
+
+    assert_eq!(x.ncols(), p.set_size());
+    let inverse = p.inverse();
+    na::OMatrix::<f64, na::Const<3>, C>::from_fn(|i, j| x[(i, inverse[j])])
+}
+
 // Column-permute a matrix
 //
 // Post-condition is x.column(i) == result.column(p(i))
@@ -344,7 +356,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
 
     let skips = USE_SKIPS.then(|| skip_vertices(s));
     let narrow = (0..n)
-        .map(Vertex::from)
+        .map_into::<Vertex>()
         .permutations(PREMATCH)
         .filter(|vertices| {
             match USE_SKIPS {
@@ -366,7 +378,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
 
                 // Assemble cost matrix of matching each pair of unmatched vertices
                 let right_free: Vec<Vertex> = (0..n)
-                    .map(Vertex::from)
+                    .map_into::<Vertex>()
                     .filter(|v| !vertices.contains(v))
                     .collect();
                 debug_assert_eq!(left_free.len(), right_free.len());
@@ -398,11 +410,11 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                     assert_eq!(partial_map.len(), n);
                     assert!(itertools::equal(
                         partial_map.keys().copied().sorted(), 
-                        (0..n).map(Column::from)
+                        (0..n).map_into::<Column>()
                     ));
                     assert!(itertools::equal(
                         partial_map.values().copied().sorted(), 
-                        (0..n).map(Vertex::from)
+                        (0..n).map_into::<Vertex>()
                     ));
                 }
 

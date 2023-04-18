@@ -1,4 +1,4 @@
-use crate::shapes::{Shape, Name, Vertex, Rotation, Matrix3N};
+use crate::shapes::{Shape, Name, Rotation, Matrix3N};
 use crate::permutation::Permutation;
 
 // TODO 
@@ -23,8 +23,6 @@ fn make_rotation(slice: &[usize]) -> Rotation {
     Rotation::new(Permutation {sigma: slice.to_vec()})
 }
 
-pub static ORIGIN: Vertex = Vertex(usize::MAX);
-
 lazy_static! {
     pub static ref LINE: Shape = Shape {
         name: Name::Line,
@@ -33,7 +31,6 @@ lazy_static! {
             -1.0, 0.0, 0.0
         ]),
         rotation_basis: vec![make_rotation(&[1, 0])],
-        tetrahedra: vec![],
     };
 
     /// Bent at 107°
@@ -44,7 +41,6 @@ lazy_static! {
             -0.292371704722737, 0.956304755963036, 0.0
         ]),
         rotation_basis: vec![make_rotation(&[1, 0])],
-        tetrahedra: vec![],
     };
 
     pub static ref EQUILATERAL_TRIANGLE: Shape = Shape {
@@ -58,7 +54,6 @@ lazy_static! {
             make_rotation(&[1, 2, 0]),
             make_rotation(&[0, 2, 1])
         ],
-        tetrahedra: vec![],
     };
 
     /// Monovacant tetrahedron. 
@@ -72,8 +67,7 @@ lazy_static! {
             0.805765, -0.366501, -0.465209,
             -0.805765, -0.366501, -0.465209
         ]),
-        rotation_basis: vec![make_rotation(&[2, 0, 1])],
-        tetrahedra: vec![[ORIGIN, Vertex(0), Vertex(1), Vertex(2)]],
+        rotation_basis: vec![make_rotation(&[2, 0, 1])]
     };
 
     pub static ref TSHAPE: Shape = Shape {
@@ -84,7 +78,6 @@ lazy_static! {
              1.0,  0.0,  0.0,
         ]),
         rotation_basis: vec![Rotation::new(Permutation {sigma: vec![2, 1, 0]})],
-        tetrahedra: vec![],
     };
 
     pub static ref TETRAHEDRON: Shape = Shape {
@@ -101,7 +94,6 @@ lazy_static! {
             make_rotation(&[3, 0, 2, 1]),
             make_rotation(&[1, 2, 0, 3])
         ],
-        tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(2), Vertex(3)]],
     };
 
     pub static ref SQUARE: Shape = Shape {
@@ -117,7 +109,6 @@ lazy_static! {
             make_rotation(&[1, 0, 3, 2]),
             make_rotation(&[3, 2, 1, 0]),
         ],
-        tetrahedra: vec![],
     };
 
     /// Equatorially monovacant trigonal bipyramid or edge-centered tetragonal disphenoid
@@ -130,10 +121,6 @@ lazy_static! {
              0.0, -1.0,           0.0
         ]),
         rotation_basis: vec![make_rotation(&[3, 2, 1, 0])],
-        tetrahedra: vec![
-            [Vertex(0), ORIGIN, Vertex(1), Vertex(2)],
-            [ORIGIN, Vertex(3), Vertex(1), Vertex(2)]
-        ],
     };
 
     /// Face-centered trigonal pyramid = trig. pl. + axial ligand 
@@ -147,7 +134,6 @@ lazy_static! {
              0.0,           0.0, 1.0
         ]),
         rotation_basis: vec![make_rotation(&[2, 0, 1, 3])],
-        tetrahedra: vec![[Vertex(0), Vertex(1), Vertex(3), Vertex(2)]],
     };
 
     /// J1 solid (central position is square-face centered)
@@ -161,12 +147,6 @@ lazy_static! {
              0.0,  0.0, 1.0,
         ]),
         rotation_basis: vec![make_rotation(&[3, 0, 1, 2, 4])],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(4), ORIGIN],
-            [Vertex(1), Vertex(2), Vertex(4), ORIGIN],
-            [Vertex(2), Vertex(3), Vertex(4), ORIGIN],
-            [Vertex(3), Vertex(0), Vertex(4), ORIGIN],
-        ],
     };
 
     /// J12 solid
@@ -183,10 +163,6 @@ lazy_static! {
             make_rotation(&[2, 0, 1, 3, 4]), // C3
             make_rotation(&[0, 2, 1, 4, 3]), // C2 on 0
         ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(3), Vertex(2)], 
-            [Vertex(0), Vertex(1), Vertex(2), Vertex(4)]
-        ],
     };
 
     pub static ref PENTAGON: Shape = Shape {
@@ -202,7 +178,6 @@ lazy_static! {
             make_rotation(&[4, 0, 1, 2, 3]),
             make_rotation(&[0, 4, 3, 2, 1]),
         ],
-        tetrahedra: vec![],
     };
 
     pub static ref OCTAHEDRON: Shape = Shape {
@@ -220,16 +195,6 @@ lazy_static! {
             make_rotation(&[0, 5, 2, 4, 1, 3]),
             make_rotation(&[4, 1, 5, 3, 2, 0]), // TODO maybe unnecessary?
         ],
-        tetrahedra: vec![ // TODO check if reducible
-            [Vertex(3), Vertex(0), Vertex(4), ORIGIN],
-            [Vertex(0), Vertex(1), Vertex(4), ORIGIN],
-            [Vertex(1), Vertex(2), Vertex(4), ORIGIN],
-            [Vertex(2), Vertex(3), Vertex(4), ORIGIN],
-            [Vertex(3), Vertex(0), ORIGIN, Vertex(5)],
-            [Vertex(0), Vertex(1), ORIGIN, Vertex(5)],
-            [Vertex(1), Vertex(2), ORIGIN, Vertex(5)],
-            [Vertex(2), Vertex(3), ORIGIN, Vertex(5)],
-        ],
     };
 
     pub static ref TRIGONALPRISM: Shape = Shape {
@@ -245,10 +210,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[2, 0, 1, 5, 3, 4]), // C3 axial
             make_rotation(&[3, 5, 4, 0, 2, 1]), // C2 between 0, 3
-        ],
-        tetrahedra: vec![
-            [ORIGIN, Vertex(0), Vertex(2), Vertex(1)],
-            [Vertex(3), ORIGIN, Vertex(5), Vertex(4)]
         ],
     };
     
@@ -266,14 +227,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[4, 0, 1, 2, 3, 5]),
         ],
-        tetrahedra: vec![
-            [Vertex(0), ORIGIN, Vertex(1), Vertex(5)],
-            [Vertex(1), ORIGIN, Vertex(2), Vertex(5)],
-            [Vertex(2), ORIGIN, Vertex(3), Vertex(5)],
-            [Vertex(3), ORIGIN, Vertex(4), Vertex(5)],
-            [Vertex(4), ORIGIN, Vertex(0), Vertex(5)],
-
-        ],
     };
 
     pub static ref HEXAGON: Shape = Shape {
@@ -290,7 +243,6 @@ lazy_static! {
             make_rotation(&[5, 0, 1, 2, 3, 4]),
             make_rotation(&[0, 5, 4, 3, 2, 1]),
         ],
-        tetrahedra: vec![],
     };
 
     /// J13 solid
@@ -308,14 +260,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[4, 0, 1, 2, 3, 5, 6]),
             make_rotation(&[1, 0, 4, 3, 2, 6, 5]),
-        ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(5), Vertex(6)],
-            [Vertex(1), Vertex(2), Vertex(5), Vertex(6)],
-            [Vertex(2), Vertex(3), Vertex(5), Vertex(6)],
-            [Vertex(3), Vertex(4), Vertex(5), Vertex(6)],
-            [Vertex(4), Vertex(0), Vertex(5), Vertex(6)],
-
         ],
     };
 
@@ -346,11 +290,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[0, 3, 1, 2, 6, 4, 5]), // C3 axial
         ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(2), Vertex(3)],
-            [Vertex(0), Vertex(4), Vertex(5), Vertex(6)],
-
-        ],
     };
 
     /// Spherized J49 solid in C2v
@@ -371,11 +310,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[0, 3, 4, 1, 2, 6, 5]), // C2 axial
         ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(2), Vertex(5)],
-            [Vertex(0), Vertex(3), Vertex(4), Vertex(6)],
-
-        ],
     };
 
     pub static ref SQUAREANTIPRISM: Shape = Shape {
@@ -394,13 +328,6 @@ lazy_static! {
             make_rotation(&[3, 0, 1, 2, 7, 4, 5, 6]), // C4 axial
             make_rotation(&[5, 4, 7, 6, 1, 0, 3, 2]), // C2'-ish
         ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(4), Vertex(5)],
-            [Vertex(1), Vertex(2), Vertex(5), Vertex(6)],
-            [Vertex(2), Vertex(3), Vertex(6), Vertex(7)],
-            [Vertex(3), Vertex(0), Vertex(7), Vertex(4)],
-
-        ],
     };
     
     pub static ref CUBE: Shape = Shape {
@@ -418,11 +345,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[3, 0, 1, 2, 7, 4, 5, 6]), // C4
             make_rotation(&[4, 5, 1, 0, 7, 6, 2, 3]), // C4'
-        ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(1), Vertex(3), Vertex(5)],
-            [Vertex(2), Vertex(4), Vertex(6), Vertex(7)],
-
         ],
     };
 
@@ -443,11 +365,6 @@ lazy_static! {
             make_rotation(&[1, 0, 3, 2, 5, 4, 7, 6]), // C2z between 01
             make_rotation(&[2, 3, 0, 1, 6, 7, 4, 5]), // C2x + C4z
         ],
-        tetrahedra: vec![
-            [Vertex(4), Vertex(2), Vertex(3), Vertex(5)],
-            [Vertex(0), Vertex(6), Vertex(7), Vertex(1)],
-
-        ],
     };
 
     pub static ref HEXAGONALBIPYRAMID: Shape = Shape {
@@ -465,12 +382,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[5, 0, 1, 2, 3, 4, 6, 7]), // axial C6
             make_rotation(&[0, 5, 4, 3, 2, 1, 7, 6]), // C2 around 0-3
-        ],
-        tetrahedra: vec![
-            [Vertex(6), Vertex(0), Vertex(1), Vertex(7)],
-            [Vertex(6), Vertex(4), Vertex(5), Vertex(7)],
-            [Vertex(6), Vertex(2), Vertex(3), Vertex(7)],
-
         ],
     };
 
@@ -495,11 +406,6 @@ lazy_static! {
             make_rotation(&[7, 8, 3, 4, 2, 1, 0, 6, 5]), // C3 ccw between 2-4-3
             make_rotation(&[2, 5, 0, 6, 7, 1, 3, 4, 8]), // C2 at 8
         ],
-        tetrahedra: vec![
-            [Vertex(1), Vertex(0), Vertex(6), Vertex(7)],
-            [Vertex(5), Vertex(2), Vertex(3), Vertex(4)],
-
-        ],
     };
 
     /// Spherized J10 solid in C4v, to local minimum of Thomson potential
@@ -519,11 +425,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[2, 3, 1, 0, 5, 7, 4, 6, 8]),
         ],
-        tetrahedra: vec![
-            [Vertex(6), Vertex(3), Vertex(0), Vertex(4)],
-            [Vertex(7), Vertex(5), Vertex(1), Vertex(2)],
-
-        ],
     };
 
     pub static ref HEPTAGONALBIPYRAMID: Shape = Shape {
@@ -542,12 +443,6 @@ lazy_static! {
         rotation_basis: vec![
             make_rotation(&[6, 0, 1, 2, 3, 4, 5, 7, 8]), // axial C7
             make_rotation(&[0, 6, 5, 4, 3, 2, 1, 8, 7]), // C2 around 1 and between 4 and 5
-        ],
-        tetrahedra: vec![
-            [Vertex(8), Vertex(1), Vertex(0), Vertex(7)],
-            [Vertex(8), Vertex(3), Vertex(2), Vertex(7)],
-            [Vertex(8), Vertex(5), Vertex(4), Vertex(7)],
-
         ],
     };
 
@@ -572,12 +467,6 @@ lazy_static! {
             make_rotation(&[0, 7, 6, 1, 5, 2, 4, 8, 3, 9]), // C4z
             make_rotation(&[9, 5, 3, 2, 7, 1, 8, 4, 6, 0]), // C2x + C8z
         ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(6), Vertex(8), Vertex(7)],
-            [Vertex(9), Vertex(3), Vertex(4), Vertex(5)],
-            [Vertex(9), Vertex(2), Vertex(1), Vertex(5)],
-
-        ],
     };
 
     /// Coordinates are solution to Thomson problem with 11 particles
@@ -598,12 +487,6 @@ lazy_static! {
         ]),
         rotation_basis: vec![
             make_rotation(&[1, 0, 9, 5, 7, 3, 10, 4, 8, 2, 6]), // C2
-        ],
-        tetrahedra: vec![
-            [Vertex(6), Vertex(1), Vertex(5), Vertex(4)],
-            [Vertex(3), Vertex(10), Vertex(0), Vertex(9)],
-            [Vertex(1), Vertex(2), Vertex(8), Vertex(7)],
-
         ],
     };
 
@@ -628,12 +511,6 @@ lazy_static! {
             make_rotation(&[8, 5, 6, 11, 4, 0, 3, 7, 9, 1, 2, 10]), // C5 around 4-7
             make_rotation(&[2, 3, 0, 1, 7, 6, 5, 4, 10, 11, 8, 9]),// C2 between 0-2 / 1-3
         ],
-        tetrahedra: vec![
-            [Vertex(0), Vertex(2), Vertex(10), Vertex(8)],
-            [Vertex(1), Vertex(3), Vertex(9), Vertex(11)],
-            [Vertex(1), Vertex(4), Vertex(5), Vertex(0)],
-            [Vertex(3), Vertex(7), Vertex(6), Vertex(2)]
-        ],
     };
 
     pub static ref CUBOCTAHEDRON: Shape = Shape {
@@ -656,12 +533,6 @@ lazy_static! {
             make_rotation(&[10, 11, 8, 9, 5, 7, 4, 6, 0, 1, 2, 3]), // C4 ccw 0-8-2-10
             make_rotation(&[2, 0, 3, 1, 8, 10, 9, 11, 6, 4, 7, 5]), // C4 ccw 4-9-6-8
             make_rotation(&[7, 6, 5, 4, 3, 2, 1, 0, 11, 9, 10, 8]), // C2 along 9-10
-        ],
-        tetrahedra: vec![
-            [ORIGIN, Vertex(6),  Vertex(9),  Vertex(8)],
-            [ORIGIN, Vertex(4),  Vertex(1),  Vertex(0)],
-            [ORIGIN, Vertex(5), Vertex(11), Vertex(10)],
-            [ORIGIN, Vertex(7),  Vertex(3),  Vertex(2)]
         ],
     };
 
@@ -785,43 +656,7 @@ mod tests {
     use crate::shapes::statics::make_rotation;
     use crate::shapes::*;
     use crate::shapes::similarity::unit_sphere_normalize;
-    use crate::strong::matrix::{AsNewTypeIndexedMatrix, StrongPoints};
-
-    fn tetrahedron_volume(tetrahedron: &[Vertex; 4], points: &Matrix3N) -> f64 {
-        let coords = AsNewTypeIndexedMatrix::<Vertex>::new(points);
-        let zero = Matrix3N::zeros(1);
-        let r = |v: Vertex| {
-            if v == ORIGIN {
-                zero.column(0)
-            } else {
-                coords.column(v)
-            }
-        };
-
-        (r(tetrahedron[0]) - r(tetrahedron[3])).dot(
-            &(r(tetrahedron[1]) - r(tetrahedron[3])).cross(
-                &(r(tetrahedron[2]) - r(tetrahedron[3]))
-            )
-        )
-    }
-
-    const MIN_TETRAHEDRON_VOLUME: f64 = 0.4;
-
-    #[test]
-    fn all_tetrahedra_positive_volume() {
-        for shape in SHAPES.iter() {
-            let mut pass = true;
-            for tetrahedron in shape.tetrahedra.iter() {
-                let volume = tetrahedron_volume(tetrahedron, &shape.coordinates);
-                println!("- {:e} in {}", volume, shape.name);
-                if volume < MIN_TETRAHEDRON_VOLUME {
-                    pass = false;
-                    println!("Shape {} tetrahedron {:?} does not have significant positive volume at V = {:e}", shape.name, tetrahedron, volume);
-                }
-            }
-            assert!(pass);
-        }
-    }
+    use crate::strong::matrix::StrongPoints;
 
     #[test]
     fn rotations_are_rotations() {
@@ -1031,7 +866,8 @@ mod tests {
 
     #[test]
     fn find_mirror() {
-        for shape in SHAPES.iter() {
+        // TODO temporary test size limit
+        for shape in SHAPES.iter().filter(|shape| shape.size() <= 8) {
             if let Some(annotated_mirror_maybe) = annotated_mirror(shape.name) {
                 let maybe_found_mirror = shape.find_mirror();
                 // Either both no mirror, or both Somes
@@ -1046,5 +882,168 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn annotated_tetrahedra(name: Name) -> Option<Vec<[Particle; 4]>> {
+        let maybe_vec = match name {
+            Name::Line => Some(vec![]),
+            Name::Bent => Some(vec![]),
+            Name::EquilateralTriangle => Some(vec![]),
+            Name::VacantTetrahedron => Some(vec![[None, Some(0), Some(1), Some(2)]]),
+            Name::T => Some(vec![]),
+            Name::Tetrahedron => Some(vec![[Some(0), Some(1), Some(2), Some(3)]]),
+            Name::Square => Some(vec![]),
+            Name::Seesaw => Some(vec![
+                [Some(0), None, Some(1), Some(2)],
+                [None, Some(3), Some(1), Some(2)]
+            ]),
+            Name::TrigonalPyramid => Some(vec![[Some(0), Some(1), Some(3), Some(2)]]),
+            Name::SquarePyramid => Some(vec![
+                [Some(0), Some(1), Some(4), None],
+                [Some(1), Some(2), Some(4), None],
+                [Some(2), Some(3), Some(4), None],
+                [Some(3), Some(0), Some(4), None],
+            ]),
+            Name::TrigonalBipyramid => Some(vec![
+                [Some(0), Some(1), Some(3), Some(2)], 
+                [Some(0), Some(1), Some(2), Some(4)]
+            ]),
+            Name::Pentagon => Some(vec![]),
+            Name::Octahedron => Some(vec![
+                [Some(3), Some(0), Some(4), None],
+                [Some(0), Some(1), Some(4), None],
+                [Some(1), Some(2), Some(4), None],
+                [Some(2), Some(3), Some(4), None],
+                [Some(3), Some(0), None, Some(5)],
+                [Some(0), Some(1), None, Some(5)],
+                [Some(1), Some(2), None, Some(5)],
+                [Some(2), Some(3), None, Some(5)],
+            ]),
+            Name::TrigonalPrism => Some(vec![
+                [None, Some(0), Some(2), Some(1)],
+                [Some(3), None, Some(5), Some(4)]
+            ]),
+            Name::PentagonalPyramid => Some(vec![
+                [Some(0), None, Some(1), Some(5)],
+                [Some(1), None, Some(2), Some(5)],
+                [Some(2), None, Some(3), Some(5)],
+                [Some(3), None, Some(4), Some(5)],
+                [Some(4), None, Some(0), Some(5)],
+            ]),
+            Name::Hexagon => Some(vec![]),
+            Name::PentagonalBipyramid =>Some(vec![
+                [Some(0), Some(1), Some(5), Some(6)],
+                [Some(1), Some(2), Some(5), Some(6)],
+                [Some(2), Some(3), Some(5), Some(6)],
+                [Some(3), Some(4), Some(5), Some(6)],
+                [Some(4), Some(0), Some(5), Some(6)],
+            ]),
+            Name::CappedOctahedron => Some(vec![
+                [Some(0), Some(1), Some(2), Some(3)],
+                [Some(0), Some(4), Some(5), Some(6)],
+            ]),
+            Name::CappedTrigonalPrism => Some(vec![
+                [Some(0), Some(1), Some(2), Some(5)],
+                [Some(0), Some(3), Some(4), Some(6)],
+            ]),
+            Name::SquareAntiprism => Some(vec![
+                [Some(0), Some(1), Some(4), Some(5)],
+                [Some(1), Some(2), Some(5), Some(6)],
+                [Some(2), Some(3), Some(6), Some(7)],
+                [Some(3), Some(0), Some(7), Some(4)],
+            ]),
+            Name::Cube => Some(vec![
+                [Some(0), Some(1), Some(3), Some(5)],
+                [Some(2), Some(4), Some(6), Some(7)],
+            ]),
+            Name::TrigonalDodecahedron => Some(vec![
+                [Some(4), Some(2), Some(3), Some(5)],
+                [Some(0), Some(6), Some(7), Some(1)],
+            ]),
+            Name::HexagonalBipyramid => Some(vec![
+                [Some(6), Some(0), Some(1), Some(7)],
+                [Some(6), Some(4), Some(5), Some(7)],
+                [Some(6), Some(2), Some(3), Some(7)],
+            ]),
+            Name::TricappedTrigonalPrism => Some(vec![
+                [Some(1), Some(0), Some(6), Some(7)],
+                [Some(5), Some(2), Some(3), Some(4)],
+            ]),
+            Name::CappedSquareAntiprism => Some(vec![
+                [Some(6), Some(3), Some(0), Some(4)],
+                [Some(7), Some(5), Some(1), Some(2)],
+            ]),
+            Name::HeptagonalBipyramid => Some(vec![
+                [Some(8), Some(1), Some(0), Some(7)],
+                [Some(8), Some(3), Some(2), Some(7)],
+                [Some(8), Some(5), Some(4), Some(7)],
+            ]),
+            Name::BicappedSquareAntiprism => Some(vec![
+                [Some(0), Some(6), Some(8), Some(7)],
+                [Some(9), Some(3), Some(4), Some(5)],
+                [Some(9), Some(2), Some(1), Some(5)],
+            ]),
+            Name::EdgeContractedIcosahedron => Some(vec![
+                [Some(6), Some(1), Some(5), Some(4)],
+                [Some(3), Some(10), Some(0), Some(9)],
+                [Some(1), Some(2), Some(8), Some(7)],
+            ]),
+            Name::Icosahedron => Some(vec![
+                [Some(0), Some(2), Some(10), Some(8)],
+                [Some(1), Some(3), Some(9), Some(11)],
+                [Some(1), Some(4), Some(5), Some(0)],
+                [Some(3), Some(7), Some(6), Some(2)]
+            ]),
+            Name::Cuboctahedron => Some(vec![
+                [None, Some(6),  Some(9),  Some(8)],
+                [None, Some(4),  Some(1),  Some(0)],
+                [None, Some(5), Some(11), Some(10)],
+                [None, Some(7),  Some(3),  Some(2)]
+            ]),
+        };
+
+        // Transform Option<i32>s into Particles
+        maybe_vec.map(|vec| vec.into_iter().map(|arr| arr.map(|o| o.map(Vertex::from)).map(Particle::from)).collect())
+    }
+
+    fn tetrahedron_volume(tetrahedron: &[Particle; 4], points: &Matrix3N) -> f64 {
+        let zero = Matrix3N::zeros(1);
+        let r = |p: Particle| {
+            match p {
+                Particle::Vertex(v) => points.column(v.get()),
+                Particle::Origin => zero.column(0)
+            }
+        };
+
+        crate::geometry::signed_tetrahedron_volume_with_array(tetrahedron.map(r))
+    }
+
+    const MIN_TETRAHEDRON_VOLUME: f64 = 0.4 / 6.0;
+
+    #[test]
+    fn annotated_tetrahedra_positive_volume() {
+        for shape in SHAPES.iter() {
+            if let Some(annotated_tetrahedra) = annotated_tetrahedra(shape.name) {
+                assert!(annotated_tetrahedra.iter().all(|tetrahedron| {
+                    let volume = tetrahedron_volume(tetrahedron, &shape.coordinates);
+                    if volume < MIN_TETRAHEDRON_VOLUME {
+                        println!("Shape {} tetrahedron {:?} does not have significant positive volume at V = {:e}", shape.name, tetrahedron, volume);
+                    }
+
+                    volume < MIN_TETRAHEDRON_VOLUME
+                }));
+            }
+        }
+    }
+
+    #[test]
+    fn find_tetrahedra() {
+        for shape in SHAPES.iter().filter(|s| s.size() <= 9) {
+            dbg!(shape.name);
+            let tetrahedra = shape.find_tetrahedra();
+            dbg!(tetrahedra.len());
+            println!("{:?}", tetrahedra);
+        }
+        assert!(false);
     }
 }

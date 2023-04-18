@@ -15,21 +15,21 @@ pub fn random_rotation() -> Quaternion {
     Quaternion::from_axis_angle(&random_axis, random_angle)
 }
 
-pub fn quaternion_pair_contribution<'a>(stator_col: &na::MatrixSlice3x1<'a, f64>, rotor_col: &na::MatrixSlice3x1<'a, f64>) -> Matrix4 {
+pub fn quaternion_pair_contribution<'a>(stator_col: &na::MatrixView3x1<'a, f64>, rotor_col: &na::MatrixView3x1<'a, f64>) -> Matrix4 {
     let mut a = Matrix4::zeros();
 
     let forward_difference = (rotor_col - stator_col).transpose();
-    a.fixed_slice_mut::<1, 3>(0, 1).copy_from(&forward_difference);
+    a.fixed_view_mut::<1, 3>(0, 1).copy_from(&forward_difference);
 
     let backward_difference = stator_col - rotor_col;
-    a.fixed_slice_mut::<3, 1>(1, 0).copy_from(&backward_difference);
+    a.fixed_view_mut::<3, 1>(1, 0).copy_from(&backward_difference);
 
     let mut block = Matrix3::zeros();
     let sum = stator_col + rotor_col;
     for (col, mut block_col) in Matrix3::identity().column_iter().zip(block.column_iter_mut()) {
         block_col.copy_from(&col.cross(&sum));
     }
-    a.fixed_slice_mut::<3, 3>(1, 1).copy_from(&block);
+    a.fixed_view_mut::<3, 3>(1, 1).copy_from(&block);
 
     a.transpose() * a
 }
