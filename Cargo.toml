@@ -6,10 +6,11 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8"
-nalgebra = { version = "0.32", features = ["rand"] }
+nalgebra = { version = "0.32", features = ["rand", "serde-serialize", "rayon"] }
 lazy_static = "1.4.0"
 thiserror = "1.0"
 approx = "0.5"
+argmin-math = { version = "0.3", features = ["nalgebra_latest-serde"] }
 argmin = "0.8"
 itertools = "0.10"
 num-traits = "0.2"
@@ -21,6 +22,11 @@ memoize = "0.4"
 lapjv = "0.2"
 statrs = "0.16"
 csv = "1.2"
+rayon = "1.7"
+wgpu = "0.15"
+futures-intrusive = "0.5"
+bytemuck = "1.13"
+pollster = "0.3"
 
 [dev-dependencies]
 criterion = "0.4"
@@ -43,4 +49,8 @@ test = false
 
 [[bin]]
 name = "similarity_distributions"
+test = false
+
+[[bin]]
+name = "try_tetrahedra"
 test = false

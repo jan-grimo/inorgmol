@@ -349,9 +349,7 @@ pub fn point_tetrahedron_relation(tetrahedron: &na::Matrix3x4<f64>, point: &na::
 ///
 /// Algorithm from https://vcg.isti.cnr.it/activities/OLD/geometryegraphics/pointintetraedro.html
 pub fn random_point_in_tetrahedron(tetrahedron: &na::Matrix3x4<f64>) -> Vector3 {
-    let mut s = rand::random::<f64>();
-    let mut t = rand::random::<f64>();
-    let mut u = rand::random::<f64>();
+    let [mut s, mut t, mut u]: [f64; 3] = rand::random();
 
     // cube into prism
     if s + t > 1.0 {

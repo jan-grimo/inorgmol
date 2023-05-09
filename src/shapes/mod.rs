@@ -174,6 +174,13 @@ impl Shape {
         self.coordinates.ncols()
     }
 
+    pub fn particle_position(&self, particle: Particle) -> Vector3 {
+        match particle {
+            Particle::Vertex(v) => self.coordinates.column(v.get()).into(),
+            Particle::Origin => Vector3::zeros()
+        }
+    }
+
     fn expand_rotation_basis(&self, basis: &[Rotation]) -> HashSet<Rotation> {
         let mut rotations: HashSet<Rotation> = HashSet::new();
         rotations.insert(Rotation::identity(self.size()));
