@@ -1,0 +1,247 @@
+use crate::dg::DIMENSIONS;
+use crate::dg::refinement::{Stage, Bounds, DistanceBound, RefinementErrorFunction, ParallelRefinement, StrictUpperTriangleIndices, four_mut};
+use std::borrow::Cow;
+use wgpu::util::DeviceExt;
+
+extern crate nalgebra as na;
+
+// IDEAS
+// - Could try calculating numerical hessian on GPU, since we know which terms
+//   impact which parameters, maybe possible to make it nice and efficient
+
+/// Gpu-offloaded distance bounds gradient calculation and parallel otherwise
+pub struct GpuRefinement {
+    bounds: Bounds,
+    gpu_linear_squared_bounds: na::Matrix2xX<f32>,
+    stage: Stage
+}
+
+impl GpuRefinement {
+    /// Transform distance bounds for transfer to gpu
+    fn into_matrix(bounds: &[DistanceBound]) -> na::Matrix2xX<f32> {
+        let n = bounds.len();
+        na::Matrix2xX::<f32>::from_iterator(
+            n,
+            bounds.iter()
+                .flat_map(|bound| {
+                    let (lower, upper) = bound.square_bounds;
+                    [upper as f32, lower as f32].into_iter() // access order in shader
+                })
+        )
+    }
+
+    /// Construct from bounds
+    pub fn new(bounds: Bounds) -> GpuRefinement {
+        let gpu_linear_squared_bounds = Self::into_matrix(&bounds.distances);
+        GpuRefinement {bounds, gpu_linear_squared_bounds, stage: Stage::FixChirals}
+    }
+
+    /// Run compute shader on gpu to calculate distance gradient
+    async fn distance_gradient_inner(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        positions: &na::DVector<f64>
+    ) -> na::DVector<f64> {
+        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Distance gradient"),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("dist_grad.wgsl"))),
+        });
+
+        let n = positions.len() / 4;
+        let f32_positions = positions.clone().cast::<f32>();
+
+        let linear_length = StrictUpperTriangleIndices::new(n).total_len();
+        let linear_slice_size = linear_length * 4 * std::mem::size_of::<f32>();
+        let linear_size = linear_slice_size as wgpu::BufferAddress;
+
+        let positions_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Positions buffer"),
+            contents: bytemuck::cast_slice(f32_positions.data.as_slice()),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let bounds_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Bounds buffer"),
+            contents: bytemuck::cast_slice(self.gpu_linear_squared_bounds.data.as_slice()),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let gradient_contribution_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Gradient buffer"),
+            size: linear_size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &shader_module,
+            entry_point: "main",
+        });
+
+        let bind_group_layout = pipeline.get_bind_group_layout(0);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Distance gradient buffers"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: positions_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: bounds_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: gradient_contribution_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let gradient_contribution_return_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Gradient return buffer"),
+            size: linear_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+            cpass.set_pipeline(&pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.insert_debug_marker("Compute distance gradient contributions");
+            cpass.dispatch_workgroups(n as u32, n as u32, 1);
+        }
+
+        encoder.copy_buffer_to_buffer(&gradient_contribution_buffer, 0, &gradient_contribution_return_buffer, 0, linear_size);
+        queue.submit(Some(encoder.finish()));
+
+        let buffer_slice = gradient_contribution_return_buffer.slice(..);
+        let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+        device.poll(wgpu::Maintain::Wait);
+
+        if let Some(Ok(())) = receiver.receive().await {
+            let data = buffer_slice.get_mapped_range();
+            let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
+            drop(data);
+            gradient_contribution_return_buffer.unmap();
+            na::DVector::<f64>::from_iterator(result.len(), result.into_iter().map(|f| f as f64))
+        } else {
+            panic!("Failed to map return buffer memory");
+        }
+    }
+
+    /// Try to run distance gradient compute shader on compatible gpu, if available
+    async fn distance_gradient(&self, positions: &na::DVector<f64>) -> Option<na::DVector<f64>> {
+        // Find a Gpu
+        let adapter = wgpu::Instance::default()
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+            })
+            .await?;
+
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    features: wgpu::Features::empty(),
+                    limits: wgpu::Limits::downlevel_defaults(),
+                },
+                None,
+            )
+            .await
+            .ok()?;
+
+        let contributions = self.distance_gradient_inner(&device, &queue, positions).await;
+
+        // Collect contributions into gradient serially
+        let num_pairs = contributions.len() / DIMENSIONS;
+        let contributions = contributions.reshape_generic(na::Const::<DIMENSIONS>, na::Dyn(num_pairs));
+        println!("contributions mat: {contributions}");
+
+        let mut gradient = na::DVector::<f64>::zeros(positions.nrows());
+        for (contribution, bound) in contributions.column_iter().zip(self.bounds.distances.iter()) {
+            // TODO try with and without
+            if contribution.iter().all(|v| *v == 0.0) {
+                continue;
+            }
+
+            {
+                let mut part = four_mut(&mut gradient, bound.indices.0);
+                part += contribution;
+            }
+            {
+                let mut part = four_mut(&mut gradient, bound.indices.1);
+                part -= contribution;
+            }
+        }
+
+        Some(gradient)
+    }
+
+    /// Wraps parallel computation of chiral gradient
+    async fn chiral_gradient(&self, positions: &na::DVector<f64>) -> na::DVector<f64> {
+        ParallelRefinement::chiral_gradient(&self.bounds.chirals, positions)
+    }
+
+    /// Calculate gradients asynchronously, offloading distance gradients to gpu if possible
+    async fn async_gradients(&self, positions: &na::DVector<f64>) -> na::DVector<f64> {
+        let distance_fut = self.distance_gradient(positions); // on GPU
+        let chiral_fut = self.chiral_gradient(positions); // parallel on CPU
+        let (maybe_distance_grad, chiral_grad) = futures::join!(distance_fut, chiral_fut);
+        // Fallback onto parallel impl if gpu doesn't work
+        let distance_grad = maybe_distance_grad.unwrap_or_else(|| ParallelRefinement::distance_gradient(&self.bounds.distances, positions));
+        let grad = distance_grad + chiral_grad;
+        ParallelRefinement::fourth_dimension_gradient(positions, grad, &self.stage)
+    }
+}
+
+impl RefinementErrorFunction for GpuRefinement {
+    fn error(&self, positions: &na::DVector<f64>) -> f64 {
+        ParallelRefinement::distance_error(&self.bounds.distances, positions)
+            + ParallelRefinement::chiral_error(&self.bounds.chirals, positions)
+            + ParallelRefinement::fourth_dimension_error(positions, &self.stage)
+    }
+
+    fn gradient(&self, positions: &na::DVector<f64>) -> na::DVector<f64> {
+        pollster::block_on(self.async_gradients(positions))
+    }
+
+    fn set_stage(&mut self, stage: Stage) {
+        self.stage = stage;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dg::{DistanceMatrix, MetricMatrix, MetrizationPartiality};
+    use crate::dg::refinement::{SerialRefinement, Stage};
+    use crate::dg::gpu::*;
+
+    #[test]
+    fn gpu_gradient() {
+        let shape = &crate::shapes::SQUAREANTIPRISM;
+        let bounds = crate::dg::modeling::solitary_shape::shape_into_bounds(shape);
+        let distances = DistanceMatrix::try_from_distance_bounds(bounds.clone(), MetrizationPartiality::Complete).expect("Successful metrization");
+        let metric = MetricMatrix::from_distance_matrix(distances);
+        let coords = metric.embed().scale(0.7);
+        let n = coords.len();
+        let linear_coords = coords.reshape_generic(na::Dyn(n), na::Const::<1>);
+        let refinement_bounds = Bounds::new(bounds, Vec::new());
+
+        let serial_errf = SerialRefinement {bounds: refinement_bounds.clone(), stage: Stage::FixChirals};
+        let serial_grad = serial_errf.gradient(&linear_coords);
+
+        let gpu_errf = GpuRefinement::new(refinement_bounds);
+        let gpu_grad = gpu_errf.gradient(&linear_coords);
+
+        approx::assert_relative_eq!(serial_grad, gpu_grad, epsilon=1e-4);
+    }
+}

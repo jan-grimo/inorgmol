@@ -11,10 +11,7 @@
   permutation?) or size-gate
   - Not sure this is avoidable as soon as realizeability comes into play with
     multidentate ligands
+- Parametrizeable shapes (e.g. for symmetric distortions in octahedron or
+  bipyramids)
 
-look through the GitLab issues again :D
-
-
-# TODOs
-- Recheck that all uses of new\_random realize that it generates values only in
-  [0, 1)
+look through the GitLab issues again!

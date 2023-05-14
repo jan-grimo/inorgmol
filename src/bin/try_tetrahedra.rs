@@ -1,19 +1,25 @@
-use molassembler::shapes::TETRAHEDRON;
+use molassembler::shapes::SQUAREANTIPRISM;
 use molassembler::dg::*;
-use molassembler::dg::refinement::{Chiral, SerialRefinement};
+use molassembler::dg::refinement::{Chiral, SerialRefinement, Bounds, Stage};
+use statrs::statistics::Statistics;
+
+const REPETITIONS: usize = 100;
 
 fn main() {
-    let shape = &TETRAHEDRON;
+    let shape = &SQUAREANTIPRISM;
     let bounds = modeling::solitary_shape::shape_into_bounds(shape);
-    let distances = DistanceMatrix::try_from_distance_bounds(bounds.clone(), MetrizationPartiality::Complete).expect("Successful metrization");
-    let metric = MetricMatrix::from_distance_matrix(distances);
-    let coords = metric.embed();
-    let chirals: Vec<Chiral> = shape.find_tetrahedra().into_iter()
-        .map(|tetr| modeling::solitary_shape::chiral_from_tetrahedron(tetr, shape, 0.1))
-        .collect();
-    let problem = SerialRefinement::new(bounds, chirals);
-    if let Ok(results) = refinement::refine(problem, coords) {
-        println!("coords: {}", results.coords);
-        println!("iterations: {}", results.steps);
-    }
+    let tetrahedra = shape.find_tetrahedra();
+    let iterations: Vec<f64> = (0..REPETITIONS).filter_map(|_| {
+        let distances = DistanceMatrix::try_from_distance_bounds(bounds.clone(), MetrizationPartiality::Complete).expect("Successful metrization");
+        let metric = MetricMatrix::from_distance_matrix(distances);
+        let coords = metric.embed();
+        let chirals: Vec<Chiral> = tetrahedra.iter()
+            .map(|&tetr| modeling::solitary_shape::chiral_from_tetrahedron(tetr, shape, 0.1))
+            .collect();
+        let refinement_bounds = Bounds::new(bounds.clone(), chirals);
+        let problem = SerialRefinement {bounds: refinement_bounds, stage: Stage::FixChirals};
+        refinement::refine(problem, coords).map(|results| results.steps as f64).ok()
+    }).collect();
+
+    println!("{} runs: mean iterations: {}", iterations.len(), iterations.mean());
 }

@@ -295,3 +295,4 @@ impl MetricMatrix {
 
 pub mod refinement;
 pub mod modeling;
+pub mod gpu;

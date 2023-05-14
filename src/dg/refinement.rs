@@ -11,9 +11,7 @@ extern crate nalgebra as na;
 // - Ideas for parallelization
 //   - Chiral constraints and fourth dimension contributions operate on
 //     different sections of each gradient vector (chiral on 3d, fourth dim
-//     only on 4th), so could run in parallel in shader
-//   - Distance gradient incorporation may be parallelizeable further by
-//     operating on distinct i-j pairs (0-1, 2-3, 4-5)
+//     only on 4th), so could run in parallel in a shader
 
 type Vector3 = na::Vector3<f64>;
 type Vector4 = na::Vector4<f64>;
@@ -27,17 +25,20 @@ use argmin::core::{Executor, TerminationStatus, TerminationReason, IterState};
 use argmin::solver::quasinewton::LBFGS;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
 
+/// Iterator for direct tuple use of i < j indices
 pub struct StrictUpperTriangleIndices {
     pub n: usize,
     pub indices: Option<(usize, usize)>
 }
 
 impl StrictUpperTriangleIndices {
+    /// Construct an i < j iterator for a matrix of size n
     pub fn new(n: usize) -> StrictUpperTriangleIndices {
         let indices = (n > 1).then_some((0, 1));
         StrictUpperTriangleIndices {n, indices}
     }
 
+    /// Advance the iterator
     pub fn increment(&mut self) {
         self.indices = match self.indices {
             Some((mut i, mut j)) => {
@@ -58,15 +59,17 @@ impl StrictUpperTriangleIndices {
         };
     }
 
+    /// Yield the total number of upper triangular entries
     pub fn total_len(&self) -> usize {
-        (self.n.pow(2) - self.n)/ 2
+        (self.n.pow(2) - self.n) / 2
     }
 
+    /// Yield the linear index of the (i, j) pair
     pub fn linear_index(&self) -> usize {
         if let Some((i, j)) = self.indices {
             // valid indices and n > 1
             debug_assert!(i < j);
-            i * (self.n - 1) - i * (i.wrapping_sub(1)) / 2 + j - 1
+            i * self.n - i * (i + 1) / 2 + j - i - 1
         } else {
             self.total_len()
         }
@@ -89,15 +92,21 @@ impl ExactSizeIterator for StrictUpperTriangleIndices {
     }
 }
 
+/// Gradient contribution of a distance bound
 #[derive(PartialEq, Debug)]
-struct DistanceBoundGradient(Vector4);
+pub struct DistanceBoundGradient(Vector4);
 
-struct DistanceBound {
+/// Two-particle distance bound
+#[derive(Clone)]
+pub struct DistanceBound {
+    /// Particle indices (i, j) with i < j
     pub indices: (usize, usize),
+    /// Squared distance bounds (lower, upper)
     pub square_bounds: (f64, f64)
 }
 
 impl DistanceBound {
+    /// Calculate error contribution
     pub fn error(&self, positions: &na::DVector<f64>) -> f64 {
         let (lower_squared, upper_squared) = &self.square_bounds;
         debug_assert!(lower_squared <= upper_squared);
@@ -120,6 +129,7 @@ impl DistanceBound {
         0.0
     }
 
+    /// Calculate gradient contribution, if any
     pub fn gradient(&self, positions: &na::DVector<f64>) -> Option<DistanceBoundGradient> {
         let (lower_squared, upper_squared) = &self.square_bounds;
         debug_assert!(lower_squared <= upper_squared);
@@ -146,6 +156,7 @@ impl DistanceBound {
 }
 
 impl DistanceBoundGradient {
+    /// Incorporate the distance bound gradient contribution into the gradient
     fn incorporate_into(self, gradient: &mut na::DVector<f64>, indices: (usize, usize)) {
         {
             let mut part = four_mut(gradient, indices.0);
@@ -158,20 +169,28 @@ impl DistanceBoundGradient {
     }
 }
 
+/// Chiral constraint gradient contribution data
 pub struct ChiralGradient(na::Matrix3x4<f64>);
 
+/// Chiral constraint
+#[derive(Clone)]
 pub struct Chiral {
+    /// Particle indices for each vertex of tetrahedron
     pub sites: [Vec<usize>; 4],
+    /// Adjusted volume bounds (lower, upper) with V' = 6 V
     pub adjusted_volume_bounds: (f64, f64),
+    /// Weight of constraint (exists to weaken flattening constraints)
     pub weight: f64
 }
 
 impl Chiral {
+    /// Tests if constraint volume bounds accept zero volume
     pub fn target_volume_is_zero(&self) -> bool {
         let (lower, upper) = self.adjusted_volume_bounds;
         lower + upper < 1e-4
     }
 
+    /// Tests if volume of tetrahedron spanned by constraint's sites positive
     pub fn volume_positive(&self, positions: &na::DVector<f64>) -> bool {
         let [alpha, beta, gamma, delta] = array_of_ref(&self.sites)
             .map(|site| site_three(positions, site));
@@ -184,6 +203,7 @@ impl Chiral {
         adjusted_volume >= 0.0
     }
 
+    /// Calculate error contribution
     pub fn error(&self, positions: &na::DVector<f64>) -> f64 {
         let (lower, upper) = self.adjusted_volume_bounds;
         let [alpha, beta, gamma, delta] = array_of_ref(&self.sites)
@@ -207,6 +227,7 @@ impl Chiral {
         term * term
     }
 
+    /// Calculate gradient contribution, if any
     pub fn gradient(&self, positions: &na::DVector<f64>) -> Option<ChiralGradient> {
         let (lower, upper) = self.adjusted_volume_bounds;
         let [alpha, beta, gamma, delta] = array_of_ref(&self.sites)
@@ -264,6 +285,7 @@ impl Chiral {
 }
 
 impl ChiralGradient {
+    /// Incorporate gradient contribution of chiral constraint into gradient
     fn incorporate_into(self, gradient: &mut na::DVector<f64>, sites: &[Vec<usize>; 4]) {
         for (column, site) in self.0.column_iter().zip(sites.iter()) {
             for &i in site.iter() {
@@ -274,17 +296,51 @@ impl ChiralGradient {
     }
 }
 
+/// Stage of refinement
+pub enum Stage {
+    /// Invert chiral constraints so they have positive volume
+    FixChirals,
+    /// Compress out fourth spatial dimension
+    CompressFourthDimension
+}
+
+/// Distance and chiral constraints for refinement
+#[derive(Clone)]
+pub struct Bounds {
+    pub distances: Vec<DistanceBound>,
+    pub chirals: Vec<Chiral>,
+}
+
+impl Bounds {
+    /// Construct from a distance bound matrix and list of chiral constraints
+    pub fn new(bounds: DistanceBounds, chirals: Vec<Chiral>) -> Bounds {
+        Bounds {distances: Self::linearize_bounds(bounds), chirals}
+    }
+
+    /// Reform bounds matrix into individual objects in linear order
+    fn linearize_bounds(bounds: DistanceBounds) -> Vec<DistanceBound> {
+        let n = bounds.n();
+        let bounds_squared = bounds.take_matrix().map(|v| v.powi(2));
+        StrictUpperTriangleIndices::new(n)
+            .map(|(i, j)| DistanceBound {
+                indices: (i, j),
+                square_bounds: (bounds_squared[(j, i)], bounds_squared[(i, j)]),
+            })
+            .collect()
+    }
+}
+
+/// Serial computation of error function
 pub struct SerialRefinement {
-    distances: Vec<DistanceBound>,
-    chirals: Vec<Chiral>,
-    compress_fourth_dimension: bool
+    pub bounds: Bounds,
+    pub stage: Stage
 }
 
 fn four(line: &DVector, index: usize) -> VectorView4 {
     line.fixed_view::<4, 1>(DIMENSIONS * index, 0)
 }
 
-fn four_mut(line: &mut DVector, index: usize) -> VectorViewMut4 {
+pub fn four_mut(line: &mut DVector, index: usize) -> VectorViewMut4 {
     line.fixed_view_mut::<4, 1>(DIMENSIONS * index, 0)
 }
 
@@ -318,7 +374,8 @@ fn site_three(line: &DVector, site: &Vec<usize>) -> Vector3 {
     sum / site.len() as f64
 }
 
-fn negate_y_coordinates(line: &mut DVector) {
+/// Invert the y coordinates of linearized coordinates
+pub fn negate_y_coordinates(line: &mut DVector) {
     let n = line.len() / DIMENSIONS;
     line.view_with_steps_mut((1, 0), (n, 1), (DIMENSIONS - 1, 0)).neg_mut();
 }
@@ -339,32 +396,17 @@ fn array_of_ref<T, const N:usize>(arr: &[T;N])->[&T;N] {
     unsafe { out.assume_init() }
 }
 
-fn linearize_bounds(bounds: DistanceBounds) -> Vec<DistanceBound> {
-    let n = bounds.n();
-    let bounds_squared = bounds.take_matrix().map(|v| v.powi(2));
-    StrictUpperTriangleIndices::new(n)
-        .map(|(i, j)| DistanceBound {
-            indices: (i, j),
-            square_bounds: (bounds_squared[(j, i)], bounds_squared[(i, j)]),
-        })
-        .collect()
-}
-
 impl SerialRefinement {
-    pub fn new(bounds: DistanceBounds, chirals: Vec<Chiral>) -> SerialRefinement {
-        SerialRefinement {distances: linearize_bounds(bounds), chirals, compress_fourth_dimension: false}
-    }
-
-    pub fn distance_error(&self, positions: &na::DVector<f64>) -> f64 {
-        self.distances.iter()
+    pub fn distance_error(bounds: &[DistanceBound], positions: &na::DVector<f64>) -> f64 {
+        bounds.iter()
             .map(|bound| bound.error(positions))
             .sum()
     }
 
-    pub fn distance_gradient(&self, positions: &na::DVector<f64>) -> DVector {
+    pub fn distance_gradient(bounds: &[DistanceBound], positions: &na::DVector<f64>) -> DVector {
         let mut gradient: na::DVector<f64> = na::DVector::zeros(positions.nrows());
 
-        for bound in self.distances.iter() {
+        for bound in bounds.iter() {
             if let Some(contribution) = bound.gradient(positions) {
                 contribution.incorporate_into(&mut gradient, bound.indices);
             }
@@ -373,16 +415,16 @@ impl SerialRefinement {
         gradient
     }
 
-    pub fn chiral_error(&self, positions: &na::DVector<f64>) -> f64 {
-        self.chirals.iter()
+    pub fn chiral_error(bounds: &[Chiral], positions: &na::DVector<f64>) -> f64 {
+        bounds.iter()
             .map(|constraint| constraint.error(positions))
             .sum()
     }
 
-    pub fn chiral_gradient(&self, positions: &na::DVector<f64>) -> DVector {
+    pub fn chiral_gradient(bounds: &[Chiral], positions: &na::DVector<f64>) -> DVector {
         let mut gradient: na::DVector<f64> = na::DVector::zeros(positions.nrows());
 
-        for constraint in self.chirals.iter() {
+        for constraint in bounds.iter() {
             if let Some(contribution) = constraint.gradient(positions) {
                 contribution.incorporate_into(&mut gradient, &constraint.sites);
             }
@@ -391,72 +433,71 @@ impl SerialRefinement {
         gradient
     }
 
-    pub fn fourth_dimension_error(&self, positions: &na::DVector<f64>) -> f64 {
-        if !self.compress_fourth_dimension {
-            return 0.0;
+    pub fn fourth_dimension_error(positions: &na::DVector<f64>, stage: &Stage) -> f64 {
+        match stage {
+            Stage::FixChirals => 0.0,
+            Stage::CompressFourthDimension => {
+                let n = positions.len() / DIMENSIONS;
+                (0..n).map(|i| positions[DIMENSIONS * i + 3].powi(2))
+                    .sum()
+            }
         }
-
-        let n = positions.len() / DIMENSIONS;
-        (0..n).map(|i| positions[DIMENSIONS * i + 3].powi(2))
-            .sum()
     }
 
-    pub fn fourth_dimension_gradient(&self, positions: &na::DVector<f64>, mut gradient: DVector) -> DVector {
-        if !self.compress_fourth_dimension {
-            return gradient;
+    pub fn fourth_dimension_gradient(positions: &na::DVector<f64>, mut gradient: DVector, stage: &Stage) -> DVector {
+        match stage {
+            Stage::FixChirals => gradient,
+            Stage::CompressFourthDimension => {
+                let n = positions.len() / DIMENSIONS;
+                for i in 0..n {
+                    gradient[DIMENSIONS * i + 3] += 2.0 * positions[DIMENSIONS * i + 3];
+                }
+                gradient
+            }
         }
-
-        let n = positions.len() / DIMENSIONS;
-        for i in 0..n {
-            gradient[DIMENSIONS * i + 3] += 2.0 * positions[DIMENSIONS * i + 3];
-        }
-        gradient
     }
 }
 
 impl RefinementErrorFunction for SerialRefinement {
     fn error(&self, positions: &DVector) -> f64 {
-        self.distance_error(positions)
-            + self.chiral_error(positions)
-            + self.fourth_dimension_error(positions)
+        Self::distance_error(&self.bounds.distances, positions)
+            + Self::chiral_error(&self.bounds.chirals, positions)
+            + Self::fourth_dimension_error(positions, &self.stage)
     }
 
     fn gradient(&self, positions: &DVector) -> DVector {
-        let gradient = self.distance_gradient(positions) + self.chiral_gradient(positions);
-        self.fourth_dimension_gradient(positions, gradient)
+        let gradient = Self::distance_gradient(&self.bounds.distances, positions) 
+            + Self::chiral_gradient(&self.bounds.chirals, positions);
+        Self::fourth_dimension_gradient(positions, gradient, &self.stage)
     }
 
-    fn set_4d_compression(&mut self) {
-        self.compress_fourth_dimension = true;
+    fn set_stage(&mut self, stage: Stage) {
+        self.stage = stage;
     }
 }
 
+/// Parallel computation of error function
 pub struct ParallelRefinement {
-    distances: Vec<DistanceBound>,
-    chirals: Vec<Chiral>,
-    compress_fourth_dimension: bool
+    pub bounds: Bounds,
+    pub stage: Stage
 }
 
 impl ParallelRefinement {
-    pub fn new(bounds: DistanceBounds, chirals: Vec<Chiral>) -> Self {
-        Self {distances: linearize_bounds(bounds), chirals, compress_fourth_dimension: false}
-    }
-
-    pub fn distance_error(&self, positions: &na::DVector<f64>) -> f64 {
-        self.distances.par_iter()
+    pub fn distance_error(bounds: &[DistanceBound], positions: &na::DVector<f64>) -> f64 {
+        bounds.par_iter()
             .map(|bound| bound.error(positions))
             .sum()
     }
 
-    pub fn distance_gradient(&self, positions: &na::DVector<f64>) -> DVector {
+    pub fn distance_gradient(bounds: &[DistanceBound], positions: &na::DVector<f64>) -> DVector {
         // Calculate gradient contributions for each bound
-        let contributions: Vec<Option<DistanceBoundGradient>> = self.distances.par_iter()
+        let contributions: Vec<Option<DistanceBoundGradient>> = bounds.par_iter()
             .map(|bound| bound.gradient(positions))
             .collect();
 
         // Serially collect the gradient
         let mut gradient: na::DVector<f64> = na::DVector::zeros(positions.nrows());
-        for (maybe_contribution, bound) in contributions.into_iter().zip(self.distances.iter()) {
+        for (maybe_contribution, bound) in contributions.into_iter().zip(bounds.iter()) {
             if let Some(contribution) = maybe_contribution {
                 contribution.incorporate_into(&mut gradient, bound.indices);
             }
@@ -464,21 +505,21 @@ impl ParallelRefinement {
         gradient
     }
 
-    pub fn chiral_error(&self, positions: &na::DVector<f64>) -> f64 {
-        self.chirals.par_iter()
+    pub fn chiral_error(bounds: &[Chiral], positions: &na::DVector<f64>) -> f64 {
+        bounds.par_iter()
             .map(|constraint| constraint.error(positions))
             .sum()
     }
 
-    pub fn chiral_gradient(&self, positions: &na::DVector<f64>) -> DVector {
+    pub fn chiral_gradient(bounds: &[Chiral], positions: &na::DVector<f64>) -> DVector {
         // Calculate chiral gradient contributions in parallel
-        let contributions: Vec<Option<ChiralGradient>> = self.chirals.par_iter()
+        let contributions: Vec<Option<ChiralGradient>> = bounds.par_iter()
             .map(|constraint| constraint.gradient(positions))
             .collect();
 
         // Serially collect the gradient contributions
         let mut gradient: na::DVector<f64> = na::DVector::zeros(positions.nrows());
-        for (constraint, maybe_contribution) in self.chirals.iter().zip(contributions.into_iter()) {
+        for (constraint, maybe_contribution) in bounds.iter().zip(contributions.into_iter()) {
             if let Some(contribution) = maybe_contribution {
                 contribution.incorporate_into(&mut gradient, &constraint.sites);
             }
@@ -486,62 +527,67 @@ impl ParallelRefinement {
         gradient
     }
 
-    pub fn fourth_dimension_error(&self, positions: &na::DVector<f64>) -> f64 {
-        if !self.compress_fourth_dimension {
-            return 0.0;
+    pub fn fourth_dimension_error(positions: &na::DVector<f64>, stage: &Stage) -> f64 {
+        match stage {
+            Stage::FixChirals => 0.0,
+            Stage::CompressFourthDimension => {
+                let n = positions.len() / DIMENSIONS;
+                (0..n).into_par_iter()
+                    .map(|i| positions[DIMENSIONS * i + 3].powi(2))
+                    .sum()
+            }
         }
-
-        let n = positions.len() / DIMENSIONS;
-        (0..n).into_par_iter()
-            .map(|i| positions[DIMENSIONS * i + 3].powi(2))
-            .sum()
     }
 
-    pub fn fourth_dimension_gradient(&self, positions: &na::DVector<f64>, gradient: DVector) -> DVector {
-        if !self.compress_fourth_dimension {
-            return gradient;
+    pub fn fourth_dimension_gradient(positions: &na::DVector<f64>, gradient: DVector, stage: &Stage) -> DVector {
+        match stage {
+            Stage::FixChirals => gradient,
+            Stage::CompressFourthDimension => {
+                // Positions could be reshaped for a nicer form
+                //
+                //  let matrix_grad = gradient.reshape_generic(na::Const<DIMENSIONS>, na::Dyn(n));
+                //  matrix_grad.par_column_iter_mut()
+                //      .zip(positions.par_column_iter())
+                //      .for_each(|(mut grad_v, pos_v)| grad_v.w() += 2.0 * pos_v.w(););
+
+                let n = positions.len() / DIMENSIONS;
+                let mut matrix_grad = gradient.reshape_generic(na::Const::<DIMENSIONS>, na::Dyn(n));
+                matrix_grad.par_column_iter_mut()
+                    .enumerate()
+                    .for_each(|(i, mut grad_v)| {grad_v[3] += 2.0 * positions[DIMENSIONS * i + 3];});
+
+                matrix_grad.reshape_generic(na::Dyn(n * DIMENSIONS), na::Const::<1>)
+            }
         }
-
-        // Positions could be reshaped for a nicer form
-        //
-        //  let matrix_grad = gradient.reshape_generic(na::Const<DIMENSIONS>, na::Dyn(n));
-        //  matrix_grad.par_column_iter_mut()
-        //      .zip(positions.par_column_iter())
-        //      .for_each(|(mut grad_v, pos_v)| grad_v.w() += 2.0 * pos_v.w(););
-
-        let n = positions.len() / DIMENSIONS;
-        let mut matrix_grad = gradient.reshape_generic(na::Const::<DIMENSIONS>, na::Dyn(n));
-        matrix_grad.par_column_iter_mut()
-            .zip((0..n).into_par_iter())
-            .for_each(|(mut grad_v, i)| {grad_v[3] += 2.0 * positions[DIMENSIONS * i + 3];});
-
-        matrix_grad.reshape_generic(na::Dyn(n * DIMENSIONS), na::Const::<1>)
     }
 }
 
 impl RefinementErrorFunction for ParallelRefinement {
     fn error(&self, positions: &DVector) -> f64 {
-        self.distance_error(positions)
-            + self.chiral_error(positions)
-            + self.fourth_dimension_error(positions)
+        Self::distance_error(&self.bounds.distances, positions)
+            + Self::chiral_error(&self.bounds.chirals, positions)
+            + Self::fourth_dimension_error(positions, &self.stage)
     }
 
     fn gradient(&self, positions: &DVector) -> DVector {
-        let gradient = self.distance_gradient(positions) + self.chiral_gradient(positions);
-        self.fourth_dimension_gradient(positions, gradient)
+        let gradient = Self::distance_gradient(&self.bounds.distances, positions) 
+            + Self::chiral_gradient(&self.bounds.chirals, positions);
+        Self::fourth_dimension_gradient(positions, gradient, &self.stage)
     }
 
-    fn set_4d_compression(&mut self) {
-        self.compress_fourth_dimension = true;
+    fn set_stage(&mut self, stage: Stage) {
+        self.stage = stage;
     }
 }
 
+/// Interface between various error function implementations and argmin
 pub trait RefinementErrorFunction {
     fn error(&self, positions: &DVector) -> f64;
     fn gradient(&self, positions: &DVector) -> DVector;
-    fn set_4d_compression(&mut self);
+    fn set_stage(&mut self, stage: Stage);
 }
 
+/// Calculate error function value for argmin
 impl argmin::core::CostFunction for &dyn RefinementErrorFunction {
     type Param = DVector;
     type Output = f64;
@@ -551,6 +597,7 @@ impl argmin::core::CostFunction for &dyn RefinementErrorFunction {
     }
 }
 
+/// Calculate error function gradient for argmin
 impl argmin::core::Gradient for &dyn RefinementErrorFunction {
     type Param = DVector;
     type Gradient = DVector;
@@ -560,11 +607,13 @@ impl argmin::core::Gradient for &dyn RefinementErrorFunction {
     }
 }
 
+/// Result data of a refinement
 pub struct Refinement {
     pub coords: na::Matrix3xX<f64>,
     pub steps: usize
 }
 
+/// Possible errors in refinement
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum RefinementError {
     #[error("Solver failure")]
@@ -581,6 +630,7 @@ fn check_termination_status<P, G, J, H, F>(state: &IterState<P, G, J, H, F>) -> 
     }
 }
 
+/// Refine a set of coordinates with some error function implementation
 pub fn refine(mut problem: impl RefinementErrorFunction, positions: na::Matrix4xX<f64>) -> Result<Refinement, RefinementError> {
     const LBFGS_MEMORY: usize = 32;
 
@@ -601,8 +651,7 @@ pub fn refine(mut problem: impl RefinementErrorFunction, positions: na::Matrix4x
         .expect("Successful termination implies optimal parameters present");
     let relaxation_steps = result.state.iter;
 
-    // Compress out fourth dimension
-    problem.set_4d_compression();
+    problem.set_stage(Stage::CompressFourthDimension);
     let solver = LBFGS::new(linesearch, LBFGS_MEMORY).with_tolerance_grad(1e-6).unwrap();
     let mut result = Executor::new(&problem as &dyn RefinementErrorFunction, solver)
         .configure(|state| state.param(uncompressed_positions))
@@ -645,6 +694,14 @@ mod tests {
                 StrictUpperTriangleIndices::new(i), 
                 (0..i).combinations(2).map(|v| (v[0], v[1]))
             );
+
+            let mut iter = StrictUpperTriangleIndices::new(i);
+            assert_eq!(iter.linear_index(), 0);
+            let mut count = 1;
+            while let Some(_) = iter.next() {
+                assert_eq!(iter.linear_index(), count);
+                count += 1;
+            }
         }
     }
 

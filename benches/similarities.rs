@@ -51,7 +51,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("reference", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron_reference_base::<false>(black_box(&cloud.matrix), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron_reference_base::<false>(black_box(cloud.matrix.clone()), black_box(shape.name)))
             );
         }
 
@@ -59,7 +59,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("skip", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron_reference(black_box(&cloud.matrix), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron_reference(black_box(cloud.matrix.clone()), black_box(shape.name)))
             );
         }
 
@@ -67,7 +67,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("prematch", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, false, false>(black_box(&cloud.matrix), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, false, false>(black_box(cloud.matrix.clone()), black_box(shape.name)))
             );
         }
 
@@ -75,7 +75,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("prematch, skip", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, true, false>(black_box(&cloud.matrix), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, true, false>(black_box(cloud.matrix.clone()), black_box(shape.name)))
             );
         }
 
@@ -83,7 +83,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("prematch, skip, jv", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron(black_box(&cloud.matrix), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron(black_box(cloud.matrix.clone()), black_box(shape.name)))
             );
         }
     }
