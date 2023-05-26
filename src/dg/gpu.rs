@@ -3,6 +3,8 @@ use crate::dg::refinement::{Stage, Bounds, DistanceBound, RefinementErrorFunctio
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 
+use crate::dg::refinement::UsableFloat;
+
 extern crate nalgebra as na;
 
 // IDEAS
@@ -57,9 +59,10 @@ impl GpuHandles {
         pollster::block_on(Self::construct())
     }
 
-    async fn distance_gradient_contributions(&self, positions: &na::DVector<f64>, gpu_linear_squared_bounds: &na::Matrix2xX<f32>) -> na::DVector<f64> {
+    async fn distance_gradient_contributions<F: UsableFloat>(&self, positions: &na::DVector<F>, gpu_linear_squared_bounds: &na::Matrix2xX<f32>) -> na::DVector<F> {
         let n = positions.len() / 4;
-        let f32_positions = positions.clone().cast::<f32>();
+        // TODO this is an unnecessary copy if F is f32
+        let f32_positions = na::DVector::<f32>::from_iterator(positions.len(), positions.iter().map(|f| f.to_f32().unwrap()));
 
         let linear_length = StrictUpperTriangleIndices::new(n).total_len();
         let linear_slice_size = linear_length * 4 * std::mem::size_of::<f32>();
@@ -133,7 +136,7 @@ impl GpuHandles {
             let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
             drop(data);
             gradient_contribution_return_buffer.unmap();
-            na::DVector::<f64>::from_iterator(result.len(), result.into_iter().map(|f| f as f64))
+            na::DVector::<F>::from_iterator(result.len(), result.into_iter().map(|f| F::from(f).unwrap()))
         } else {
             panic!("Failed to map return buffer memory");
         }
@@ -141,36 +144,36 @@ impl GpuHandles {
 }
 
 /// Gpu-offloaded distance bounds gradient calculation and parallel otherwise
-pub struct GpuRefinement {
-    bounds: Bounds,
+pub struct GpuRefinement<F: UsableFloat> {
+    bounds: Bounds<F>,
     gpu_linear_squared_bounds: na::Matrix2xX<f32>,
     gpu_handles: Option<GpuHandles>,
     stage: Stage,
 }
 
-impl GpuRefinement {
+impl<F: UsableFloat> GpuRefinement<F> {
     /// Transform distance bounds for transfer to gpu
-    fn into_matrix(bounds: &[DistanceBound]) -> na::Matrix2xX<f32> {
+    fn into_matrix(bounds: &[DistanceBound<F>]) -> na::Matrix2xX<f32> {
         let n = bounds.len();
         na::Matrix2xX::<f32>::from_iterator(
             n,
             bounds.iter()
                 .flat_map(|bound| {
                     let (lower, upper) = bound.square_bounds;
-                    [upper as f32, lower as f32].into_iter() // access order in shader
+                    [upper.to_f32().unwrap(), lower.to_f32().unwrap()].into_iter() // access order in shader
                 })
         )
     }
 
     /// Construct from bounds
-    pub fn new(bounds: Bounds) -> GpuRefinement {
+    pub fn new(bounds: Bounds<F>) -> GpuRefinement<F> {
         let gpu_linear_squared_bounds = Self::into_matrix(&bounds.distances);
         let gpu_handles = GpuHandles::new();
         GpuRefinement {bounds, gpu_linear_squared_bounds, gpu_handles, stage: Stage::FixChirals}
     }
 
     /// Run compute shader on gpu to calculate distance gradient contributions
-    async fn distance_gradient(&self, positions: &na::DVector<f64>) -> Option<na::DVector<f64>> {
+    async fn distance_gradient(&self, positions: &na::DVector<F>) -> Option<na::DVector<F>> {
         let handles = self.gpu_handles.as_ref()?;
         let contributions = handles.distance_gradient_contributions(positions, &self.gpu_linear_squared_bounds).await;
 
@@ -178,10 +181,10 @@ impl GpuRefinement {
         let num_pairs = contributions.len() / DIMENSIONS;
         let contributions = contributions.reshape_generic(na::Const::<DIMENSIONS>, na::Dyn(num_pairs));
 
-        let mut gradient = na::DVector::<f64>::zeros(positions.nrows());
+        let mut gradient = na::DVector::<F>::zeros(positions.nrows());
         for (contribution, bound) in contributions.column_iter().zip(self.bounds.distances.iter()) {
-            // TODO try with and without
-            if contribution.iter().all(|v| *v == 0.0) {
+            // TODO try perf with and without this
+            if contribution.iter().all(|v| *v == F::zero()) {
                 continue;
             }
 
@@ -199,12 +202,12 @@ impl GpuRefinement {
     }
 
     /// Wraps parallel computation of chiral gradient
-    async fn chiral_gradient(&self, positions: &na::DVector<f64>) -> na::DVector<f64> {
+    async fn chiral_gradient(&self, positions: &na::DVector<F>) -> na::DVector<F> {
         ParallelRefinement::chiral_gradient(&self.bounds.chirals, positions)
     }
 
     /// Calculate gradients asynchronously, offloading distance gradients to gpu if possible
-    async fn async_gradients(&self, positions: &na::DVector<f64>) -> na::DVector<f64> {
+    async fn async_gradients(&self, positions: &na::DVector<F>) -> na::DVector<F> {
         let distance_fut = self.distance_gradient(positions); // on GPU
         let chiral_fut = self.chiral_gradient(positions); // parallel on CPU
         let (maybe_distance_grad, chiral_grad) = futures::join!(distance_fut, chiral_fut);
@@ -215,14 +218,14 @@ impl GpuRefinement {
     }
 }
 
-impl RefinementErrorFunction for GpuRefinement {
-    fn error(&self, positions: &na::DVector<f64>) -> f64 {
+impl<F: UsableFloat> RefinementErrorFunction<F> for GpuRefinement<F> {
+    fn error(&self, positions: &na::DVector<F>) -> F {
         ParallelRefinement::distance_error(&self.bounds.distances, positions)
             + ParallelRefinement::chiral_error(&self.bounds.chirals, positions)
             + ParallelRefinement::fourth_dimension_error(positions, &self.stage)
     }
 
-    fn gradient(&self, positions: &na::DVector<f64>) -> na::DVector<f64> {
+    fn gradient(&self, positions: &na::DVector<F>) -> na::DVector<F> {
         pollster::block_on(self.async_gradients(positions))
     }
 

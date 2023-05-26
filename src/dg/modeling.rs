@@ -37,7 +37,7 @@ pub fn shape_into_bounds(shape: &Shape) -> DistanceBounds {
     bounds.floyd_triangle_smooth().expect("Valid bounds")
 }
 
-pub fn chiral_from_tetrahedron(tetrahedron: [Particle; 4], shape: &Shape, relative_tolerance: f64) -> Chiral {
+pub fn chiral_from_tetrahedron(tetrahedron: [Particle; 4], shape: &Shape, relative_tolerance: f64) -> Chiral<f64> {
     let adjusted_volume = 6.0 * crate::geometry::signed_tetrahedron_volume_with_array(tetrahedron.map(|p| shape.particle_position(p)));
     debug_assert!(adjusted_volume > 0.0);
     let sites = tetrahedron.map(|p| vec![particle_index(&p, shape)]);

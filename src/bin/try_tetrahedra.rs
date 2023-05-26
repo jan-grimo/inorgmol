@@ -13,7 +13,7 @@ fn main() {
         let distances = DistanceMatrix::try_from_distance_bounds(bounds.clone(), MetrizationPartiality::Complete).expect("Successful metrization");
         let metric = MetricMatrix::from_distance_matrix(distances);
         let coords = metric.embed();
-        let chirals: Vec<Chiral> = tetrahedra.iter()
+        let chirals: Vec<Chiral<f64>> = tetrahedra.iter()
             .map(|&tetr| modeling::solitary_shape::chiral_from_tetrahedron(tetr, shape, 0.1))
             .collect();
         let refinement_bounds = Bounds::new(bounds.clone(), chirals);
