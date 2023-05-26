@@ -134,7 +134,7 @@ mod scaling {
 pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
     let shape = shape_from_name(shape_name);
 
-    let s = shape.size();
+    let s = shape.num_vertices();
     let mut skips = na::DMatrix::<bool>::from_element(s + 1, s + 1, true);
     let rotations = shape.generate_rotations();
     let viable_vertices: Vec<Vertex> = shape.vertex_groups()
@@ -253,7 +253,7 @@ pub struct Similarity {
 pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
     let shape = shape_from_name(s);
     let n = x.ncols();
-    if n != shape.size() + 1 {
+    if n != shape.num_vertices() + 1 {
         return Err(SimilarityError::ParticleNumberMismatch);
     }
 
@@ -350,7 +350,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     type Occupation = Bijection<Vertex, Column>;
     let shape = shape_from_name(s);
     let n = x.ncols();
-    if n != shape.size() + 1 {
+    if n != shape.num_vertices() + 1 {
         return Err(SimilarityError::ParticleNumberMismatch);
     }
 
@@ -548,14 +548,14 @@ mod tests {
 
     impl Case {
         fn random_shape_rotation(shape: &Shape) -> StrongPoints<Vertex> {
-            let shape_coords = shape.coordinates.clone().insert_column(shape.size(), 0.0);
+            let shape_coords = shape.coordinates.clone().insert_column(shape.num_vertices(), 0.0);
             let rotation = random_rotation().to_rotation_matrix();
             StrongPoints::new(unit_sphere_normalize(rotation * shape_coords))
         }
 
         fn random(shape: &Shape) -> Case {
             let bijection = {
-                let mut p = Permutation::random(shape.size());
+                let mut p = Permutation::random(shape.num_vertices());
                 p.sigma.push(p.set_size());
                 Bijection::new(p)
             };
@@ -566,7 +566,7 @@ mod tests {
 
         fn indexed(shape: &Shape, index: usize) -> Case {
             let bijection = {
-                let mut p = Permutation::from_index(shape.size(), index);
+                let mut p = Permutation::from_index(shape.num_vertices(), index);
                 p.sigma.push(p.set_size());
                 Bijection::new(p)
             };
@@ -623,8 +623,8 @@ mod tests {
 
     #[test]
     fn polyhedron_reference_all_bijections() {
-        for shape in SHAPES.iter().filter(|s| s.size() <= MAX_SHAPE_SIZE_EXHAUSTIVE) {
-            let index_bound = Permutation::group_order(shape.size());
+        for shape in SHAPES.iter().filter(|s| s.num_vertices() <= MAX_SHAPE_SIZE_EXHAUSTIVE) {
+            let index_bound = Permutation::group_order(shape.num_vertices());
             for i in 0..index_bound {
                 let case = Case::indexed(shape, i);
                 if !case.can_find_bijection_with(&polyhedron_reference) {
@@ -636,8 +636,8 @@ mod tests {
 
     #[test]
     fn polyhedron_all_bijections() {
-        for shape in SHAPES.iter().filter(|s| s.size() <= MAX_SHAPE_SIZE_EXHAUSTIVE) {
-            let index_bound = Permutation::group_order(shape.size());
+        for shape in SHAPES.iter().filter(|s| s.num_vertices() <= MAX_SHAPE_SIZE_EXHAUSTIVE) {
+            let index_bound = Permutation::group_order(shape.num_vertices());
             for i in 0..index_bound {
                 let case = Case::indexed(shape, i);
                 if !case.can_find_bijection_with(&polyhedron) {
@@ -649,8 +649,8 @@ mod tests {
 
     #[test]
     fn stochastic_similarities_tests() {
-        for shape in SHAPES.iter().filter(|s| s.size() > MAX_SHAPE_SIZE_EXHAUSTIVE) {
-            let shape_size = shape.size();
+        for shape in SHAPES.iter().filter(|s| s.num_vertices() > MAX_SHAPE_SIZE_EXHAUSTIVE) {
+            let shape_size = shape.num_vertices();
             let case = Case::random(shape);
 
             for bounds in similarity_fn_bounds() {
@@ -663,7 +663,7 @@ mod tests {
 
     #[test]
     fn skips_recoverable_by_rotation() {
-        for shape in SHAPES.iter().filter(|s| s.size() < 7) {
+        for shape in SHAPES.iter().filter(|s| s.num_vertices() < 7) {
             let rotations = shape.generate_rotations();
 
             let mut recovered_bijections = HashSet::new();
@@ -681,17 +681,17 @@ mod tests {
                 }
             }
 
-            assert_eq!(recovered_bijections.len(), Permutation::group_order(shape.size() + 1));
+            assert_eq!(recovered_bijections.len(), Permutation::group_order(shape.num_vertices() + 1));
         }
     }
 
     #[test]
     fn skip_generator() {
-        for shape in SHAPES.iter().filter(|s| s.size() < 7) {
+        for shape in SHAPES.iter().filter(|s| s.num_vertices() < 7) {
             let skips = skip_vertices(shape.name);
 
             itertools::assert_equal(
-                bijections(shape.size() + 1)
+                bijections(shape.num_vertices() + 1)
                     .filter(|b| !skips[(b.permutation[0], b.permutation[1])]),
                 SkipsBijectionGenerator::new(shape.name)
             );

@@ -9,17 +9,17 @@ use crate::shapes::{Shape, Vertex, Particle};
 pub fn particle_index(p: &Particle, shape: &Shape) -> usize {
     match p {
         Particle::Vertex(v) => v.get(),
-        Particle::Origin => shape.size()
+        Particle::Origin => shape.num_vertices()
     }
 }
 
 pub fn shape_into_bounds(shape: &Shape) -> DistanceBounds {
     // Include the origin particle
-    let mut bounds = DistanceBounds::new(shape.size() + 1);
+    let mut bounds = DistanceBounds::new(shape.num_vertices() + 1);
 
     const TOLERANCE_PERCENT: f64 = 1.0;
 
-    let mut particles: Vec<Particle> = (0..shape.size()).map_into::<Vertex>().map(Particle::Vertex).collect();
+    let mut particles: Vec<Particle> = (0..shape.num_vertices()).map_into::<Vertex>().map(Particle::Vertex).collect();
     particles.push(Particle::Origin);
 
     // Distances between all particles

@@ -13,9 +13,9 @@ fn refinement(c: &mut Criterion) {
         .summary_scale(criterion::AxisScale::Logarithmic);
     bench_group.plot_config(plot_config);
 
-    let max_shape_size = &shapes::SHAPES.iter().map(|s| s.size()).max().unwrap();
+    let max_shape_size = &shapes::SHAPES.iter().map(|s| s.num_vertices()).max().unwrap();
     for shape_size in 8..=*max_shape_size {
-        let shape = &shapes::SHAPES.iter().find(|s| s.size() == shape_size).unwrap();
+        let shape = &shapes::SHAPES.iter().find(|s| s.num_vertices() == shape_size).unwrap();
         let bounds = dg::modeling::solitary_shape::shape_into_bounds(shape);
         let tetrahedra = shape.find_tetrahedra();
         let distances = dg::DistanceMatrix::try_from_distance_bounds(bounds.clone(), dg::MetrizationPartiality::Complete).expect("Successful metrization");
@@ -27,7 +27,7 @@ fn refinement(c: &mut Criterion) {
             .map(|&tetr| dg::modeling::solitary_shape::chiral_from_tetrahedron(tetr, shape, 0.1))
             .collect();
 
-        let refinement_n = (shape.size() + 1) as u64;
+        let refinement_n = (shape.num_vertices() + 1) as u64;
         bench_group.throughput(Throughput::Elements(refinement_n));
 
         let refinement_bounds = dg::refinement::Bounds::new(bounds, chirals);

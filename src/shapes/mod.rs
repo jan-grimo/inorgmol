@@ -201,7 +201,7 @@ impl Shape {
     // }
 
     /// Number of vertices of the shape (not including the implicit origin)
-    pub fn size(&self) -> usize {
+    pub fn num_vertices(&self) -> usize {
         self.coordinates.ncols()
     }
 
@@ -216,7 +216,7 @@ impl Shape {
     /// Expands a basis of rotations into all possible combinations
     fn expand_rotation_basis(&self, basis: &[Rotation]) -> HashSet<Rotation> {
         let mut rotations: HashSet<Rotation> = HashSet::new();
-        rotations.insert(Rotation::identity(self.size()));
+        rotations.insert(Rotation::identity(self.num_vertices()));
         let max_basis_idx = basis.len() - 1;
 
         struct Frame {
@@ -225,7 +225,7 @@ impl Shape {
         }
 
         let mut stack = Vec::<Frame>::new();
-        stack.push(Frame {permutation: Rotation::identity(self.size()), next_basis: 0});
+        stack.push(Frame {permutation: Rotation::identity(self.num_vertices()), next_basis: 0});
 
         // Tree-like traversal, while tracking rotations applied to get new rotations and pruning
         // if rotations have been seen before
@@ -307,7 +307,7 @@ impl Shape {
 
     /// Subsets vertices according to superposability by rotation
     pub fn vertex_groups(&self) -> Vec<Vec<Vertex>> {
-        let shape_size = self.size();
+        let shape_size = self.num_vertices();
         let mut sets = UnionFind::new(shape_size);
         for rotation in self.rotation_basis.iter() {
             for v in 0..shape_size {
@@ -319,7 +319,7 @@ impl Shape {
     }
 
     pub fn vertex_groups_holding(&self, held: &[Vertex], rotations: &HashSet<Rotation>) -> Vec<Vec<Vertex>> {
-        let shape_size = self.size();
+        let shape_size = self.num_vertices();
         let mut sets = UnionFind::new(shape_size);
         for rotation in rotations.iter().filter(|rot| held.iter().all(|v| rot.is_fixed_point(*v))) {
             for v in 0..shape_size {
@@ -334,7 +334,7 @@ impl Shape {
     fn coplanar_vertex_groups(&self) -> HashMap<Vec<Vertex>, Plane> {
         let mut groups = HashMap::new();
 
-        let n = self.size();
+        let n = self.num_vertices();
         for mut vertex_triple in (0..n).map(Vertex::from).combinations(3) {
             let mut plane = Plane::fit_matrix_points(&self.coordinates, &vertex_triple);
             let mut coplanar_vertices: Vec<Vertex> = (0..n).map(Vertex::from)
@@ -424,7 +424,7 @@ impl Shape {
         }
 
         let axis = planes.first().expect("At least one per group").plane.normal;
-        let n = self.size();
+        let n = self.num_vertices();
         let mut remaining_vertices: Vec<Vertex> = (0..n).map_into::<Vertex>()
             .filter(|v| !planes.iter().any(|p| p.vertices.contains(v)))
             .collect();
@@ -513,7 +513,7 @@ impl Shape {
             std::f64::consts::PI
         ) * self.coordinates.clone();
 
-        let n = self.size();
+        let n = self.num_vertices();
         let mut proper = Permutation::identity(n);
         'outer: for i in 0..n {
             if proper[i] != i {
@@ -614,7 +614,7 @@ impl Shape {
         // TODO this is really very stupid, as 
         // - repeated applications of true rotations aren't excluded / skipped
         // - combinations of found rotations aren't excluded / skipped
-        permutations(self.size())
+        permutations(self.num_vertices())
             .filter(|p| self.permutation_is_rotation(p))
             .map(Rotation::new)
             .collect()
@@ -634,7 +634,7 @@ impl Shape {
             .collect::<HashSet<Rotation>>();
 
         if rotations.is_empty() {
-            if self.size() > 4 {
+            if self.num_vertices() > 4 {
                 panic!("No rotations found heuristically for {}, too large to use exhaustive search", self.name);
             }
 
@@ -648,7 +648,7 @@ impl Shape {
     pub fn find_mirror(&self) -> Option<Mirror> {
         // Bit weird, this is actually an inversion
         let inverted = -1.0 * self.coordinates.clone();
-        let inverted = inverted.insert_column(self.size(), 0.0);
+        let inverted = inverted.insert_column(self.num_vertices(), 0.0);
 
         // if the quaternion fit onto the original coordinates fails, there is
         // a mirror element: the mirror is the permutation from
@@ -658,7 +658,7 @@ impl Shape {
         let similarity = similarity::polyhedron(inverted, self.name).ok()?;
         if similarity.csm < 1e-6 && !similarity.bijection.permutation.is_identity() {
             let mut permutation = similarity.bijection.permutation;
-            assert!(permutation.sigma.pop() == Some(self.size()));
+            assert!(permutation.sigma.pop() == Some(self.num_vertices()));
             Some(Mirror::new(permutation))
         } else {
             None
@@ -693,7 +693,7 @@ impl Shape {
             }
         };
 
-        let n = self.size();
+        let n = self.num_vertices();
         let mut particles: Vec<Particle> = (0..n).map_into::<Vertex>().map(Particle::Vertex).collect();
         particles.push(Particle::Origin);
 
@@ -747,7 +747,7 @@ impl Shape {
 
         // Find selection of quads that covers all vertices with minimal overlap
         let q = dbg!(quads.len());
-        let min_k = (self.size() as f32 / 4.0).ceil() as usize;
+        let min_k = (self.num_vertices() as f32 / 4.0).ceil() as usize;
         let (minimal_covering_quads, _) = (min_k..=q)
             .map(|i| quads.iter().combinations(i))
             .find_map(|combinations| combinations.fold(
@@ -756,7 +756,7 @@ impl Shape {
                     // Test cover, and return early if doesn't cover
                     let mut covered_particles = quad_combination.iter().map(|q| q.iter()).flatten().map(|&&p| p).collect::<HashSet<Particle>>();
                     covered_particles.remove(&Particle::Origin);
-                    let covers = covered_particles.len() == self.size();
+                    let covers = covered_particles.len() == self.num_vertices();
                     if !covers {
                         return maybe_best;
                     }
@@ -813,11 +813,11 @@ mod tests {
 
         // Every vertex occurs once
         let mut counts = Vec::new();
-        counts.resize(shape.size(), 0);
+        counts.resize(shape.num_vertices(), 0);
         for group in vertex_groups.iter() {
             for v in group.iter() {
                 let usize_v = v.get();
-                assert!(usize_v < shape.size());
+                assert!(usize_v < shape.num_vertices());
                 counts[usize_v] += 1;
             }
         }

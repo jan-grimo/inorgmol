@@ -47,7 +47,7 @@ impl Case {
     }
 
     pub fn new(shape: &Shape, distortion_norm: f64) -> Case {
-        let coords = shape.coordinates.clone().insert_column(shape.size(), 0.0);
+        let coords = shape.coordinates.clone().insert_column(shape.num_vertices(), 0.0);
         let distorted = Self::distort(Self::rotate(coords), distortion_norm);
         // The bijection with which the distorted version is generated is not
         // important, since it's possible the distorted version could have a

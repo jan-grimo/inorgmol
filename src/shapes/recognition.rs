@@ -9,7 +9,7 @@ use statrs::statistics::Statistics;
 pub const CSM_RESCALE: f64 = 150.0;
 
 pub fn sample(s: Name) -> f64 {
-    let n = shape_from_name(s).size();
+    let n = shape_from_name(s).num_vertices();
 
     let norm_distribution = Normal::new(1.0, 0.2).unwrap();
     let mut prng = rand::thread_rng();
@@ -138,7 +138,7 @@ pub fn least_likely_random(cloud: &Matrix3N) -> (Name, f64) {
     };
 
     SHAPES.iter()
-        .filter(|s| s.size() + 1 == cloud.ncols())
+        .filter(|s| s.num_vertices() + 1 == cloud.ncols())
         .map(|s| (s.name, likelihood_random(s.name)))
         .min_by(|(_, p), (_, q)| p.partial_cmp(q).expect("No NaNs from similarities"))
         .expect("At least one fitting shape size")

@@ -867,7 +867,7 @@ mod tests {
     #[test]
     fn find_mirror() {
         // TODO temporary test size limit
-        for shape in SHAPES.iter().filter(|shape| shape.size() <= 8) {
+        for shape in SHAPES.iter().filter(|shape| shape.num_vertices() <= 8) {
             if let Some(annotated_mirror_maybe) = annotated_mirror(shape.name) {
                 let maybe_found_mirror = shape.find_mirror();
                 // Either both no mirror, or both Somes
@@ -1038,7 +1038,7 @@ mod tests {
 
     #[test]
     fn find_tetrahedra() {
-        for shape in SHAPES.iter().filter(|s| s.size() <= 9) {
+        for shape in SHAPES.iter().filter(|s| s.num_vertices() <= 9) {
             dbg!(shape.name);
             let tetrahedra = shape.find_tetrahedra();
             dbg!(tetrahedra.len());

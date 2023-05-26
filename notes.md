@@ -20,9 +20,16 @@ look through the GitLab issues again!
 # To do
 
 - Generalize refinement over floating-point types
-- Flamegraph a simple binary to figure out timing of gpu handoff
 - Documentation (deny undocumented and work through all)
 - Check shape analysis methods (e.g. rotation finding, superposable vertex sets,
   tetrahedra, etc.)
   - Coolest way to do this would be to make a molecular viewer with bevy and
     highlight the results
+
+
+# Cargo flamegraph
+
+```
+2019  echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+2020  CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph --unit-test molassembler -- gpu_gradient
+```

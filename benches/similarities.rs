@@ -16,7 +16,7 @@ fn similarities(c: &mut Criterion) {
     bench_group.plot_config(plot_config);
 
     let mut shapes = Vec::new();
-    for (size, shape_group) in &shapes::SHAPES.iter().group_by(|s| s.size()) {
+    for (size, shape_group) in &shapes::SHAPES.iter().group_by(|s| s.num_vertices()) {
         if size < 4 {
             continue;
         }
@@ -29,7 +29,7 @@ fn similarities(c: &mut Criterion) {
     }
 
     for shape in shapes {
-        let size = shape.size();
+        let size = shape.num_vertices();
 
         if size < 4 {
             continue;
@@ -39,7 +39,7 @@ fn similarities(c: &mut Criterion) {
         let rotation = quaternions::random_rotation().to_rotation_matrix();
         let shape_rotated: StrongPoints<shapes::Vertex> = StrongPoints::new(shapes::similarity::unit_sphere_normalize(rotation * shape_coordinates));
         let bijection: Bijection<shapes::Vertex, shapes::Column> = {
-            let mut p = permutation::Permutation::random(shape.size());
+            let mut p = permutation::Permutation::random(shape.num_vertices());
             p.sigma.push(p.set_size());
             strong::bijection::Bijection::new(p)
         };
