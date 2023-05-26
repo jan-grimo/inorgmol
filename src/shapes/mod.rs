@@ -115,6 +115,7 @@ impl std::fmt::Display for Name {
 
 use crate::strong::bijection::Bijection;
 
+/// Index wrapper for shape vertices
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Vertex(usize);
 
@@ -124,15 +125,19 @@ impl std::fmt::Display for Vertex {
     }
 }
 
+/// A rotation of vertices is the equivalent of an SO(3) rotation in vertex space
 type Rotation = Bijection<Vertex, Vertex>;
+/// A mirror is a sigma symmetry element of a shape, in vertex space
 type Mirror = Bijection<Vertex, Vertex>;
 
+/// Shape particles are either vertices, or the implicit origin
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Particle {
     Vertex(Vertex),
     Origin
 }
 
+/// Construct a particle from a vertex option. If `None`, yields the implicit origin
 impl From<Option<Vertex>> for Particle {
     fn from(maybe_vertex: Option<Vertex>) -> Particle {
         match maybe_vertex {
@@ -155,6 +160,7 @@ impl std::fmt::Display for Particle {
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Column(usize);
 
+/// A coordination polyhedron
 pub struct Shape {
     pub name: Name,
     /// Unit sphere coordinates without a centroid
@@ -163,17 +169,43 @@ pub struct Shape {
     pub rotation_basis: Vec<Rotation>,
 }
 
+/// A plane in three dimensions that contains vertices of a shape
 pub struct VertexPlane {
-    pub vertices: Vec<usize>,
+    /// Shape vertices contained in the plane
+    pub vertices: Vec<Vertex>,
+    /// Three dimensional plane found containing `vertices`
     pub plane: Plane
 }
 
+/// Reasons why a shape could be invalid
+pub enum InvalidShapeError {
+    NotUnitSpherical
+}
+
 impl Shape {
-    /// Number of vertices of the shape
+    // fn unit_spherical(matrix: &Matrix3N) -> bool {
+    //     const MAX_COLUMN_DEVIATION: f64 = 1e-6;
+    //     matrix.column_iter()
+    //         .all(|col| (col.norm() - 1.0).abs() <= MAX_COLUMN_DEVIATION)
+    // }
+
+    // pub fn try_new(coordinates: Matrix3N) -> Result<Shape, InvalidShapeError> {
+    //     if !Self::unit_spherical(&coordinates) {
+    //         return Err(InvalidShapeError::NotUnitSpherical);
+    //     }
+    //
+    //     // TODO remove explicit centroid if present
+    //     // TODO ensure no coordinates are present twice
+    //
+    //     Ok(Shape {coordinates})
+    // }
+
+    /// Number of vertices of the shape (not including the implicit origin)
     pub fn size(&self) -> usize {
         self.coordinates.ncols()
     }
 
+    /// Yields the position of a particle
     pub fn particle_position(&self, particle: Particle) -> Vector3 {
         match particle {
             Particle::Vertex(v) => self.coordinates.column(v.get()).into(),
@@ -181,6 +213,7 @@ impl Shape {
         }
     }
 
+    /// Expands a basis of rotations into all possible combinations
     fn expand_rotation_basis(&self, basis: &[Rotation]) -> HashSet<Rotation> {
         let mut rotations: HashSet<Rotation> = HashSet::new();
         rotations.insert(Rotation::identity(self.size()));
@@ -237,10 +270,12 @@ impl Shape {
         self.expand_rotation_basis(self.rotation_basis.as_slice())
     }
 
+    /// Test whether one vertex bijection is a rotation of another
     pub fn is_rotation<T: NewTypeIndex>(a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
         rotations.iter().any(|r| r.compose(a).expect("Bad occupations") == *b)
     }
 
+    /// Make explicit groups of indices out of a UnionFind instance
     fn union_to_groups(sets: UnionFind<usize>) -> Vec<Vec<Vertex>> {
         let group_injection: Vec<usize> = {
             let injection: Vec<usize> = sets.into_labeling();
@@ -270,6 +305,7 @@ impl Shape {
         groups
     }
 
+    /// Subsets vertices according to superposability by rotation
     pub fn vertex_groups(&self) -> Vec<Vec<Vertex>> {
         let shape_size = self.size();
         let mut sets = UnionFind::new(shape_size);
@@ -295,14 +331,14 @@ impl Shape {
     }
 
     /// Collect coplanar vertices and their joint plane
-    fn coplanar_vertex_groups(&self) -> HashMap<Vec<usize>, Plane> {
+    fn coplanar_vertex_groups(&self) -> HashMap<Vec<Vertex>, Plane> {
         let mut groups = HashMap::new();
 
         let n = self.size();
-        for mut vertex_triple in (0..n).combinations(3) {
+        for mut vertex_triple in (0..n).map(Vertex::from).combinations(3) {
             let mut plane = Plane::fit_matrix_points(&self.coordinates, &vertex_triple);
-            let mut coplanar_vertices: Vec<usize> = (0..n)
-                .filter(|v| !vertex_triple.contains(v) && plane.signed_distance(&self.coordinates.column(*v)).abs() < 1e-3)
+            let mut coplanar_vertices: Vec<Vertex> = (0..n).map(Vertex::from)
+                .filter(|v| !vertex_triple.contains(v) && plane.signed_distance(&self.coordinates.column(v.get())).abs() < 1e-3)
                 .collect();
 
             if !coplanar_vertices.is_empty() {
@@ -310,7 +346,7 @@ impl Shape {
                 coplanar_vertices.sort();
                 let mut updated_centroid = Vector3::zeros();
                 for &v in coplanar_vertices.iter() {
-                    updated_centroid += self.coordinates.column(v);
+                    updated_centroid += self.coordinates.column(v.into());
                 }
                 updated_centroid /= coplanar_vertices.len() as f64;
                 plane.offset = updated_centroid;
@@ -389,7 +425,7 @@ impl Shape {
 
         let axis = planes.first().expect("At least one per group").plane.normal;
         let n = self.size();
-        let mut remaining_vertices: Vec<usize> = (0..n)
+        let mut remaining_vertices: Vec<Vertex> = (0..n).map_into::<Vertex>()
             .filter(|v| !planes.iter().any(|p| p.vertices.contains(v)))
             .collect();
 
@@ -397,16 +433,16 @@ impl Shape {
 
         // If the minimal order is two, look for axis-perpendicular dipoles
         // Those are neither in the plane vertex triples nor are axial
-        let mut dipoles: Vec<(usize, usize)> = Vec::new();
+        let mut dipoles: Vec<(Vertex, Vertex)> = Vec::new();
         if minimal_order % 2 == 0 {
             'outer: for (i, &a) in remaining_vertices.iter().enumerate() {
-                let component_a = axis_perpendicular_component(&axis, &self.coordinates.column(a));
+                let component_a = axis_perpendicular_component(&axis, &self.coordinates.column(a.into()));
                 if component_a.norm_squared() < 1e-3 {
                     continue;
                 }
 
                 for &b in remaining_vertices.iter().skip(i + 1) {
-                    let component_b = axis_perpendicular_component(&axis, &self.coordinates.column(b));
+                    let component_b = axis_perpendicular_component(&axis, &self.coordinates.column(b.into()));
                     if component_b.norm_squared() < 1e-3 {
                         continue;
                     }
@@ -425,7 +461,7 @@ impl Shape {
 
         // The remaining vertices must be along the axis
         let remainder_axial = remaining_vertices.iter()
-            .all(|v| axis_distance(&axis, &self.coordinates.column(*v)) < 1e-3);
+            .all(|v| axis_distance(&axis, &self.coordinates.column(v.get())) < 1e-3);
 
         if !remainder_axial {
             return None;
@@ -435,31 +471,31 @@ impl Shape {
         let mut proper = Permutation::identity(n);
         for p in planes.iter() {
             let anchor = p.vertices.first().expect("Guaranteed three vertices per group");
-            let positive_signed_angle = |v| {
-                let a = self.coordinates.column(*anchor);
-                let b = self.coordinates.column(v);
+            let positive_signed_angle = |v: Vertex| {
+                let a = self.coordinates.column(anchor.get());
+                let b = self.coordinates.column(v.get());
                 let mut angle = a.cross(&b).dot(&axis).atan2(a.dot(&b));
                 if angle < 0.0 {
                     angle += std::f64::consts::TAU;
                 }
                 angle
             };
-            let mut with_signed_angles: Vec<(usize, f64)> = p.vertices.iter().skip(1)
+            let mut with_signed_angles: Vec<(Vertex, f64)> = p.vertices.iter().skip(1)
                 .map(|&v| (v, positive_signed_angle(v))).collect();
             with_signed_angles.sort_by(|(_, alpha), (_, beta)| alpha.partial_cmp(beta).expect("No NaN angles"));
 
-            let mut ordered_vertices: Vec<usize> = with_signed_angles.into_iter()
+            let mut ordered_vertices: Vec<Vertex> = with_signed_angles.into_iter()
                 .map(|(v, _)| v)
                 .collect();
             ordered_vertices.push(*anchor);
 
             for (&i, &j) in ordered_vertices.iter().circular_tuple_windows() {
-                proper.sigma[i] = j;
+                proper.sigma[i.get()] = j.get();
             }
         }
         for (i, j) in dipoles.into_iter() {
-            proper.sigma[i] = j;
-            proper.sigma[j] = i;
+            proper.sigma[i.get()] = j.get();
+            proper.sigma[j.get()] = i.get();
         }
 
         // TODO maybe unnecessary to test
@@ -615,7 +651,7 @@ impl Shape {
         let inverted = inverted.insert_column(self.size(), 0.0);
 
         // if the quaternion fit onto the original coordinates fails, there is
-        // a mirror element the mirror is the permutation from
+        // a mirror element: the mirror is the permutation from
         // similarity-fitting the inverted coordinates onto the original ones
         //
         // TODO Is there a better (faster) way?
@@ -757,6 +793,7 @@ impl Shape {
 pub mod statics;
 pub use statics::*;
 
+/// Look up a shape from its name
 pub fn shape_from_name(name: Name) -> &'static Shape {
     let shape = SHAPES[name as usize];
     assert_eq!(shape.name, name);

@@ -1,5 +1,11 @@
 // TODO
 // - Consider trying to homogenize all the Case implementations
+// - Measure convergence of prematching of vertices by difference between
+//   initial quaternion fit and final, maybe fewer vertices for larger sizes is
+//   plausible because of reduced average angular differences
+// - Experiment with reducing the number of prematched vertices and finding a
+//   threshold minimal quaternion fit msd as criterion for increasing the
+//   number of prematched vertices
 // - Add (automatic?) centroid prematching
 
 extern crate nalgebra as na;
@@ -60,6 +66,7 @@ mod scaling {
     use argmin::core::{CostFunction, Error, Executor};
     use argmin::solver::brent::BrentOpt;
 
+    /// Scaling problem cost function for numerical minimization
     fn msd(cloud: &Matrix3N, shape: &Matrix3N, factor: f64) -> f64 {
         (shape.scale(factor) - cloud)
             .column_iter()
@@ -81,6 +88,7 @@ mod scaling {
         }
     }
 
+    /// Convert minimum square deviation into a continuous shape measure
     fn csm_from_msd(cloud: &Matrix3N, msd: f64) -> f64 {
         100.0 * msd / cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
     }
@@ -152,12 +160,16 @@ pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
     skips
 }
 
+/// Bijections iterator whose first two target vertices are rotationally unqiue
 struct SkipsBijectionGenerator {
+    /// Reversed order rotationally unique pairs of vertices
     starting_pairs: Vec<(Vertex, Vertex)>,
+    /// Next bijection to return during iteration
     maybe_next: Option<Bijection<Column, Vertex>>
 }
 
 impl SkipsBijectionGenerator {
+    /// Construct a bijection generator for a shape
     pub fn new(shape_name: Name) -> SkipsBijectionGenerator {
         let skips = skip_vertices(shape_name);
         let s = skips.ncols();
@@ -167,6 +179,8 @@ impl SkipsBijectionGenerator {
             .map(|(i, j)| (Vertex(i), Vertex(j)))
             .collect();
 
+        // We want to pop off items off the end of the vec for efficiency
+        // during iteration, so reverse it
         pairs.reverse();
 
         let mut generator = SkipsBijectionGenerator {
@@ -177,7 +191,9 @@ impl SkipsBijectionGenerator {
         generator
     }
 
-    pub fn reset_from_next_pair(&mut self) {
+    /// Helper function for iteration, resets bijection to minimal
+    /// lexicographic order after new rotationally unique vertex pair
+    fn reset_from_next_pair(&mut self) {
         if let Some((a, b)) = self.starting_pairs.pop() {
             let mut initial = Vec::new();
             initial.push(a.get());
@@ -202,16 +218,17 @@ impl SkipsBijectionGenerator {
 }
 
 impl Iterator for SkipsBijectionGenerator {
+    /// Bijection from an input coordinate matrix onto shape vertices
     type Item = Bijection<Column, Vertex>;
 
+    /// Advance iterator
     fn next(&mut self) -> Option<Self::Item> {
-        if self.maybe_next.is_none() {
-            return None;
-        }
-
         let cached_maybe_next = self.maybe_next.clone();
-        if !slice_next(&mut self.maybe_next.as_mut().unwrap().permutation.sigma[2..]) {
-            self.reset_from_next_pair();
+
+        if let Some(current_bijection) = self.maybe_next.as_mut() {
+            if !slice_next(&mut current_bijection.permutation.sigma[2..]) {
+                self.reset_from_next_pair();
+            }
         }
 
         cached_maybe_next
@@ -224,8 +241,11 @@ pub enum SimilarityError {
     ParticleNumberMismatch,
 }
 
+/// Result struct for a continuous similarity measure calculation
 pub struct Similarity {
+    /// Best bijection between shape vertices and input matrix
     pub bijection: Bijection<Vertex, Column>,
+    /// Continuous shape measure
     pub csm: f64,
 }
 

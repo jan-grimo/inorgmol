@@ -40,6 +40,10 @@ harness = false
 name = "linear_assignment"
 harness = false
 
+[[bench]]
+name = "refinement"
+harness = false
+
 # Disable bench so criterion's cargo bench -- --quick works
 [lib]
 bench = false

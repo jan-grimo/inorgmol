@@ -26,11 +26,11 @@ impl Plane {
         Plane {normal, offset: centroid}
     }
 
-    pub fn fit_matrix_points(cloud: &Matrix3N, vertices: &[usize]) -> Plane {
-        let n = vertices.len();
+    pub fn fit_matrix_points<T: Copy + Into<usize>>(matrix: &Matrix3N, point_indices: &[T]) -> Plane {
+        let n = point_indices.len();
         let mut plane_vertices = Matrix3N::zeros(n);
-        for (i, &v) in vertices.iter().enumerate() {
-            plane_vertices.set_column(i, &cloud.column(v));
+        for (i, &v) in point_indices.iter().enumerate() {
+            plane_vertices.set_column(i, &matrix.column(v.into()));
         }
 
         Self::fit_matrix(plane_vertices)

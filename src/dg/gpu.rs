@@ -9,136 +9,15 @@ extern crate nalgebra as na;
 // - Could try calculating numerical hessian on GPU, since we know which terms
 //   impact which parameters, maybe possible to make it nice and efficient
 
-/// Gpu-offloaded distance bounds gradient calculation and parallel otherwise
-pub struct GpuRefinement {
-    bounds: Bounds,
-    gpu_linear_squared_bounds: na::Matrix2xX<f32>,
-    stage: Stage
+struct GpuHandles {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    shader: wgpu::ShaderModule,
+    pipeline: wgpu::ComputePipeline,
 }
 
-impl GpuRefinement {
-    /// Transform distance bounds for transfer to gpu
-    fn into_matrix(bounds: &[DistanceBound]) -> na::Matrix2xX<f32> {
-        let n = bounds.len();
-        na::Matrix2xX::<f32>::from_iterator(
-            n,
-            bounds.iter()
-                .flat_map(|bound| {
-                    let (lower, upper) = bound.square_bounds;
-                    [upper as f32, lower as f32].into_iter() // access order in shader
-                })
-        )
-    }
-
-    /// Construct from bounds
-    pub fn new(bounds: Bounds) -> GpuRefinement {
-        let gpu_linear_squared_bounds = Self::into_matrix(&bounds.distances);
-        GpuRefinement {bounds, gpu_linear_squared_bounds, stage: Stage::FixChirals}
-    }
-
-    /// Run compute shader on gpu to calculate distance gradient
-    async fn distance_gradient_inner(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        positions: &na::DVector<f64>
-    ) -> na::DVector<f64> {
-        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Distance gradient"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("dist_grad.wgsl"))),
-        });
-
-        let n = positions.len() / 4;
-        let f32_positions = positions.clone().cast::<f32>();
-
-        let linear_length = StrictUpperTriangleIndices::new(n).total_len();
-        let linear_slice_size = linear_length * 4 * std::mem::size_of::<f32>();
-        let linear_size = linear_slice_size as wgpu::BufferAddress;
-
-        let positions_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Positions buffer"),
-            contents: bytemuck::cast_slice(f32_positions.data.as_slice()),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-
-        let bounds_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Bounds buffer"),
-            contents: bytemuck::cast_slice(self.gpu_linear_squared_bounds.data.as_slice()),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-
-        let gradient_contribution_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Gradient buffer"),
-            size: linear_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: None,
-            module: &shader_module,
-            entry_point: "main",
-        });
-
-        let bind_group_layout = pipeline.get_bind_group_layout(0);
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Distance gradient buffers"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: positions_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: bounds_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: gradient_contribution_buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-        let gradient_contribution_return_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Gradient return buffer"),
-            size: linear_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        {
-            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
-            cpass.set_pipeline(&pipeline);
-            cpass.set_bind_group(0, &bind_group, &[]);
-            cpass.insert_debug_marker("Compute distance gradient contributions");
-            cpass.dispatch_workgroups(n as u32, n as u32, 1);
-        }
-
-        encoder.copy_buffer_to_buffer(&gradient_contribution_buffer, 0, &gradient_contribution_return_buffer, 0, linear_size);
-        queue.submit(Some(encoder.finish()));
-
-        let buffer_slice = gradient_contribution_return_buffer.slice(..);
-        let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
-        device.poll(wgpu::Maintain::Wait);
-
-        if let Some(Ok(())) = receiver.receive().await {
-            let data = buffer_slice.get_mapped_range();
-            let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
-            drop(data);
-            gradient_contribution_return_buffer.unmap();
-            na::DVector::<f64>::from_iterator(result.len(), result.into_iter().map(|f| f as f64))
-        } else {
-            panic!("Failed to map return buffer memory");
-        }
-    }
-
-    /// Try to run distance gradient compute shader on compatible gpu, if available
-    async fn distance_gradient(&self, positions: &na::DVector<f64>) -> Option<na::DVector<f64>> {
-        // Find a Gpu
+impl GpuHandles {
+    async fn construct() -> Option<GpuHandles> {
         let adapter = wgpu::Instance::default()
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -159,12 +38,145 @@ impl GpuRefinement {
             .await
             .ok()?;
 
-        let contributions = self.distance_gradient_inner(&device, &queue, positions).await;
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Distance gradient"),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("dist_grad.wgsl"))),
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &shader,
+            entry_point: "main",
+        });
+
+        Some(GpuHandles {device, queue, shader, pipeline})
+    }
+
+    fn new() -> Option<GpuHandles> {
+        pollster::block_on(Self::construct())
+    }
+
+    async fn distance_gradient_contributions(&self, positions: &na::DVector<f64>, gpu_linear_squared_bounds: &na::Matrix2xX<f32>) -> na::DVector<f64> {
+        let n = positions.len() / 4;
+        let f32_positions = positions.clone().cast::<f32>();
+
+        let linear_length = StrictUpperTriangleIndices::new(n).total_len();
+        let linear_slice_size = linear_length * 4 * std::mem::size_of::<f32>();
+        let linear_size = linear_slice_size as wgpu::BufferAddress;
+
+        let positions_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Positions buffer"),
+            contents: bytemuck::cast_slice(f32_positions.data.as_slice()),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let bounds_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Bounds buffer"),
+            contents: bytemuck::cast_slice(gpu_linear_squared_bounds.data.as_slice()),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let gradient_contribution_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Gradient buffer"),
+            size: linear_size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+
+        let bind_group_layout = self.pipeline.get_bind_group_layout(0);
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Distance gradient buffers"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: positions_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: bounds_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: gradient_contribution_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let gradient_contribution_return_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Gradient return buffer"),
+            size: linear_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+            cpass.set_pipeline(&self.pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.insert_debug_marker("Compute distance gradient contributions");
+            cpass.dispatch_workgroups(n as u32, n as u32, 1);
+        }
+
+        encoder.copy_buffer_to_buffer(&gradient_contribution_buffer, 0, &gradient_contribution_return_buffer, 0, linear_size);
+        self.queue.submit(Some(encoder.finish()));
+
+        let buffer_slice = gradient_contribution_return_buffer.slice(..);
+        let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+        self.device.poll(wgpu::Maintain::Wait);
+
+        if let Some(Ok(())) = receiver.receive().await {
+            let data = buffer_slice.get_mapped_range();
+            let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
+            drop(data);
+            gradient_contribution_return_buffer.unmap();
+            na::DVector::<f64>::from_iterator(result.len(), result.into_iter().map(|f| f as f64))
+        } else {
+            panic!("Failed to map return buffer memory");
+        }
+    }
+}
+
+/// Gpu-offloaded distance bounds gradient calculation and parallel otherwise
+pub struct GpuRefinement {
+    bounds: Bounds,
+    gpu_linear_squared_bounds: na::Matrix2xX<f32>,
+    gpu_handles: Option<GpuHandles>,
+    stage: Stage,
+}
+
+impl GpuRefinement {
+    /// Transform distance bounds for transfer to gpu
+    fn into_matrix(bounds: &[DistanceBound]) -> na::Matrix2xX<f32> {
+        let n = bounds.len();
+        na::Matrix2xX::<f32>::from_iterator(
+            n,
+            bounds.iter()
+                .flat_map(|bound| {
+                    let (lower, upper) = bound.square_bounds;
+                    [upper as f32, lower as f32].into_iter() // access order in shader
+                })
+        )
+    }
+
+    /// Construct from bounds
+    pub fn new(bounds: Bounds) -> GpuRefinement {
+        let gpu_linear_squared_bounds = Self::into_matrix(&bounds.distances);
+        let gpu_handles = GpuHandles::new();
+        GpuRefinement {bounds, gpu_linear_squared_bounds, gpu_handles, stage: Stage::FixChirals}
+    }
+
+    /// Run compute shader on gpu to calculate distance gradient contributions
+    async fn distance_gradient(&self, positions: &na::DVector<f64>) -> Option<na::DVector<f64>> {
+        let handles = self.gpu_handles.as_ref()?;
+        let contributions = handles.distance_gradient_contributions(positions, &self.gpu_linear_squared_bounds).await;
 
         // Collect contributions into gradient serially
         let num_pairs = contributions.len() / DIMENSIONS;
         let contributions = contributions.reshape_generic(na::Const::<DIMENSIONS>, na::Dyn(num_pairs));
-        println!("contributions mat: {contributions}");
 
         let mut gradient = na::DVector::<f64>::zeros(positions.nrows());
         for (contribution, bound) in contributions.column_iter().zip(self.bounds.distances.iter()) {
