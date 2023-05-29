@@ -19,7 +19,13 @@ look through the GitLab issues again!
 
 # To do
 
+- Finish making shape list dynamic
+  - [x] Remove final static members
+  - [ ] Remove name enum in favor of string name
+  - [ ] Figure out what to do about the global list of shapes (locked after first
+        use? how to customize elements?) how are properties cached?
 - Generalize refinement over floating-point types
+  - Missing: `refine<F: UsableFloat>`: Maybe needs a PR with argmin?
 - Documentation (deny undocumented and work through all)
 - Check shape analysis methods (e.g. rotation finding, superposable vertex sets,
   tetrahedra, etc.)

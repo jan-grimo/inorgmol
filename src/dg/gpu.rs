@@ -3,7 +3,7 @@ use crate::dg::refinement::{Stage, Bounds, DistanceBound, RefinementErrorFunctio
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 
-use crate::dg::refinement::UsableFloat;
+use crate::dg::refinement::Float;
 
 extern crate nalgebra as na;
 
@@ -59,7 +59,7 @@ impl GpuHandles {
         pollster::block_on(Self::construct())
     }
 
-    async fn distance_gradient_contributions<F: UsableFloat>(&self, positions: &na::DVector<F>, gpu_linear_squared_bounds: &na::Matrix2xX<f32>) -> na::DVector<F> {
+    async fn distance_gradient_contributions<F: Float>(&self, positions: &na::DVector<F>, gpu_linear_squared_bounds: &na::Matrix2xX<f32>) -> na::DVector<F> {
         let n = positions.len() / 4;
         // TODO this is an unnecessary copy if F is f32
         let f32_positions = na::DVector::<f32>::from_iterator(positions.len(), positions.iter().map(|f| f.to_f32().unwrap()));
@@ -144,14 +144,14 @@ impl GpuHandles {
 }
 
 /// Gpu-offloaded distance bounds gradient calculation and parallel otherwise
-pub struct GpuRefinement<F: UsableFloat> {
+pub struct GpuRefinement<F: Float> {
     bounds: Bounds<F>,
     gpu_linear_squared_bounds: na::Matrix2xX<f32>,
     gpu_handles: Option<GpuHandles>,
     stage: Stage,
 }
 
-impl<F: UsableFloat> GpuRefinement<F> {
+impl<F: Float> GpuRefinement<F> {
     /// Transform distance bounds for transfer to gpu
     fn into_matrix(bounds: &[DistanceBound<F>]) -> na::Matrix2xX<f32> {
         let n = bounds.len();
@@ -218,7 +218,7 @@ impl<F: UsableFloat> GpuRefinement<F> {
     }
 }
 
-impl<F: UsableFloat> RefinementErrorFunction<F> for GpuRefinement<F> {
+impl<F: Float> RefinementErrorFunction<F> for GpuRefinement<F> {
     fn error(&self, positions: &na::DVector<F>) -> F {
         ParallelRefinement::distance_error(&self.bounds.distances, positions)
             + ParallelRefinement::chiral_error(&self.bounds.chirals, positions)

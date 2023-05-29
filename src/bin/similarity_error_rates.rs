@@ -55,7 +55,7 @@ impl Case {
         let (distorted, _) = Self::permute(distorted);
         let cloud = unit_sphere_normalize(distorted);
 
-        let similarity = similarity::polyhedron_reference_base::<false>(cloud.clone(), shape.name).expect("Reference doesn't fail");
+        let similarity = similarity::polyhedron_reference_base::<false>(cloud.clone(), shape).expect("Reference doesn't fail");
 
         // let shape_rotations = shape_from_name(shape.name).generate_rotations();
         // let reference_bijection = Self::pop_centroid(bijection);
@@ -65,10 +65,11 @@ impl Case {
         Case {shape_name: shape.name, cloud, similarity}
     }
 
-    pub fn pass(&self, f: &dyn Fn(Matrix3N, Name) -> Result<Similarity, SimilarityError>) -> bool {
-        let similarity = f(self.cloud.clone(), self.shape_name).expect("similarity fn doesn't panic");
+    pub fn pass(&self, f: &dyn Fn(Matrix3N, &Shape) -> Result<Similarity, SimilarityError>) -> bool {
+        let shape = shape_from_name(self.shape_name);
+        let similarity = f(self.cloud.clone(), shape).expect("similarity fn doesn't panic");
 
-        let shape_rotations = shape_from_name(self.shape_name).generate_rotations();
+        let shape_rotations = shape.generate_rotations();
         let reference_bijection = Self::pop_centroid(self.similarity.bijection.clone());
         let found_bijection = Self::pop_centroid(similarity.bijection);
         let is_rotation = Shape::is_rotation(&reference_bijection, &found_bijection, &shape_rotations);
@@ -81,12 +82,12 @@ impl Case {
 
 #[derive(Clone)]
 struct Statistics<'a> {
-    f: &'a dyn Fn(Matrix3N, Name) -> Result<Similarity, SimilarityError>,
+    f: &'a dyn Fn(Matrix3N, &Shape) -> Result<Similarity, SimilarityError>,
     distortion_step_pass_count: Vec<usize>
 }
 
 impl<'a> Statistics<'a> {
-    pub fn new(f: &'a dyn Fn(Matrix3N, Name) -> Result<Similarity, SimilarityError>) -> Statistics<'a> {
+    pub fn new(f: &'a dyn Fn(Matrix3N, &Shape) -> Result<Similarity, SimilarityError>) -> Statistics<'a> {
         Statistics {f, distortion_step_pass_count: Vec::new()}
     }
 

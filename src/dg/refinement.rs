@@ -3,15 +3,15 @@ use crate::dg::{DistanceBounds, DIMENSIONS};
 use thiserror::Error;
 extern crate nalgebra as na;
 
-pub trait UsableFloat: num_traits::Float + num_traits::NumAssign + num_traits::NumAssignRef + num_traits::NumRef + na::RealField + std::iter::Sum {}
+pub trait Float: num_traits::Float + num_traits::NumAssign + num_traits::NumAssignRef + num_traits::NumRef + na::RealField + std::iter::Sum {}
 
-impl<F> UsableFloat for F where 
+impl<F> Float for F where 
     F: num_traits::Float + num_traits::NumAssign + num_traits::NumAssignRef + num_traits::NumRef + na::RealField + std::iter::Sum
 {}
 
 // Ensure f32 and f64 implement Float
 const _: () = {
-    fn assert_float<F: UsableFloat>() {}
+    fn assert_float<F: Float>() {}
     fn assert_all() {
         assert_float::<f32>();
         assert_float::<f64>();
@@ -106,18 +106,18 @@ impl ExactSizeIterator for StrictUpperTriangleIndices {
 
 /// Gradient contribution of a distance bound
 #[derive(PartialEq, Debug)]
-pub struct DistanceBoundGradient<F: UsableFloat>(na::Vector4<F>);
+pub struct DistanceBoundGradient<F: Float>(na::Vector4<F>);
 
 /// Two-particle distance bound
 #[derive(Clone)]
-pub struct DistanceBound<F: UsableFloat> {
+pub struct DistanceBound<F: Float> {
     /// Particle indices (i, j) with i < j
     pub indices: (usize, usize),
     /// Squared distance bounds (lower, upper)
     pub square_bounds: (F, F)
 }
 
-impl<F: UsableFloat> DistanceBound<F> {
+impl<F: Float> DistanceBound<F> {
     /// Calculate error contribution
     pub fn error(&self, positions: &na::DVector<F>) -> F {
         let (lower_squared, upper_squared) = &self.square_bounds;
@@ -167,7 +167,7 @@ impl<F: UsableFloat> DistanceBound<F> {
     }
 }
 
-impl<F: UsableFloat> DistanceBoundGradient<F> {
+impl<F: Float> DistanceBoundGradient<F> {
     /// Incorporate the distance bound gradient contribution into the gradient
     fn incorporate_into(self, gradient: &mut na::DVector<F>, indices: (usize, usize)) {
         {
@@ -182,11 +182,11 @@ impl<F: UsableFloat> DistanceBoundGradient<F> {
 }
 
 /// Chiral constraint gradient contribution data
-pub struct ChiralGradient<F: UsableFloat>(na::Matrix3x4<F>);
+pub struct ChiralGradient<F: Float>(na::Matrix3x4<F>);
 
 /// Chiral constraint
 #[derive(Clone)]
-pub struct Chiral<F: UsableFloat> {
+pub struct Chiral<F: Float> {
     /// Particle indices for each vertex of tetrahedron
     pub sites: [Vec<usize>; 4],
     /// Adjusted volume bounds (lower, upper) with V' = 6 V
@@ -195,7 +195,7 @@ pub struct Chiral<F: UsableFloat> {
     pub weight: F
 }
 
-impl<F: UsableFloat> Chiral<F> {
+impl<F: Float> Chiral<F> {
     /// Tests if constraint volume bounds accept zero volume
     pub fn target_volume_is_zero(&self) -> bool {
         let (lower, upper) = self.adjusted_volume_bounds;
@@ -296,7 +296,7 @@ impl<F: UsableFloat> Chiral<F> {
     }
 }
 
-impl<F: UsableFloat> ChiralGradient<F> {
+impl<F: Float> ChiralGradient<F> {
     /// Incorporate gradient contribution of chiral constraint into gradient
     fn incorporate_into(self, gradient: &mut na::DVector<F>, sites: &[Vec<usize>; 4]) {
         for (column, site) in self.0.column_iter().zip(sites.iter()) {
@@ -318,12 +318,12 @@ pub enum Stage {
 
 /// Distance and chiral constraints for refinement
 #[derive(Clone)]
-pub struct Bounds<F: UsableFloat> {
+pub struct Bounds<F: Float> {
     pub distances: Vec<DistanceBound<F>>,
     pub chirals: Vec<Chiral<F>>,
 }
 
-impl<F: UsableFloat> Bounds<F> {
+impl<F: Float> Bounds<F> {
     /// Construct from a distance bound matrix and list of chiral constraints
     pub fn new(bounds: DistanceBounds, chirals: Vec<Chiral<F>>) -> Bounds<F> {
         Bounds {distances: Self::linearize_bounds(bounds), chirals}
@@ -343,7 +343,7 @@ impl<F: UsableFloat> Bounds<F> {
 }
 
 /// Serial computation of error function
-pub struct SerialRefinement<F: UsableFloat> {
+pub struct SerialRefinement<F: Float> {
     pub bounds: Bounds<F>,
     pub stage: Stage
 }
@@ -376,7 +376,7 @@ fn three_mut<F>(line: &mut na::DVector<F>, index: usize) -> VectorViewMut3<F> {
 
 // TODO try alteration where return type is an enum of Vector3 and VectorView3
 // or where site is a smallvec
-fn site_three<F: UsableFloat>(line: &na::DVector<F>, site: &Vec<usize>) -> na::Vector3<F> {
+fn site_three<F: Float>(line: &na::DVector<F>, site: &Vec<usize>) -> na::Vector3<F> {
     if site.len() == 1 {
         return three(line, site[0]).into();
     }
@@ -387,7 +387,7 @@ fn site_three<F: UsableFloat>(line: &na::DVector<F>, site: &Vec<usize>) -> na::V
 }
 
 /// Invert the y coordinates of linearized coordinates
-pub fn negate_y_coordinates<F: UsableFloat>(line: &mut na::DVector<F>) {
+pub fn negate_y_coordinates<F: Float>(line: &mut na::DVector<F>) {
     let n = line.len() / DIMENSIONS;
     line.view_with_steps_mut((1, 0), (n, 1), (DIMENSIONS - 1, 0)).neg_mut();
 }
@@ -408,7 +408,7 @@ fn array_of_ref<T, const N:usize>(arr: &[T;N])->[&T;N] {
     unsafe { out.assume_init() }
 }
 
-impl<F: UsableFloat> SerialRefinement<F> {
+impl<F: Float> SerialRefinement<F> {
     pub fn distance_error(bounds: &[DistanceBound<F>], positions: &na::DVector<F>) -> F {
         bounds.iter()
             .map(|bound| bound.error(positions))
@@ -470,7 +470,7 @@ impl<F: UsableFloat> SerialRefinement<F> {
     }
 }
 
-impl<F: UsableFloat> RefinementErrorFunction<F> for SerialRefinement<F> {
+impl<F: Float> RefinementErrorFunction<F> for SerialRefinement<F> {
     fn error(&self, positions: &na::DVector<F>) -> F {
         Self::distance_error(&self.bounds.distances, positions)
             + Self::chiral_error(&self.bounds.chirals, positions)
@@ -489,12 +489,12 @@ impl<F: UsableFloat> RefinementErrorFunction<F> for SerialRefinement<F> {
 }
 
 /// Parallel computation of error function
-pub struct ParallelRefinement<F: UsableFloat> {
+pub struct ParallelRefinement<F: Float> {
     pub bounds: Bounds<F>,
     pub stage: Stage
 }
 
-impl<F: UsableFloat> ParallelRefinement<F> {
+impl<F: Float> ParallelRefinement<F> {
     pub fn distance_error(bounds: &[DistanceBound<F>], positions: &na::DVector<F>) -> F {
         bounds.par_iter()
             .map(|bound| bound.error(positions))
@@ -574,7 +574,7 @@ impl<F: UsableFloat> ParallelRefinement<F> {
     }
 }
 
-impl<F: UsableFloat> RefinementErrorFunction<F> for ParallelRefinement<F> {
+impl<F: Float> RefinementErrorFunction<F> for ParallelRefinement<F> {
     fn error(&self, positions: &na::DVector<F>) -> F {
         Self::distance_error(&self.bounds.distances, positions)
             + Self::chiral_error(&self.bounds.chirals, positions)
@@ -632,7 +632,7 @@ impl argmin::core::CostFunction for &dyn RefinementErrorFunction<f64> {
 
 
 /// Calculate error function gradient for argmin
-impl<F: UsableFloat> argmin::core::Gradient for &dyn RefinementErrorFunction<F> {
+impl<F: Float> argmin::core::Gradient for &dyn RefinementErrorFunction<F> {
     type Param = na::DVector<F>;
     type Gradient = na::DVector<F>;
 
@@ -642,7 +642,7 @@ impl<F: UsableFloat> argmin::core::Gradient for &dyn RefinementErrorFunction<F> 
 }
 
 /// Result data of a refinement
-pub struct Refinement<F: UsableFloat> {
+pub struct Refinement<F: Float> {
     pub coords: na::Matrix3xX<F>,
     pub steps: usize
 }
@@ -739,7 +739,7 @@ mod tests {
     }
 
     /// Central difference numerical gradient
-    fn numerical_gradient<F: UsableFloat>(cost: &dyn Fn(&na::DVector<F>) -> F, args: &na::DVector<F>) -> na::DVector<F> {
+    fn numerical_gradient<F: Float>(cost: &dyn Fn(&na::DVector<F>) -> F, args: &na::DVector<F>) -> na::DVector<F> {
         let n = args.len();
         let mut params = args.clone();
         let h = F::from(1e-4).unwrap();

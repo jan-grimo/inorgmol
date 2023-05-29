@@ -23,7 +23,7 @@ fn refinement(c: &mut Criterion) {
         let coords = metric.embed();
         let n = coords.len();
         let linear_positions = coords.reshape_generic(na::Dyn(n), na::Const::<1>);
-        let chirals: Vec<dg::refinement::Chiral> = tetrahedra.iter()
+        let chirals: Vec<dg::refinement::Chiral<f64>> = tetrahedra.iter()
             .map(|&tetr| dg::modeling::solitary_shape::chiral_from_tetrahedron(tetr, shape, 0.1))
             .collect();
 

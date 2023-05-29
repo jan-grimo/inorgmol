@@ -12,7 +12,6 @@ extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
 
 use thiserror::Error;
-use memoize::memoize;
 use itertools::Itertools;
 use std::collections::HashMap;
 
@@ -130,10 +129,7 @@ mod scaling {
 }
 
 // Bool matrix indicating which vertex pairs are rotationally unique
-#[memoize]
-pub fn skip_vertices(shape_name: Name) -> na::DMatrix<bool> {
-    let shape = shape_from_name(shape_name);
-
+pub fn skip_vertices(shape: &Shape) -> na::DMatrix<bool> {
     let s = shape.num_vertices();
     let mut skips = na::DMatrix::<bool>::from_element(s + 1, s + 1, true);
     let rotations = shape.generate_rotations();
@@ -170,8 +166,8 @@ struct SkipsBijectionGenerator {
 
 impl SkipsBijectionGenerator {
     /// Construct a bijection generator for a shape
-    pub fn new(shape_name: Name) -> SkipsBijectionGenerator {
-        let skips = skip_vertices(shape_name);
+    pub fn new(shape: &Shape) -> SkipsBijectionGenerator {
+        let skips = skip_vertices(shape);
         let s = skips.ncols();
 
         let mut pairs: Vec<(Vertex, Vertex)> = (0..s).cartesian_product(0..s)
@@ -250,8 +246,7 @@ pub struct Similarity {
 }
 
 /// Polyhedron similarity performing quaternion fits on all rotationally distinct bijections
-pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
-    let shape = shape_from_name(s);
+pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
     let n = x.ncols();
     if n != shape.num_vertices() + 1 {
         return Err(SimilarityError::ParticleNumberMismatch);
@@ -265,7 +260,7 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, s: Name) ->
 
     type BijectionGenerator = dyn Iterator<Item = Bijection<Column, Vertex>>;
     let bijection_generator: Box<BijectionGenerator> = match USE_SKIPS {
-        true => Box::new(SkipsBijectionGenerator::new(s)),
+        true => Box::new(SkipsBijectionGenerator::new(shape)),
         false => Box::new(bijections(n))
     };
 
@@ -286,8 +281,8 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, s: Name) ->
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
-pub fn polyhedron_reference(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
-    polyhedron_reference_base::<true>(x, s)
+pub fn polyhedron_reference(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
+    polyhedron_reference_base::<true>(x, shape)
 }
 
 pub mod linear_assignment {
@@ -343,19 +338,18 @@ pub mod linear_assignment {
 
 /// Polyhedron similarity performing quaternion fits only on a limited number of 
 /// vertices before assigning the rest by brute force linear assignment
-pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_JV: bool>(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
+pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_JV: bool>(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
     const MIN_PREMATCH: usize = 2;
     assert!(MIN_PREMATCH <= PREMATCH); // TODO trigger compilation failure? static assert?
 
     type Occupation = Bijection<Vertex, Column>;
-    let shape = shape_from_name(s);
     let n = x.ncols();
     if n != shape.num_vertices() + 1 {
         return Err(SimilarityError::ParticleNumberMismatch);
     }
 
     if n <= PREMATCH {
-        return polyhedron_reference_base::<USE_SKIPS>(x, s);
+        return polyhedron_reference_base::<USE_SKIPS>(x, shape);
     }
 
     let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x));
@@ -374,7 +368,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     }
     let left_free: Vec<Column> = (PREMATCH..n).map(Column::from).collect();
 
-    let skips = USE_SKIPS.then(|| skip_vertices(s));
+    let skips = USE_SKIPS.then(|| skip_vertices(shape));
     let narrow = (0..n)
         .map_into::<Vertex>()
         .permutations(PREMATCH)
@@ -475,8 +469,8 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
-pub fn polyhedron(x: Matrix3N, s: Name) -> Result<Similarity, SimilarityError> {
-    polyhedron_base::<5, true, true>(x, s)
+pub fn polyhedron(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
+    polyhedron_base::<5, true, true>(x, shape)
 }
 
 #[cfg(test)]
@@ -575,8 +569,8 @@ mod tests {
             Case { shape_name: shape.name, bijection, cloud }
         }
 
-        fn can_find_bijection_with(&self, f: &dyn Fn(Matrix3N, Name) -> Result<Similarity, SimilarityError>) -> bool {
-            let similarity = f(self.cloud.matrix.clone(), self.shape_name).expect("Fine");
+        fn can_find_bijection_with(&self, f: &dyn Fn(Matrix3N, &Shape) -> Result<Similarity, SimilarityError>) -> bool {
+            let similarity = f(self.cloud.matrix.clone(), shape_from_name(self.shape_name)).expect("Fine");
 
             // Found bijection must be a rotation of the original bijection
             let shape = shape_from_name(self.shape_name);
@@ -600,7 +594,7 @@ mod tests {
     }
 
     struct SimilarityFnTestBounds<'a> {
-        f: &'a dyn Fn(Matrix3N, Name) -> Result<Similarity, SimilarityError>,
+        f: &'a dyn Fn(Matrix3N, &Shape) -> Result<Similarity, SimilarityError>,
         max: usize,
         name: &'static str
     }
@@ -667,7 +661,7 @@ mod tests {
             let rotations = shape.generate_rotations();
 
             let mut recovered_bijections = HashSet::new();
-            for rotationally_unique in SkipsBijectionGenerator::new(shape.name) {
+            for rotationally_unique in SkipsBijectionGenerator::new(shape) {
                 // Need to invert since the centroid is only last in vertex -> column
                 // and need to remove it to rotate in shape vertex space
                 let mut inverted = rotationally_unique.inverse();
@@ -688,12 +682,12 @@ mod tests {
     #[test]
     fn skip_generator() {
         for shape in SHAPES.iter().filter(|s| s.num_vertices() < 7) {
-            let skips = skip_vertices(shape.name);
+            let skips = skip_vertices(shape);
 
             itertools::assert_equal(
                 bijections(shape.num_vertices() + 1)
                     .filter(|b| !skips[(b.permutation[0], b.permutation[1])]),
-                SkipsBijectionGenerator::new(shape.name)
+                SkipsBijectionGenerator::new(shape)
             );
         }
     }

@@ -1,5 +1,5 @@
 use crate::shapes::similarity::{unit_sphere_normalize, polyhedron};
-use crate::shapes::{shape_from_name, Name, Matrix3N, SHAPES};
+use crate::shapes::{Shape, shape_from_name, Name, Matrix3N, SHAPES};
 
 use itertools::Itertools;
 use rand::distributions::Distribution;
@@ -9,7 +9,8 @@ use statrs::statistics::Statistics;
 pub const CSM_RESCALE: f64 = 150.0;
 
 pub fn sample(s: Name) -> f64 {
-    let n = shape_from_name(s).num_vertices();
+    let shape = shape_from_name(s);
+    let n = shape.num_vertices();
 
     let norm_distribution = Normal::new(1.0, 0.2).unwrap();
     let mut prng = rand::thread_rng();
@@ -23,7 +24,7 @@ pub fn sample(s: Name) -> f64 {
     // add centroid and normalize
     cloud = unit_sphere_normalize(cloud.insert_column(n, 0.0));
 
-    polyhedron(cloud, s).expect("No algorithm failures").csm
+    polyhedron(cloud, shape).expect("No algorithm failures").csm
 }
 
 fn beta_parameters(samples: &Vec<f64>) -> (f64, f64) {
@@ -132,14 +133,14 @@ pub fn goodness_of_fit(samples: &[f64], beta: Beta) -> f64 {
 }
 
 pub fn least_likely_random(cloud: &Matrix3N) -> (Name, f64) {
-    let likelihood_random = |name: Name| {
-        let csm = polyhedron(cloud.clone(), name).expect("Similarities worked fine").csm;
-        embedded_distribution(name).cdf(csm / CSM_RESCALE)
+    let likelihood_random = |shape: &Shape| {
+        let csm = polyhedron(cloud.clone(), shape).expect("Similarities worked fine").csm;
+        embedded_distribution(shape.name).cdf(csm / CSM_RESCALE)
     };
 
     SHAPES.iter()
         .filter(|s| s.num_vertices() + 1 == cloud.ncols())
-        .map(|s| (s.name, likelihood_random(s.name)))
+        .map(|s| (s.name, likelihood_random(s)))
         .min_by(|(_, p), (_, q)| p.partial_cmp(q).expect("No NaNs from similarities"))
         .expect("At least one fitting shape size")
 }
