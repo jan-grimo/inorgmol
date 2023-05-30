@@ -12,7 +12,7 @@ use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
 use crate::permutation::{Permutation, permutations};
 use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash)]
 pub enum Name {
     // 2
     Line,
@@ -68,37 +68,39 @@ pub enum Name {
 
 impl Name {
     pub fn repr(&self) -> &'static str {
+        use Name::*;
+
         match self {
-            Name::Line => "line",
-            Name::Bent => "bent",
-            Name::EquilateralTriangle => "triangle",
-            Name::VacantTetrahedron => "vacant tetrahedron",
-            Name::T => "T-shaped",
-            Name::Tetrahedron => "tetrahedron",
-            Name::Square => "square",
-            Name::Seesaw => "seesaw",
-            Name::TrigonalPyramid => "trigonal pyramid",
-            Name::SquarePyramid => "square pyramid",
-            Name::TrigonalBipyramid => "trigonal bipyramid",
-            Name::Pentagon => "pentagon",
-            Name::Octahedron => "octahedron",
-            Name::TrigonalPrism => "trigonal prism",
-            Name::PentagonalPyramid => "pentagonal pyramid",
-            Name::Hexagon => "hexagon",
-            Name::PentagonalBipyramid => "pentagonal bipyramid",
-            Name::CappedOctahedron => "capped octahedron",
-            Name::CappedTrigonalPrism => "capped trigonal prism",
-            Name::SquareAntiprism => "square antiprism",
-            Name::Cube => "cube",
-            Name::TrigonalDodecahedron => "trigonal dodecahedron",
-            Name::HexagonalBipyramid => "hexagonal bipyramid",
-            Name::TricappedTrigonalPrism => "tricapped trigonal prism",
-            Name::CappedSquareAntiprism => "capped square antiprism",
-            Name::HeptagonalBipyramid => "heptagonal bipyramid",
-            Name::BicappedSquareAntiprism => "bicapped square antiprism",
-            Name::EdgeContractedIcosahedron => "edge contracted icosahedron",
-            Name::Icosahedron => "icosahedron",
-            Name::Cuboctahedron => "cuboctahedron",
+            Line => "line",
+            Bent => "bent",
+            EquilateralTriangle => "triangle",
+            VacantTetrahedron => "vacant tetrahedron",
+            T => "T-shaped",
+            Tetrahedron => "tetrahedron",
+            Square => "square",
+            Seesaw => "seesaw",
+            TrigonalPyramid => "trigonal pyramid",
+            SquarePyramid => "square pyramid",
+            TrigonalBipyramid => "trigonal bipyramid",
+            Pentagon => "pentagon",
+            Octahedron => "octahedron",
+            TrigonalPrism => "trigonal prism",
+            PentagonalPyramid => "pentagonal pyramid",
+            Hexagon => "hexagon",
+            PentagonalBipyramid => "pentagonal bipyramid",
+            CappedOctahedron => "capped octahedron",
+            CappedTrigonalPrism => "capped trigonal prism",
+            SquareAntiprism => "square antiprism",
+            Cube => "cube",
+            TrigonalDodecahedron => "trigonal dodecahedron",
+            HexagonalBipyramid => "hexagonal bipyramid",
+            TricappedTrigonalPrism => "tricapped trigonal prism",
+            CappedSquareAntiprism => "capped square antiprism",
+            HeptagonalBipyramid => "heptagonal bipyramid",
+            BicappedSquareAntiprism => "bicapped square antiprism",
+            EdgeContractedIcosahedron => "edge contracted icosahedron",
+            Icosahedron => "icosahedron",
+            Cuboctahedron => "cuboctahedron",
             // Name::Thirteen => "thirteen",
             // Name::BicappedHexagonalAntiprism => "bicapped hexagonal antiprism",
             // Name::Fifteen => "fifteen",
