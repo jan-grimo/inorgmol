@@ -1,6 +1,3 @@
-/// TODO
-/// - from_index could fail with indices higher than count()
-
 use std::ops::Index;
 use core::convert::TryFrom;
 use num_traits::int::PrimInt;
@@ -125,8 +122,8 @@ pub enum PermutationError {
 impl Permutation {
     /// Initialize an identity permutation of specific size
     ///
-    /// The identity permutation has index zero within the lexicographical order 
-    /// of permutations.
+    /// The identity permutation maps each number onto itself. It has index
+    /// zero within the lexicographical order of permutations.
     ///
     /// ```
     /// # use molassembler::permutation::Permutation;
@@ -138,17 +135,28 @@ impl Permutation {
 
     /// Initialize the i-th permutation by lexicographic order of size n
     ///
+    /// Initializes a particular permutation identified by its position
+    /// (zero-indexed) in the lexicographic order `i` of all permutations of
+    /// size `n`.
+    ///
+    /// If `i` is larger than the final position of all permutations of that
+    /// size, i.e. $ i >= n! $, `None` is returned.
+    ///
     /// ```
     /// # use molassembler::permutation::Permutation;
-    /// assert_eq!(Permutation::from_index(3, 0).sigma, vec![0, 1, 2]);
-    /// assert_eq!(Permutation::from_index(3, 1).sigma, vec![0, 2, 1]);
-    /// assert_eq!(Permutation::from_index(3, 2).sigma, vec![1, 0, 2]);
+    /// assert_eq!(Permutation::try_from_index(2, 0), Some(Permutation {sigma: vec![0, 1]}));
+    /// assert_eq!(Permutation::try_from_index(2, 1), Some(Permutation {sigma: vec![1, 0]}));
+    /// assert_eq!(Permutation::try_from_index(2, 2), None);
     /// ```
-    pub fn from_index(n: usize, mut i: usize) -> Permutation {
+    pub fn try_from_index(n: usize, mut i: usize) -> Option<Permutation> {
         let mut factorials = Vec::<usize>::with_capacity(n);
         factorials.push(1);
         for k in 1..n {
             factorials.push(factorials.last().unwrap() * k);
+        }
+
+        if i >= *factorials.last().unwrap() * n {
+            return None;
         }
 
         let mut sigma = Vec::with_capacity(n);
@@ -167,7 +175,7 @@ impl Permutation {
             }
         }
 
-        Permutation {sigma}
+        Some(Permutation {sigma})
     }
 
     /// Find a permutation ordering a container's elements
@@ -175,7 +183,7 @@ impl Permutation {
     /// # use molassembler::permutation::Permutation;
     /// let container = vec![-3, 2, 0];
     /// let p = Permutation::ordering(&container);
-    /// assert_eq!(p, Permutation::from_index(3, 1));
+    /// assert_eq!(p, Permutation::try_from_index(3, 1).unwrap());
     /// assert_eq!(p.apply(&container), Ok(vec![-3, 0, 2]));
     /// ```
     pub fn ordering<T: Ord>(container: &Vec<T>) -> Permutation {
@@ -190,8 +198,12 @@ impl Permutation {
     /// # use molassembler::permutation::Permutation;
     /// assert_eq!(Permutation {sigma: vec![0, 1, 2]}.index(), 0);
     /// assert_eq!(Permutation {sigma: vec![0, 2, 1]}.index(), 1);
-    /// for i in 0..10 {
-    ///     assert_eq!(Permutation::from_index(6, i).index(), i);
+    ///
+    /// let num_permutations_size_five = Permutation::group_order(5);
+    /// for i in 0..num_permutations_size_five {
+    ///     if let Some(p) = Permutation::try_from_index(5, i) {
+    ///         assert_eq!(p.index(), i);
+    ///     }
     /// }
     /// ```
     pub fn index(&self) -> usize {
@@ -236,10 +248,10 @@ impl Permutation {
     ///
     /// ```
     /// # use molassembler::permutation::Permutation;
-    /// let mut permutation = Permutation::from_index(6, 0);
+    /// let mut permutation = Permutation::try_from_index(6, 0).expect("Valid index");
     /// for i in 1..15 {
     ///     assert_eq!(permutation.next_permutation(), true);
-    ///     assert_eq!(permutation, Permutation::from_index(6, i));
+    ///     assert_eq!(permutation, Permutation::try_from_index(6, i).expect("Valid index"));
     /// }
     /// ```
     pub fn next_permutation(&mut self) -> bool {
@@ -250,10 +262,10 @@ impl Permutation {
     ///
     /// ```
     /// # use molassembler::permutation::Permutation;
-    /// let mut permutation = Permutation::from_index(6, 15);
+    /// let mut permutation = Permutation::try_from_index(6, 15).expect("Valid index");
     /// for i in 14..1 {
     ///     assert_eq!(permutation.prev_permutation(), true);
-    ///     assert_eq!(permutation, Permutation::from_index(6, i));
+    ///     assert_eq!(permutation, Permutation::try_from_index(6, i).expect("Valid index"));
     /// }
     /// ```
     pub fn prev_permutation(&mut self) -> bool {
@@ -266,7 +278,7 @@ impl Permutation {
     /// # use molassembler::permutation::{Permutation, PermutationError};
     /// # use std::result::Result;
     /// # fn main() -> Result<(), PermutationError> {
-    /// let permutation = Permutation::from_index(3, 1);
+    /// let permutation = Permutation::try_from_index(3, 1).expect("Valid index");
     /// assert_eq!(permutation.inverse().compose(&permutation)?, Permutation::identity(3));
     /// assert_eq!(permutation.compose(&permutation.inverse())?, Permutation::identity(3));
     /// # Ok(())
@@ -334,8 +346,8 @@ impl Permutation {
     }
 
     /// Generate a random permutation (identity inclusive)
-    pub fn random(n: usize) -> Permutation {
-        Permutation::from_index(n, random_discrete(Permutation::group_order(n)))
+    pub fn new_random(n: usize) -> Permutation {
+        Permutation::try_from_index(n, random_discrete(Permutation::group_order(n))).expect("Proposed valid permutation")
     }
 
     /// Fixed points are values that the permutation does not permute
@@ -396,7 +408,7 @@ impl Index<usize> for Permutation {
 /// # use molassembler::permutation::Permutation;
 /// # use std::convert::TryFrom;
 /// let p = Permutation::try_from(vec![0, 1, 2]);
-/// assert_eq!(p, Ok(Permutation::from_index(3, 0)));
+/// assert_eq!(p, Ok(Permutation::try_from_index(3, 0).expect("Valid index")));
 /// let q = Permutation::try_from(vec![-1, 0, 1]);
 /// assert!(q.is_err());
 /// ```
@@ -424,7 +436,7 @@ impl<I: PrimInt> TryFrom<Vec<I>> for Permutation {
 /// # use molassembler::permutation::Permutation;
 /// # use std::convert::TryFrom;
 /// let p = Permutation::try_from([0, 2, 1]);
-/// assert_eq!(p, Ok(Permutation::from_index(3, 1)));
+/// assert_eq!(p, Ok(Permutation::try_from_index(3, 1).expect("Valid index")));
 /// ```
 impl<I: PrimInt, const N: usize> TryFrom<[I; N]> for Permutation {
     type Error = PermutationError;
@@ -447,7 +459,6 @@ impl PermutationIterator {
     }
 }
 
-// TODO figure out how to return references to permutation with the appropriate lifetime (GATs)
 impl Iterator for PermutationIterator {
     type Item = Permutation;
 
@@ -471,8 +482,8 @@ impl Iterator for PermutationIterator {
 /// ```
 /// # use molassembler::permutation::{Permutation, permutations};
 /// let mut iter = permutations(2);
-/// assert_eq!(iter.next(), Some(Permutation::from_index(2, 0)));
-/// assert_eq!(iter.next(), Some(Permutation::from_index(2, 1)));
+/// assert_eq!(iter.next().map(|p| p.index()), Some(0));
+/// assert_eq!(iter.next().map(|p| p.index()), Some(1));
 /// assert_eq!(iter.next(), None);
 /// ```
 pub fn permutations(n: usize) -> PermutationIterator {
@@ -486,23 +497,20 @@ mod tests {
     #[test]
     fn small() {
         assert_eq!(Permutation::identity(0).sigma.len(), 0);
-        assert_eq!(Permutation::from_index(0, 0).index(), 0);
-        assert_eq!(Permutation::from_index(0, 1).index(), 0);
+        assert_eq!(Permutation::try_from_index(0, 0), None);
         assert!(!Permutation::identity(0).next_permutation());
         assert!(!Permutation::identity(0).prev_permutation());
 
         assert_eq!(Permutation::identity(1).sigma.len(), 1);
-        assert_eq!(Permutation::from_index(1, 0).index(), 0);
-        assert_eq!(Permutation::from_index(1, 1).index(), 0);
+        assert_eq!(Permutation::try_from_index(1, 0).expect("Valid index").index(), 0);
+        assert_eq!(Permutation::try_from_index(1, 1), None);
         assert!(!Permutation::identity(1).next_permutation());
         assert!(!Permutation::identity(1).prev_permutation());
 
         assert_eq!(Permutation::identity(2).sigma.len(), 2);
-        assert_eq!(Permutation::from_index(2, 0).index(), 0);
-        assert_eq!(Permutation::from_index(2, 1).index(), 1);
-        assert_eq!(Permutation::from_index(2, 2).index(), 1);
-        assert_eq!(Permutation::from_index(2, 3).index(), 1);
-        assert_eq!(Permutation::from_index(2, 4).index(), 1);
+        assert_eq!(Permutation::try_from_index(2, 0).expect("Valid index").index(), 0);
+        assert_eq!(Permutation::try_from_index(2, 1).expect("Valid index").index(), 1);
+        assert_eq!(Permutation::try_from_index(2, 2), None);
     }
 
     #[test]
@@ -513,8 +521,8 @@ mod tests {
         let v: Vec<usize> = (0..n).map(|_| random_discrete(100)).collect();
 
         for _ in 0..repeats {
-            let p = Permutation::random(n);
-            let q = Permutation::random(n);
+            let p = Permutation::new_random(n);
+            let q = Permutation::new_random(n);
 
             let compose_apply = p.compose(&q)?.apply(&v)?;
             let apply_twice = q.apply(&p.apply(&v)?)?;
@@ -532,7 +540,7 @@ mod tests {
         let v: Vec<usize> = (0..n).map(|_| random_discrete(100)).collect();
 
         for _ in 0..repeats {
-            let p = Permutation::random(n);
+            let p = Permutation::new_random(n);
 
             let w = p.apply(&v)?;
             let v_reconstructed = p.inverse().apply(&w)?;

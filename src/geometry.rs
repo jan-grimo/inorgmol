@@ -106,7 +106,7 @@ fn separating_plane_face_a(diff: &na::Matrix3x4<f64>, normal: &na::Vector3<f64>)
 
     let affine = diff.column_iter().zip(powers.iter()).map(|(c, p)| {
         // Check if vertex outside half-space defined by normal
-        let affine_coord = c.dot(&normal);
+        let affine_coord = c.dot(normal);
         if affine_coord > 0.0 {
             mask |= p;
         }
@@ -152,7 +152,7 @@ fn separating_plane_edge_a(a: &Face, b: &Face) -> bool {
 }
 
 fn separating_plane_face_b(diff: &na::Matrix3x4<f64>, normal: &na::Vector3<f64>) -> bool {
-    diff.column_iter().all(|c| c.dot(&normal) > 0.0)
+    diff.column_iter().all(|c| c.dot(normal) > 0.0)
 }
 
 /// Tetrahedron-tetrahedron overlap test
@@ -178,7 +178,7 @@ pub fn tetrahedra_overlap(a: &na::Matrix3x4<f64>, b: &na::Matrix3x4<f64>) -> boo
 
     // Face 1
     let diff = { // b - a.col(0)
-        let mut tmp = b.clone();
+        let mut tmp = *b;
         tmp.column_iter_mut().for_each(|mut c| {c -= a.column(0);});
         tmp
     };
@@ -222,7 +222,7 @@ pub fn tetrahedra_overlap(a: &na::Matrix3x4<f64>, b: &na::Matrix3x4<f64>) -> boo
     a_edges.set_column(4, &(a.column(3) - a.column(1)));
     // ref: FaceA_2 uses (b - a[1]) instead of (b - a[0])
     let different_diff = {
-        let mut tmp = b.clone();
+        let mut tmp = *b;
         tmp.column_iter_mut().for_each(|mut c| c -= a.column(1));
         tmp
     };
@@ -254,7 +254,7 @@ pub fn tetrahedra_overlap(a: &na::Matrix3x4<f64>, b: &na::Matrix3x4<f64>) -> boo
     // So now if there is a separating plane it is parallel to a face of b
     // Face 1
     let diff = { // a - b.col(0)
-        let mut tmp = a.clone();
+        let mut tmp = *a;
         tmp.column_iter_mut().for_each(|mut c| { c -= b.column(0); });
         tmp
     };
@@ -293,7 +293,7 @@ pub fn tetrahedra_overlap(a: &na::Matrix3x4<f64>, b: &na::Matrix3x4<f64>) -> boo
     b_edges.set_column(4, &(b.column(3) - b.column(1)));
     // ref: FaceB_2 uses a - b.col(1)
     let different_diff = {
-        let mut tmp = a.clone();
+        let mut tmp = *a;
         tmp.column_iter_mut().for_each(|mut c| c -= b.column(1));
         tmp
     };
@@ -382,7 +382,7 @@ pub fn approximate_tetrahedron_overlap_volume(a: &na::Matrix3x4<f64>, b: &na::Ma
      let bounding_max = Vector3::from_fn(|dim, _| a.row(dim).max().max(b.row(dim).max()));
      // All columns of a and b inside the bounding box
      debug_assert!(a.column_iter().chain(b.column_iter()).all(|c| 
-         c.iter().enumerate().all(|(dim, v)| (bounding_min[dim]..=bounding_max[dim]).contains(&v)) 
+         c.iter().enumerate().all(|(dim, v)| (bounding_min[dim]..=bounding_max[dim]).contains(v)) 
      ));
      let box_widths = bounding_max - bounding_min;
      debug_assert!(box_widths.iter().all(|&v| v >= 0.0));
@@ -390,7 +390,7 @@ pub fn approximate_tetrahedron_overlap_volume(a: &na::Matrix3x4<f64>, b: &na::Ma
      let mut rng = rand::thread_rng();
      let in_overlap_count = (0..NUM_SAMPLES).filter(|_| {
          let sample = {
-             let mut tmp = box_widths.clone();
+             let mut tmp = box_widths;
              tmp.iter_mut().for_each(|c| *c *= rng.gen::<f64>());
              bounding_min + tmp
          };

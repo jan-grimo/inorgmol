@@ -19,8 +19,12 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
         Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
     }
 
-    pub fn from_index(n: usize, i: usize) -> Bijection<Key, Value> {
-        Bijection::new(Permutation::from_index(n, i))
+    pub fn new_random(n: usize) -> Bijection<Key, Value> {
+        Bijection::new(Permutation::new_random(n))
+    }
+
+    pub fn try_from_index(n: usize, i: usize) -> Option<Bijection<Key, Value>> {
+        Permutation::try_from_index(n, i).map(Bijection::new)
     }
 
     pub fn identity(n: usize) -> Bijection<Key, Value> {
@@ -127,12 +131,12 @@ mod tests {
 
     #[test]
     fn basics() {
-        let f1 = Bijection::<Foo, Bar>::new(Permutation::from_index(4, 3));
+        let f1 = Bijection::<Foo, Bar>::new(Permutation::try_from_index(4, 3).expect("Valid index"));
         let f1_at_two = Bar::from(f1.permutation.sigma[2]);
         assert_eq!(f1.get(&Foo(2)), Some(f1_at_two));
         assert_eq!(f1.inverse_of(&f1_at_two), Some(Foo::from(2)));
 
-        let f2 = Bijection::<Bar, Baz>::new(Permutation::from_index(4, 3));
+        let f2 = Bijection::<Bar, Baz>::new(Permutation::try_from_index(4, 3).expect("Valid index"));
         let f3 = f1.compose(&f2).unwrap();
         assert_eq!(f3.permutation, f1.permutation.compose(&f2.permutation).unwrap());
 

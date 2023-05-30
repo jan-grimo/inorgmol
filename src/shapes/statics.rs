@@ -3,10 +3,6 @@ use crate::permutation::Permutation;
 
 // TODO 
 // - Improve coordinates and tighten MAX_COLUMN_DEVIATION
-// - Consider whether to allow shape set modification at runtime
-//   - Would imply no Name enum, or a string identifier
-//   - Adding a shape at runtime would entail runtime property tests
-//   - Would need to think about how SHAPES will work and related caches
 
 use std::f64::consts::{FRAC_1_SQRT_2, SQRT_2};
 

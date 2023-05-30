@@ -6,8 +6,10 @@ use strong::bijection::Bijection;
 use itertools::Itertools;
 
 // TODO
-// - Better line colors
-// - Fairly certain it would be more valid benchmarking if it wasn't the same input every time
+// - Better line colors (no idea how)
+// - Fairly certain it would be better benchmarking if it wasn't the same input
+//   every time, since inputs have different calculation times due to branch
+//   pruning
 
 fn similarities(c: &mut Criterion) {
     let mut bench_group = c.benchmark_group("similarities");
@@ -39,7 +41,7 @@ fn similarities(c: &mut Criterion) {
         let rotation = quaternions::random_rotation().to_rotation_matrix();
         let shape_rotated: StrongPoints<shapes::Vertex> = StrongPoints::new(shapes::similarity::unit_sphere_normalize(rotation * shape_coordinates));
         let bijection: Bijection<shapes::Vertex, shapes::Column> = {
-            let mut p = permutation::Permutation::random(shape.num_vertices());
+            let mut p = permutation::Permutation::new_random(shape.num_vertices());
             p.sigma.push(p.set_size());
             strong::bijection::Bijection::new(p)
         };
@@ -51,7 +53,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("reference", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron_reference_base::<false>(black_box(cloud.matrix.clone()), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron_reference_base::<false>(black_box(cloud.matrix.clone()), black_box(shape)))
             );
         }
 
@@ -59,7 +61,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("skip", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron_reference(black_box(cloud.matrix.clone()), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron_reference(black_box(cloud.matrix.clone()), black_box(shape)))
             );
         }
 
@@ -67,7 +69,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("prematch", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, false, false>(black_box(cloud.matrix.clone()), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, false, false>(black_box(cloud.matrix.clone()), black_box(shape)))
             );
         }
 
@@ -75,7 +77,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("prematch, skip", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, true, false>(black_box(cloud.matrix.clone()), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, true, false>(black_box(cloud.matrix.clone()), black_box(shape)))
             );
         }
 
@@ -83,7 +85,7 @@ fn similarities(c: &mut Criterion) {
             bench_group.bench_with_input(
                 BenchmarkId::new("prematch, skip, jv", size as u64),
                 &(size as u64),
-                |b, _| b.iter(|| shapes::similarity::polyhedron(black_box(cloud.matrix.clone()), black_box(shape.name)))
+                |b, _| b.iter(|| shapes::similarity::polyhedron(black_box(cloud.matrix.clone()), black_box(shape)))
             );
         }
     }

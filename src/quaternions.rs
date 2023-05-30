@@ -195,7 +195,7 @@ mod tests {
     fn with_map_zero_msd() {
         let v = 6;
         let case = Case::new(v);
-        let permutation = Permutation::random(v);
+        let permutation = Permutation::new_random(v);
         let permuted_rotor = Rotor::from(apply_permutation(&case.rotor.matrix, &permutation));
         let partial_permutation = {
             let mut p = HashMap::new();

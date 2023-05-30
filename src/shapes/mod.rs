@@ -12,7 +12,7 @@ use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
 use crate::permutation::{Permutation, permutations};
 use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Name {
     // 2
     Line,
@@ -192,9 +192,6 @@ pub enum InvalidVerticesError {
     #[error("There are duplicate vertices in the shape coordinates")]
     DuplicateVertices
 }
-
-// TODO if it makes sense, move methods acting on coordinates only into an impl
-// of a tuple-wrapping struct VertexCoords
 
 impl Shape {
     fn is_unit_spherical(coordinates: &Matrix3N) -> bool {
@@ -883,7 +880,7 @@ mod tests {
     #[test]
     fn is_rotation_works() {
         let tetr_rotations = TETRAHEDRON.generate_rotations();
-        let occupation: Bijection<Vertex, Column> = Bijection::from_index(4, 23);
+        let occupation: Bijection<Vertex, Column> = Bijection::new_random(TETRAHEDRON.num_vertices());
         for rot in &tetr_rotations {
             let rotated_occupation = rot.compose(&occupation).expect("fine");
             assert!(Shape::is_rotation(&occupation, &rotated_occupation, &tetr_rotations));

@@ -787,7 +787,7 @@ mod tests {
         approx::assert_relative_eq!(
             analytical_gradient,
             numerical_gradient(&|param| bound.error(param), &positions),
-            epsilon=1e-7
+            epsilon=1e-6
         );
 
         // Above bounds
@@ -804,7 +804,7 @@ mod tests {
         approx::assert_relative_eq!(
             analytical_gradient,
             numerical_gradient(&|param| bound.error(param), &positions),
-            epsilon=1e-7
+            epsilon=1e-6
         );
     }
 

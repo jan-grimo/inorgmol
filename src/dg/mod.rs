@@ -117,7 +117,7 @@ impl DistanceBounds {
         };
 
         for k in 0..n {
-            for i in (0..(n-1)).filter(|&x| x != k) { // TODO maybe split range
+            for i in (0..k).chain((k + 1)..(n-1)) {
                 let (ik_lower, ik_upper) = idx_tuples(i, k);
 
                 if self.mat[ik_lower] > self.mat[ik_upper] {

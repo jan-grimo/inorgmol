@@ -488,7 +488,7 @@ mod tests {
     #[test]
     fn column_permutation() {
         let n = 6;
-        let permutation = Permutation::random(n);
+        let permutation = Permutation::new_random(n);
 
         let stator = random_cloud(n);
         let permuted = apply_permutation(&stator, &permutation);
@@ -549,7 +549,7 @@ mod tests {
 
         fn random(shape: &Shape) -> Case {
             let bijection = {
-                let mut p = Permutation::random(shape.num_vertices());
+                let mut p = Permutation::new_random(shape.num_vertices());
                 p.sigma.push(p.set_size());
                 Bijection::new(p)
             };
@@ -560,7 +560,7 @@ mod tests {
 
         fn indexed(shape: &Shape, index: usize) -> Case {
             let bijection = {
-                let mut p = Permutation::from_index(shape.num_vertices(), index);
+                let mut p = Permutation::try_from_index(shape.num_vertices(), index).expect("Valid index");
                 p.sigma.push(p.set_size());
                 Bijection::new(p)
             };
