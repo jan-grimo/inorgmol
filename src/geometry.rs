@@ -160,7 +160,7 @@ fn separating_plane_face_b(diff: &na::Matrix3x4<f64>, normal: &na::Vector3<f64>)
 /// Adapted from "Fast tetrahedron-tetrahedron overlap algorithm" by Fabio Ganovelli,
 /// Federico Ponchio and Claudio Rocchini: Fast Tetrahedron-Tetrahedron Overlap Algorithm, Journal
 /// of Graphics Tools, 7(2), 2002. DOI: 10.1080/10867651.2002.10487557. Original source code
-/// archived at http://web.archive.org/web/20031130075955/http://www.acm.org/jgt/papers/GanovelliPonchioRocchini02/tet_a_tet.html
+/// archived at [http://web.archive.org/web/20031130075955/http://www.acm.org/jgt/papers/GanovelliPonchioRocchini02/tet_a_tet.html](web.archive.org)
 ///
 /// NOTE: Finicky edge case: If the two tetrahedra have any matching vertices, this method says
 /// they overlap
@@ -347,7 +347,8 @@ pub fn point_tetrahedron_relation(tetrahedron: &na::Matrix3x4<f64>, point: &na::
 
 /// Select a random point in a tetrahedron
 ///
-/// Algorithm from https://vcg.isti.cnr.it/activities/OLD/geometryegraphics/pointintetraedro.html
+/// Algorithm from
+/// [https://vcg.isti.cnr.it/activities/OLD/geometryegraphics/pointintetraedro.html](vcg.isti.cnr.it)
 pub fn random_point_in_tetrahedron(tetrahedron: &na::Matrix3x4<f64>) -> Vector3 {
     let [mut s, mut t, mut u]: [f64; 3] = rand::random();
 

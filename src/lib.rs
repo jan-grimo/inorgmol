@@ -7,3 +7,4 @@ pub mod quaternions;
 pub mod strong;
 pub mod geometry;
 pub mod dg;
+pub mod inertia;

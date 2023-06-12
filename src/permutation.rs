@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::ops::Index;
 use core::convert::TryFrom;
 use num_traits::int::PrimInt;
@@ -178,18 +179,25 @@ impl Permutation {
         Some(Permutation {sigma})
     }
 
-    /// Find a permutation ordering a container's elements
+    /// Find a permutation ordering a slice's elements
+    pub fn ordering_by<T, F>(slice: &[T], compare: F) -> Permutation 
+        where F: Fn(&T, &T) -> Ordering
+    {
+        let mut p = Permutation::identity(slice.len());
+        p.sigma.sort_by(|&i, &j| compare(&slice[i], &slice[j]));
+        p.inverse()
+    }
+
+    /// Find a permutation ordering a slice's elements
     /// ```
     /// # use molassembler::permutation::Permutation;
     /// let container = vec![-3, 2, 0];
-    /// let p = Permutation::ordering(&container);
+    /// let p = Permutation::ordering(container.as_slice());
     /// assert_eq!(p, Permutation::try_from_index(3, 1).unwrap());
     /// assert_eq!(p.apply(&container), Ok(vec![-3, 0, 2]));
     /// ```
-    pub fn ordering<T: Ord>(container: &Vec<T>) -> Permutation {
-        let mut p = Permutation::identity(container.len());
-        p.sigma.sort_by(|i, j| container[*i].cmp(&container[*j]));
-        p
+    pub fn ordering<T: Ord>(slice: &[T]) -> Permutation {
+        Self::ordering_by(slice, |a, b| a.cmp(b))
     }
 
     /// Determine the index of a permutation in its lexicographic order
@@ -307,6 +315,14 @@ impl Permutation {
     /// ```
     pub fn apply<T: Copy>(&self, other: &Vec<T>) -> Result<Vec<T>, PermutationError> {
         slice_apply(self.sigma.as_slice(), other.as_slice()).ok_or(PermutationError::LengthMismatch)
+    }
+
+    pub fn apply_collect<B, T: Copy>(&self, slice: &[T]) -> Result<B, PermutationError> 
+        where B: FromIterator<T>
+    {
+        slice_apply(self.sigma.as_slice(), slice)
+            .map(|v| B::from_iter(v.into_iter()))
+            .ok_or(PermutationError::LengthMismatch)
     }
 
     /// Compose two permutations into a new permutation
@@ -546,6 +562,21 @@ mod tests {
             let v_reconstructed = p.inverse().apply(&w)?;
             assert_eq!(v, v_reconstructed);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn ordering_permutation() -> Result<(), PermutationError> {
+        let indices: Vec<usize> = (0..10).collect();
+        let disordering = Permutation::new_random(indices.len());
+        let disordered = disordering.apply(&indices)?;
+
+        let ordering = Permutation::ordering(&disordered);
+        let ordered = ordering.apply(&disordered)?;
+
+        assert_eq!(indices, ordered);
+        assert_eq!(disordering.inverse(), ordering);
 
         Ok(())
     }

@@ -8,6 +8,13 @@
     multidentate ligands
 - Parametrizeable shapes (e.g. for symmetric distortions in octahedron or
   bipyramids)
+- I think that the ordering of stereopermutations is dependent on the ordering
+  of vertices in shape coordinates, and is therefore somewhat arbitrary. Can
+  there be a general canonical order without resorting to choosing a different
+  system for each shape (as in nomenclature)?
+  - Maybe there's some way with inertial moment axes and an ordered vector space
+    (e.g. heaviest axis along z, second heaviest along x, then ordered from
+    positive z to negative and anticlockwise around the x-y plane
 
 look through the GitLab issues again!
 

@@ -824,6 +824,35 @@ impl Shape {
         // Un-ref particles by copying
         minimal_covering_quads.into_iter().map(|arr| arr.map(|&p| p)).collect()
     }
+
+    /// Reorder coordinates into a canonical vertex order
+    ///
+    /// Canonical order is lexicographical in spherical coordinate
+    /// (theta, phi) tuples of vertices after reorienting coordinates
+    /// according to [`crate::inertia::standardize_top`]
+    ///
+    /// As long as top standardization imposes a regular z-axis orientation,
+    /// this relatively arbitrary ordered vector space should allow for vertex order
+    /// canonicalization.
+    pub fn canonicalize_coordinates(coords: Matrix3N) -> Matrix3N {
+        let (_, reoriented) = crate::inertia::standardize_top(coords);
+
+        // Order points by z coordinate first (theta), then by phi
+        let z_phis: Vec<_> = reoriented.column_iter()
+            .map(|v| {
+                let phi = (v.x / (v.x.powi(2) + v.y.powi(2)).sqrt()).acos().copysign(v.y);
+                // Round z coordinates so that coordinates approximately sharing a plane are equal
+                // TODO this isn't going to work so great away from z=0, need something like fuzzy
+                // equality instead
+                const DIGITS: i32 = 4;
+                let rounded_z = (10.0_f64.powi(DIGITS) * v.z).round() / 10.0_f64.powi(DIGITS);
+                (rounded_z, phi)
+            })
+            .collect();
+
+        let ordering = Permutation::ordering_by(&z_phis, |a, b| a.partial_cmp(b).expect("No NaNs"));
+        apply_permutation(&reoriented, &ordering)
+    }
 }
 
 pub mod statics;
@@ -885,5 +914,43 @@ mod tests {
             let rotated_occupation = rot.compose(&occupation).expect("fine");
             assert!(Shape::is_rotation(&occupation, &rotated_occupation, &tetr_rotations));
         }
+    }
+
+    fn assert_canonical_vertex_orders_for(shape: &Shape) {
+        let expected_canon = Shape::canonicalize_coordinates(shape.coordinates.clone());
+
+        for _ in 0..3 {
+            let scrambled_coords = {
+                let random_rotation = na::Rotation3::from_axis_angle(
+                    &na::Unit::new_normalize(na::Vector3::new_random()),
+                    rand::random::<f64>() * std::f64::consts::TAU
+                );
+                let random_permutation = Permutation::new_random(shape.num_vertices());
+
+                let rotated = random_rotation * shape.coordinates.clone();
+                apply_permutation(&rotated, &random_permutation)
+            };
+
+            let canonicalized = Shape::canonicalize_coordinates(scrambled_coords);
+
+            let fit = crate::quaternions::fit(&expected_canon, &canonicalized);
+            assert!(fit.msd < 1e-6);
+        }
+    }
+
+    #[test]
+    fn canonical_vertex_orders() {
+        // Shapes with unique inertial axes
+        assert_canonical_vertex_orders_for(&LINE);
+        assert_canonical_vertex_orders_for(&TRIGONALBIPYRAMID);
+        assert_canonical_vertex_orders_for(&PENTAGONALBIPYRAMID);
+        assert_canonical_vertex_orders_for(&SQUARE);
+
+        // Asymmetric tops
+        // TODO
+
+        // Spherical tops
+        assert_canonical_vertex_orders_for(&TETRAHEDRON);
+        assert_canonical_vertex_orders_for(&OCTAHEDRON);
     }
 }
