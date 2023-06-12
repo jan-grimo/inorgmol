@@ -67,7 +67,7 @@ fn similarities(c: &mut Criterion) {
 
         if size > 5 && size <= 10 {
             bench_group.bench_with_input(
-                BenchmarkId::new("prematch", size as u64),
+                BenchmarkId::new("prematch(5)", size as u64),
                 &(size as u64),
                 |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, false, false>(black_box(cloud.matrix.clone()), black_box(shape)))
             );
@@ -75,7 +75,7 @@ fn similarities(c: &mut Criterion) {
 
         if size > 5 {
             bench_group.bench_with_input(
-                BenchmarkId::new("prematch, skip", size as u64),
+                BenchmarkId::new("prematch(5), skip", size as u64),
                 &(size as u64),
                 |b, _| b.iter(|| shapes::similarity::polyhedron_base::<5, true, false>(black_box(cloud.matrix.clone()), black_box(shape)))
             );
@@ -83,11 +83,24 @@ fn similarities(c: &mut Criterion) {
 
         if size > 7 {
             bench_group.bench_with_input(
-                BenchmarkId::new("prematch, skip, jv", size as u64),
+                BenchmarkId::new("prematch(5), skip, jv", size as u64),
                 &(size as u64),
                 |b, _| b.iter(|| shapes::similarity::polyhedron(black_box(cloud.matrix.clone()), black_box(shape)))
             );
+
+            bench_group.bench_with_input(
+                BenchmarkId::new("prematch(4), skip, jv", size as u64),
+                &(size as u64),
+                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<4, true, true>(black_box(cloud.matrix.clone()), black_box(shape)))
+            );
+
+            bench_group.bench_with_input(
+                BenchmarkId::new("prematch(3), skip, jv", size as u64),
+                &(size as u64),
+                |b, _| b.iter(|| shapes::similarity::polyhedron_base::<3, true, true>(black_box(cloud.matrix.clone()), black_box(shape)))
+            );
         }
+
     }
 }
 

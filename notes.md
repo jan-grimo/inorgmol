@@ -15,6 +15,9 @@
   - Maybe there's some way with inertial moment axes and an ordered vector space
     (e.g. heaviest axis along z, second heaviest along x, then ordered from
     positive z to negative and anticlockwise around the x-y plane
+  - Need to expand testing to all shapes, but expecting failure: asymmetric tops
+    need a different form of standardization and there are shapes where even z
+    axis +/- orientation is important, such as square pyramid
 
 look through the GitLab issues again!
 
@@ -37,7 +40,7 @@ Think about this again, and hard! Is this really wanted?
 
 ## Plan
 
-- rename `Name` to `StaticName` (or similar) with LSP and add
+- rename `Name` to `StaticName` (or `BuiltIn` or so) with LSP and add
 
   ```rust
   #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -81,17 +84,16 @@ Think about this again, and hard! Is this really wanted?
   - Missing: `refine<F: Float>`: Maybe needs a PR with argmin or some
     trait specializations
 - Documentation (deny undocumented and work through all)
-- Check shape analysis methods (e.g. rotation finding, superposable vertex sets,
-  tetrahedra, etc.)
-  - Coolest way to do this would be to make a molecular viewer with bevy and
-    highlight the results
+- Check shape analysis methods
+  - [x] rotation finding
+  - [x] superposable vertex sets
+  - [ ] tetrahedra (buggy!)
+  - [ ] mirror
 
 
 # Fun to do
 
 - Improve the polyhedron functions with the new ideas (see inline TODOs)
-- Add basic molecule support
-- Make a molecule viewer with bevy
 
 
 # Ideas

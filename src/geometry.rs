@@ -376,35 +376,33 @@ pub fn random_point_in_tetrahedron(tetrahedron: &na::Matrix3x4<f64>) -> Vector3 
 
 /// TODO: rewrite to statistical digit convergence criterion instead of number of samples
 pub fn approximate_tetrahedron_overlap_volume(a: &na::Matrix3x4<f64>, b: &na::Matrix3x4<f64>) -> f64 {
-     const NUM_SAMPLES: usize = 2000;
-     
-     // Figure out bounding box, then monte carlo sample points within the volume
-     let bounding_min = Vector3::from_fn(|dim, _| a.row(dim).min().min(b.row(dim).min()));
-     let bounding_max = Vector3::from_fn(|dim, _| a.row(dim).max().max(b.row(dim).max()));
-     // All columns of a and b inside the bounding box
-     debug_assert!(a.column_iter().chain(b.column_iter()).all(|c| 
-         c.iter().enumerate().all(|(dim, v)| (bounding_min[dim]..=bounding_max[dim]).contains(v)) 
-     ));
-     let box_widths = bounding_max - bounding_min;
-     debug_assert!(box_widths.iter().all(|&v| v >= 0.0));
+    // TODO try std::simd?
 
-     let mut rng = rand::thread_rng();
-     let in_overlap_count = (0..NUM_SAMPLES).filter(|_| {
-         let sample = {
-             let mut tmp = box_widths;
-             tmp.iter_mut().for_each(|c| *c *= rng.gen::<f64>());
-             bounding_min + tmp
-         };
-         // Random vector is in bounding box
-         debug_assert!(sample.iter().enumerate().all(|(dim, v)| (bounding_min[dim]..=bounding_max[dim]).contains(v)));
-         let in_a = point_tetrahedron_relation(a, &sample).expect("Valid tetrahedron a") == PointTetrahedronRelation::Inside;
-         let in_b = point_tetrahedron_relation(b, &sample).expect("Valid tetrahedron b") == PointTetrahedronRelation::Inside;
-         in_a && in_b
-     }).count();
+    const NUM_SAMPLES: usize = 2000;
 
-     let bounding_box_volume = box_widths.into_iter().fold(1.0, |acc, v| acc * v);
-     debug_assert!(bounding_box_volume > 0.0);
-     bounding_box_volume * (in_overlap_count as f64) / (NUM_SAMPLES as f64)
+    // Figure out bounding box, then monte carlo sample points within the volume
+    let bounding_min = Vector3::from_fn(|dim, _| a.row(dim).min().min(b.row(dim).min()));
+    let bounding_max = Vector3::from_fn(|dim, _| a.row(dim).max().max(b.row(dim).max()));
+    let box_widths = bounding_max - bounding_min;
+    debug_assert!(box_widths.iter().all(|&v| v >= 0.0));
+
+    let mut rng = rand::thread_rng();
+    let in_overlap_count = (0..NUM_SAMPLES).filter(|_| {
+        let sample = {
+            let mut tmp = box_widths;
+            tmp.iter_mut().for_each(|c| *c *= rng.gen::<f64>());
+            bounding_min + tmp
+        };
+        // Random vector is in bounding box
+        debug_assert!(sample.iter().enumerate().all(|(dim, v)| (bounding_min[dim]..=bounding_max[dim]).contains(v)));
+        let in_a = point_tetrahedron_relation(a, &sample).expect("Valid tetrahedron a") == PointTetrahedronRelation::Inside;
+        let in_b = point_tetrahedron_relation(b, &sample).expect("Valid tetrahedron b") == PointTetrahedronRelation::Inside;
+        in_a && in_b
+    }).count();
+
+    let bounding_box_volume = box_widths.into_iter().fold(1.0, |acc, v| acc * v);
+    debug_assert!(bounding_box_volume > 0.0);
+    bounding_box_volume * (in_overlap_count as f64) / (NUM_SAMPLES as f64)
 }
 
 #[cfg(test)]

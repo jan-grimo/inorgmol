@@ -202,12 +202,19 @@ impl Shape {
 
     fn has_duplicate_vertices(coordinates: &Matrix3N) -> bool {
         let n = coordinates.ncols();
-        (0..n).combinations(2).any(|v| {
-            (coordinates.column(v[0]) - coordinates.column(v[1])).norm_squared() < 1e-3 
+        (0..n).tuple_combinations().any(|(i, j)| {
+            (coordinates.column(i) - coordinates.column(j)).norm_squared() < 1e-3 
         })
     }
 
-    // Construct a new shape
+    /// Construct a new shape
+    ///
+    /// Constructs a new shape from a name and coordinates.
+    ///
+    /// Coordinates must:
+    /// - be unit spherical with a low tolerance
+    /// - not contain an explicit centroid vertex
+    /// - not have duplicate vertices
     pub fn try_new(name: Name, coordinates: Matrix3N) -> Result<Shape, InvalidVerticesError> {
         if coordinates.column_iter().any(|v| v.norm_squared() < 1e-3) {
             return Err(InvalidVerticesError::ExplicitCentroid);
@@ -770,7 +777,6 @@ impl Shape {
         };
 
         if quads.len() > 100 {
-            println!("Triggered quad reduction with {} quads", quads.len());
             // Too many quads, limit to two-vertex overlap
             let mut limited = Vec::new();
             for q in quads {
@@ -778,11 +784,11 @@ impl Shape {
                     limited.push(q);
                 }
             }
-            quads = Vec::from_iter(limited.into_iter());
+            quads = limited;
         }
 
         // Find selection of quads that covers all vertices with minimal overlap
-        let q = dbg!(quads.len());
+        let q = quads.len();
         let min_k = (n as f32 / 4.0).ceil() as usize;
         let (minimal_covering_quads, _) = (min_k..=q)
             .map(|i| quads.iter().combinations(i))
@@ -798,13 +804,13 @@ impl Shape {
                     }
 
                     let vertex_overlap: usize = quad_combination.iter()
-                        .combinations(2)
-                        .map(|quad_vec| quad_vertex_overlap(**quad_vec[0], **quad_vec[1]))
+                        .tuple_combinations()
+                        .map(|(&i, &j)| quad_vertex_overlap(*i, *j))
                         .sum();
 
                     let volume_overlap: f64 = quad_combination.iter()
-                        .combinations(2)
-                        .map(|quad_vec| quad_volume_overlap(**quad_vec[0], **quad_vec[1]))
+                        .tuple_combinations()
+                        .map(|(&i, &j)| quad_volume_overlap(*i, *j))
                         .sum();
 
                     let overlap = (vertex_overlap, volume_overlap);

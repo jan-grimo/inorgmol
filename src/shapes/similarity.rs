@@ -245,6 +245,20 @@ pub struct Similarity {
     pub csm: f64,
 }
 
+pub fn polyhedron_reference_base_inner(
+    generator: impl Iterator<Item = Bijection<Column, Vertex>>,
+    cloud: &StrongPoints<Column>,
+    shape_coordinates: &StrongPoints<Vertex>
+) -> (Bijection<Column, Vertex>, crate::quaternions::Fit)
+{
+    generator.map(|p| {
+            let fit = shape_coordinates.quaternion_fit_with_rotor(&cloud.apply_bijection(&p));
+            (p, fit)
+        })
+        .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("No NaNs in MSDs"))
+        .expect("There is always at least one permutation available to try")
+}
+
 /// Polyhedron similarity performing quaternion fits on all rotationally distinct bijections
 pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
     let n = x.ncols();
@@ -258,19 +272,10 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Sha
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = StrongPoints::new(unit_sphere_normalize(shape_coordinates));
 
-    type BijectionGenerator = dyn Iterator<Item = Bijection<Column, Vertex>>;
-    let bijection_generator: Box<BijectionGenerator> = match USE_SKIPS {
-        true => Box::new(SkipsBijectionGenerator::new(shape)),
-        false => Box::new(bijections(n))
+    let (best_bijection, best_fit) = match USE_SKIPS {
+        true => polyhedron_reference_base_inner(SkipsBijectionGenerator::new(shape), &cloud, &shape_coordinates),
+        false => polyhedron_reference_base_inner(bijections(n), &cloud, &shape_coordinates),
     };
-
-    let (best_bijection, best_fit) = bijection_generator
-        .map(|p| {
-            let fit = shape_coordinates.quaternion_fit_with_rotor(&cloud.apply_bijection(&p));
-            (p, fit)
-        })
-        .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("No NaNs in MSDs"))
-        .expect("There is always at least one permutation available to try");
 
     let best_bijection = best_bijection.inverse();
 
@@ -447,7 +452,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
      * positions once here for the minimization so that memory access is in-order
      * during the repeated scaling minimization function calls.
      *
-     * NOTE: The bijection gets inverted here
+     * NOTE: The bijection is inverted here
      */
     let best_bijection = {
         let mut p = Permutation::identity(n);

@@ -7,6 +7,31 @@ extern crate nalgebra as na;
 // calculation, which is assumed to be the bottleneck in large molecule
 // refinements.
 
+#[cfg(feature = "gpu")]
+fn gpu_bench<T>(
+    bench_group: &mut criterion::BenchmarkGroup<T>,
+    refinement_n: u64,
+    refinement_bounds: dg::refinement::Bounds<f64>,
+    linear_positions: &na::DVector<f64>
+) 
+    where T: criterion::measurement::Measurement 
+{
+    let gpu = dg::gpu::GpuRefinement::new(refinement_bounds);
+    bench_group.bench_with_input(
+        BenchmarkId::new("gpu", refinement_n),
+        &refinement_n,
+        |b, _| b.iter(|| gpu.gradient(black_box(linear_positions)))
+    );
+}
+
+#[cfg(not(feature = "gpu"))]
+fn gpu_bench<T>(
+    _bench_group: &mut criterion::BenchmarkGroup<T>,
+    _refinement_n: u64,
+    _refinement_bounds: dg::refinement::Bounds<f64>,
+    _linear_positions: &na::DVector<f64>
+) where T: criterion::measurement::Measurement {}
+
 fn refinement(c: &mut Criterion) {
     let mut bench_group = c.benchmark_group("refinement");
     let plot_config = criterion::PlotConfiguration::default()
@@ -46,12 +71,8 @@ fn refinement(c: &mut Criterion) {
             |b, _| b.iter(|| parallel.gradient(black_box(&linear_positions)))
         );
 
-        let gpu = dg::gpu::GpuRefinement::new(refinement_bounds);
-        bench_group.bench_with_input(
-            BenchmarkId::new("gpu", refinement_n),
-            &refinement_n,
-            |b, _| b.iter(|| gpu.gradient(black_box(&linear_positions)))
-        );
+        #[allow(clippy::unnecessary_mut_passed)]
+        gpu_bench(&mut bench_group, refinement_n, refinement_bounds, &linear_positions);
     }
 }
 

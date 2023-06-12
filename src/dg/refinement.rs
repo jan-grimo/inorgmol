@@ -725,7 +725,7 @@ mod tests {
 
             itertools::assert_equal(
                 StrictUpperTriangleIndices::new(i), 
-                (0..i).combinations(2).map(|v| (v[0], v[1]))
+                (0..i).tuple_combinations()
             );
 
             let mut iter = StrictUpperTriangleIndices::new(i);

@@ -3,8 +3,8 @@ use crate::permutation::Permutation;
 extern crate nalgebra as na;
 use na::base::dimension::{U1, U3};
 
-pub struct Moments(na::Vector3<f64>);
-pub struct Axes(na::Matrix3<f64>);
+pub struct Moments(pub na::Vector3<f64>);
+pub struct Axes(pub na::Matrix3<f64>);
 
 impl Moments {
     pub fn degeneracy(&self) -> usize {
@@ -18,7 +18,7 @@ impl Moments {
     }
 }
 
-pub fn principal_inertial_moments(particles: &na::Matrix3xX<f64>) -> (Moments, Axes) {
+pub fn moments_axes(particles: &na::Matrix3xX<f64>) -> (Moments, Axes) {
     let mut inertial_mat = na::Matrix3::<f64>::zeros();
 
     for col in particles.column_iter() {
@@ -157,7 +157,7 @@ impl Default for CoordinateSystem {
 /// - Spherical: Arbitrary particle to +z
 ///
 pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64>) {
-    let (moments, axes) = principal_inertial_moments(&particles);
+    let (moments, axes) = moments_axes(&particles);
     let degeneracy = moments.degeneracy();
 
     if degeneracy == 1 {

@@ -23,8 +23,7 @@ pub fn shape_into_bounds(shape: &Shape) -> DistanceBounds {
     particles.push(Particle::Origin);
 
     // Distances between all particles
-    for particle_pair_vec in particles.iter().combinations(2) {
-        let [a, b]: [&Particle; 2] = particle_pair_vec.try_into().expect("Matching size");
+    for (a, b) in particles.iter().tuple_combinations() {
         let distance = (shape.particle_position(*a) - shape.particle_position(*b)).norm();
         let delta = distance * TOLERANCE_PERCENT / 100.0;
 

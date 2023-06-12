@@ -14,7 +14,6 @@ extern crate nalgebra as na;
 struct GpuHandles {
     device: wgpu::Device,
     queue: wgpu::Queue,
-    shader: wgpu::ShaderModule,
     pipeline: wgpu::ComputePipeline,
 }
 
@@ -52,7 +51,7 @@ impl GpuHandles {
             entry_point: "main",
         });
 
-        Some(GpuHandles {device, queue, shader, pipeline})
+        Some(GpuHandles {device, queue, pipeline})
     }
 
     fn new() -> Option<GpuHandles> {

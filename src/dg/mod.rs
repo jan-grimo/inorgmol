@@ -295,4 +295,6 @@ impl MetricMatrix {
 
 pub mod refinement;
 pub mod modeling;
+
+#[cfg(feature = "gpu")]
 pub mod gpu;

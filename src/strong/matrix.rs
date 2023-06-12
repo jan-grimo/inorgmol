@@ -21,6 +21,7 @@ impl<'a, I> AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
         AsNewTypeIndexedMatrix {matrix, index_type: PhantomData}
     }
 
+    /// Access a column of the matrix
     pub fn column(&self, index: I) -> na::VectorView3<'a, f64> {
         self.matrix.column(index.get().to_usize().expect("Conversion failure"))
     }
@@ -43,6 +44,7 @@ impl<'a, I> AsNewTypeIndexedMatrix<'a, I> where I: NewTypeIndex {
         quaternions::quaternion_decomposition(a)
     }
 
+    /// Permute the matrix into a different index space
     pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
         StrongPoints::new(apply_permutation(self.matrix, &bijection.permutation))
     }
@@ -74,6 +76,7 @@ impl<I> StrongPoints<I> where I: NewTypeIndex {
         self.raise().quaternion_fit_with_map(rotor.raise(), map)
     }
 
+    /// Apply a bijection
     pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> StrongPoints<J> where J: NewTypeIndex {
         self.raise().apply_bijection(bijection)
     }
