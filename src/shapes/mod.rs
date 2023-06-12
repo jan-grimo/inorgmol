@@ -129,9 +129,9 @@ impl std::fmt::Display for Vertex {
 }
 
 /// A rotation of vertices is the equivalent of an SO(3) rotation in vertex space
-type Rotation = Bijection<Vertex, Vertex>;
+pub type Rotation = Bijection<Vertex, Vertex>;
 /// A mirror is a sigma symmetry element of a shape, in vertex space
-type Mirror = Bijection<Vertex, Vertex>;
+pub type Mirror = Bijection<Vertex, Vertex>;
 
 /// Shape particles are either vertices, or the implicit origin
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
