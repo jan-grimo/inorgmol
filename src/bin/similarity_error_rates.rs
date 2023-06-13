@@ -1,40 +1,167 @@
-use molassembler::shapes::similarity::{unit_sphere_normalize, apply_permutation, Similarity, SimilarityError};
+use molassembler::strong::Index;
+use molassembler::strong::matrix::StrongPoints;
+use molassembler::shapes::similarity::{skip_vertices, polyhedron_reference, unit_sphere_normalize, apply_permutation, SimilarityError};
 use molassembler::quaternions::Matrix3N;
 use molassembler::permutation::Permutation;
 use molassembler::strong::bijection::Bijection;
 use molassembler::quaternions::random_rotation;
 use molassembler::shapes::*;
 
+use statrs::statistics::Statistics as OtherStatistics;
 use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 
 // NOTES
-// - sample output: 
-//
-//   4 shapes of size 6, 100 repetitions
-//   prematch(5): [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-//   prematch(4): [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]
-//   prematch(3): [0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 2]
-//   
-//   3 shapes of size 7, 100 repetitions
-//   prematch(5): [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-//   prematch(4): [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-//   prematch(3): [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1]
-//   
-//   4 shapes of size 8, 100 repetitions
-//   prematch(5): [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]
-//   prematch(4): [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]
-//   prematch(3): [0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 10]
-//
-//   3 shapes of size 9, 100 repetitions
-//   prematch(5): [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-//   prematch(4): [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3]
-//   prematch(3): [0, 0, 0, 0, 0, 0, 0, 1, 3, 7, 10]
+// - Trying all close-to-optimal sub-permutations generated in linear assignment 
+//   helps mitigate some failure cases.
+//   - Pessimizes average case by tracking multiple partial fits and performing multiple quaternion
+//     fits for each prematch permutation. Also requires brute force linear assignment algorithm,
+//     since near-optimal permutations are not enumerated or visited by jv.
+//   - At large distortions and few prematches, the linear assignment approximation breaks down
+//     hard enough that an arbitrary well depth threshold of 1.0 cannot mitigate all failures
+// - Better to forward to a higher prematch count if the difference between partial fit and full
+//   fit is particularly bad (dependent on current prematch count)
 //   
 
-// TODO 
-// - Review implementations and find a failure criterion for falling back onto
-//   higher prematch count implementations
+pub struct SimilarityAnalysis {
+    /// Best bijection between shape vertices and input matrix
+    pub bijection: Bijection<Vertex, Column>,
+    /// Continuous shape measure
+    pub csm: f64,
+    /// Deviation between partial and full quaternion fit msds
+    pub msd_dev: f64
+}
+
+pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_JV: bool>(x: Matrix3N, shape: &Shape) -> Result<SimilarityAnalysis, SimilarityError> {
+    const MIN_PREMATCH: usize = 2;
+    assert!(MIN_PREMATCH <= PREMATCH); // TODO trigger compilation failure? static assert?
+
+    type Occupation = Bijection<Vertex, Column>;
+    let n = x.ncols();
+    if n != shape.num_vertices() + 1 {
+        return Err(SimilarityError::ParticleNumberMismatch);
+    }
+
+    if n <= PREMATCH {
+        return polyhedron_reference(x, shape)
+            .map(|s| SimilarityAnalysis {bijection: s.bijection, csm: s.csm, msd_dev: 0.0});
+    }
+
+    let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x));
+
+    // Add centroid to shape coordinates and normalize
+    let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
+    let shape_coordinates = unit_sphere_normalize(shape_coordinates);
+    let shape_coordinates = StrongPoints::<Vertex>::new(shape_coordinates);
+
+    type PartialPermutation = HashMap<Column, Vertex>;
+
+    struct PartialMsd {
+        msd: f64,
+        mapping: PartialPermutation,
+        partial_msd: f64,
+    }
+    let left_free: Vec<Column> = (PREMATCH..n).map(Column::from).collect();
+
+    let skips = USE_SKIPS.then(|| skip_vertices(shape));
+    let narrow = (0..n)
+        .map_into::<Vertex>()
+        .permutations(PREMATCH)
+        .filter(|vertices| {
+            match USE_SKIPS {
+                true => !skips.as_ref().unwrap()[(vertices[0].get(), vertices[1].get())],
+                false => true
+            }
+        })
+        .fold(
+            PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new(), partial_msd: f64::MAX},
+            |best, vertices| -> PartialMsd {
+                let mut partial_map = PartialPermutation::with_capacity(n);
+                vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c), *v); });
+                let partial_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
+
+                // If the msd caused only by the partial map is already worse, skip
+                if partial_fit.msd > best.msd {
+                    return best;
+                }
+
+                // Assemble cost matrix of matching each pair of unmatched vertices
+                let right_free: Vec<Vertex> = (0..n)
+                    .map_into::<Vertex>()
+                    .filter(|v| !vertices.contains(v))
+                    .collect();
+
+                let v = left_free.len();
+                let prematch_rotated_shape = partial_fit.rotate_rotor(&shape_coordinates.matrix.clone());
+                let prematch_rotated_shape = StrongPoints::<Vertex>::new(prematch_rotated_shape);
+
+                let cost_fn = |i, j| (cloud.column(left_free[i]) - prematch_rotated_shape.column(right_free[j])).norm_squared();
+                let sub_permutation = match LAP_JV {
+                    true => similarity::linear_assignment::optimal(v, &cost_fn),
+                    false => similarity::linear_assignment::brute_force(v, &cost_fn)
+                };
+
+                // Fuse pre-match and best subpermutation
+                for (i, j) in sub_permutation.iter_pairs() {
+                    partial_map.insert(left_free[i], right_free[*j]);
+                }
+
+                // Make a clean quaternion fit with the full mapping
+                let full_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
+                if full_fit.msd < best.msd {
+                    PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: partial_fit.msd}
+                } else {
+                    best
+                }
+            }
+        );
+
+    let msd_dev = narrow.msd - narrow.partial_msd;
+    let is_bad_approximation = {
+        let refit_delta_threshold = match PREMATCH {
+            2 => 0.25,
+            3 => 0.375,
+            4 => 0.425,
+            _ => 0.5
+        };
+        msd_dev > refit_delta_threshold
+    };
+    if is_bad_approximation {
+        return match PREMATCH {
+            2 => polyhedron_analysis::<3, USE_SKIPS, LAP_JV>(cloud.matrix, shape),
+            3 => polyhedron_analysis::<4, USE_SKIPS, LAP_JV>(cloud.matrix, shape),
+            4 => polyhedron_analysis::<5, USE_SKIPS, LAP_JV>(cloud.matrix, shape),
+            _ => similarity::polyhedron_reference(cloud.matrix, shape)
+                    .map(|s| SimilarityAnalysis {bijection: s.bijection, csm: s.csm, msd_dev: 0.0})
+        };
+    }
+
+    /* Given the best permutation for the rotational fit, we still have to
+     * minimize over the isotropic scaling factor. It is cheaper to reorder the
+     * positions once here for the minimization so that memory access is in-order
+     * during the repeated scaling minimization function calls.
+     *
+     * NOTE: The bijection is inverted here
+     */
+    let best_bijection = {
+        let mut p = Permutation::identity(n);
+        narrow.mapping.iter().for_each(|(c, v)| { p.sigma[v.get()] = c.get(); });
+        Occupation::new(p)
+    };
+
+    if cfg!(debug_assertions) {
+        for (c, v) in narrow.mapping.iter() {
+            assert_eq!(best_bijection.get(v), Some(*c));
+        }
+    }
+
+    let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
+    let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
+    let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
+
+    let csm = similarity::scaling::minimize_csm(&cloud.matrix, &rotated_shape);
+    Ok(SimilarityAnalysis {bijection: best_bijection, csm, msd_dev})
+}
 
 struct Case {
     shape_name: Name,
@@ -84,7 +211,7 @@ impl Case {
         Case {shape_name: shape.name, cloud, expected_bijection: bijection}
     }
 
-    pub fn pass(&self, f: &dyn Fn(Matrix3N, &Shape) -> Result<Similarity, SimilarityError>, rotations: &HashSet<molassembler::shapes::Rotation>) -> bool {
+    pub fn pass(&self, f: &dyn Fn(Matrix3N, &Shape) -> Result<SimilarityAnalysis, SimilarityError>, rotations: &HashSet<molassembler::shapes::Rotation>) -> (bool, f64) {
         let shape = shape_from_name(self.shape_name);
         let f_similarity = f(self.cloud.clone(), shape).expect("similarity fn doesn't panic");
 
@@ -103,64 +230,94 @@ impl Case {
 
             let csm_close = (similarity.csm - f_similarity.csm).abs() < 1e-3;
 
-            csm_close && is_rotation
+            (csm_close && is_rotation, f_similarity.msd_dev)
         } else {
-            true
+            (true, f_similarity.msd_dev)
         }
     }
 }
 
 #[derive(Clone)]
 struct Statistics<'a> {
-    f: &'a dyn Fn(Matrix3N, &Shape) -> Result<Similarity, SimilarityError>,
+    f: &'a dyn Fn(Matrix3N, &Shape) -> Result<SimilarityAnalysis, SimilarityError>,
     name: String,
     distortion_failures: HashMap<usize, usize>
 }
 
 impl<'a> Statistics<'a> {
-    pub fn new(f: &'a dyn Fn(Matrix3N, &Shape) -> Result<Similarity, SimilarityError>, name: impl Into<String>) -> Statistics<'a> {
+    pub fn new(f: &'a dyn Fn(Matrix3N, &Shape) -> Result<SimilarityAnalysis, SimilarityError>, name: impl Into<String>) -> Statistics<'a> {
         Statistics {f, name: name.into(), distortion_failures: HashMap::new()}
     }
 }
 
 fn flatten(map: &HashMap<usize, usize>) -> Vec<usize> {
-    Vec::from_iter((0..=10).map(|i| map[&i]))
+    Vec::from_iter(map.keys().sorted().map(|k| map[k]))
 }
 
+const DISTORTION_START: usize = 6;
+
 fn main() {
+    println!("Distortion range: [0.{}, 1.0]", DISTORTION_START);
+
     for (shape_size, shapes) in &SHAPES.iter().group_by(|s| s.num_vertices()) {
         if !(6..10).contains(&shape_size) {
             continue;
         }
 
-        const REPETITIONS: usize = 100;
+        const REPETITIONS: usize = 200;
 
         let mut stats = [
-            // Statistics::new(&similarity::polyhedron_reference, "reference"),
-            Statistics::new(&similarity::polyhedron_base::<5, true, true>, "prematch(5)"),
-            Statistics::new(&similarity::polyhedron_base::<4, true, true>, "prematch(4)"),
-            Statistics::new(&similarity::polyhedron_base::<3, true, true>, "prematch(3)"),
+            Statistics::new(&polyhedron_analysis::<5, true, true>, "prematch(5)"),
+            Statistics::new(&polyhedron_analysis::<4, true, true>, "prematch(4)"),
+            Statistics::new(&polyhedron_analysis::<3, true, true>, "prematch(3)"),
+            Statistics::new(&polyhedron_analysis::<2, true, true>, "prematch(2)"),
         ].to_vec();
-
 
         let mut shape_count = 0;
         for shape in shapes {
             let rotations = shape.generate_rotations();
 
-            for i in 0..=10 {
+            for i in DISTORTION_START..=10 {
                 let distortion_norm = 0.1 * i as f64;
 
                 for stat in stats.iter_mut() {
-                    let fail_count = (0..REPETITIONS)
+                    struct Accumulator {
+                        failures: usize,
+                        msd_devs: (Vec<f64>, Vec<f64>),
+                    }
+
+                    let accumulated = (0..REPETITIONS)
                         .map(|_| Case::new(shape, distortion_norm).pass(stat.f, &rotations))
-                        .filter(|s| !*s)
-                        .count();
+                        .fold(
+                            Accumulator {failures: 0, msd_devs: (Vec::new(), Vec::new())},
+                            |mut acc, (pass, msd_dev)| {
+                                if pass {
+                                    acc.msd_devs.0.push(msd_dev);
+                                } else {
+                                    acc.failures += 1;
+                                    acc.msd_devs.1.push(msd_dev);
+                                }
+
+                                acc
+                            }
+                        );
 
                     if let Some(existing_failures) = stat.distortion_failures.get_mut(&i) {
-                        *existing_failures += fail_count;
+                        *existing_failures += accumulated.failures;
                     } else {
-                        stat.distortion_failures.insert(i, fail_count);
+                        stat.distortion_failures.insert(i, accumulated.failures);
                     }
+
+                    if accumulated.failures > 0 {
+                        println!("{:.2} w/ {}: success dev {:.2}. Failure dev {:.2} ({})", 
+                                 distortion_norm,
+                                 stat.name,
+                                 accumulated.msd_devs.0.mean(),
+                                 accumulated.msd_devs.1.mean(),
+                                 accumulated.failures
+                                 );
+                    }
+
                 }
             }
 

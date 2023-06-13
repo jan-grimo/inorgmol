@@ -1,11 +1,4 @@
 // TODO
-// - Consider trying to homogenize all the Case implementations
-// - Measure convergence of prematching of vertices by difference between
-//   initial quaternion fit and final, maybe fewer vertices for larger sizes is
-//   plausible because of reduced average angular differences
-// - Experiment with reducing the number of prematched vertices and finding a
-//   threshold minimal quaternion fit msd as criterion for increasing the
-//   number of prematched vertices
 // - Add (automatic?) centroid prematching
 
 extern crate nalgebra as na;
@@ -59,7 +52,7 @@ pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
     Matrix3N::from_fn(x.ncols(), |i, j| x[(i, inverse[j])])
 }
 
-mod scaling {
+pub mod scaling {
     use crate::shapes::Matrix3N;
 
     use argmin::core::{CostFunction, Error, Executor};
@@ -370,6 +363,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     struct PartialMsd {
         msd: f64,
         mapping: PartialPermutation,
+        partial_msd: f64
     }
     let left_free: Vec<Column> = (PREMATCH..n).map(Column::from).collect();
 
@@ -384,7 +378,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
             }
         })
         .fold(
-            PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new()},
+            PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new(), partial_msd: f64::MAX},
             |best, vertices| -> PartialMsd {
                 let mut partial_map = PartialPermutation::with_capacity(n);
                 vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c), *v); });
@@ -440,12 +434,34 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                 // Make a clean quaternion fit with the full mapping
                 let full_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
                 if full_fit.msd < best.msd {
-                    PartialMsd {msd: full_fit.msd, mapping: partial_map}
+                    PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: partial_fit.msd}
                 } else {
                     best
                 }
             }
         );
+
+    // We can check whether prematching and using linear assignment is a good
+    // approximation by comparing how much the msd changes between the partial
+    // fit and the full fit that includes the linear assignment subpermutation.
+    let is_bad_approximation = {
+        let refit_delta_threshold = match PREMATCH {
+            2 => 0.25,
+            3 => 0.375,
+            4 => 0.425,
+            _ => 0.5
+        };
+        (narrow.msd - narrow.partial_msd) > refit_delta_threshold
+    };
+    if is_bad_approximation {
+        // Forward to an implementation with more prematched vertices
+        return match PREMATCH {
+            2 => polyhedron_base::<3, USE_SKIPS, LAP_JV>(cloud.matrix, shape),
+            3 => polyhedron_base::<4, USE_SKIPS, LAP_JV>(cloud.matrix, shape),
+            4 => polyhedron_base::<5, USE_SKIPS, LAP_JV>(cloud.matrix, shape),
+            _ => polyhedron_reference(cloud.matrix, shape)
+        };
+    }
 
     /* Given the best permutation for the rotational fit, we still have to
      * minimize over the isotropic scaling factor. It is cheaper to reorder the
