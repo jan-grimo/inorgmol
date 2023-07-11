@@ -586,11 +586,11 @@ impl Shape {
                 if angle < 0.0 {
                     angle += std::f64::consts::TAU;
                 }
-                angle
+                NotNan::new(angle).expect("Signed angle isn't NaN")
             };
-            let mut with_signed_angles: Vec<(Vertex, f64)> = p.vertices.iter().skip(1)
+            let mut with_signed_angles: Vec<_> = p.vertices.iter().skip(1)
                 .map(|&v| (v, positive_signed_angle(v))).collect();
-            with_signed_angles.sort_by(|(_, alpha), (_, beta)| alpha.partial_cmp(beta).expect("No NaN angles"));
+            with_signed_angles.sort_by_key(|tup| tup.1);
 
             let mut ordered_vertices: Vec<Vertex> = with_signed_angles.into_iter()
                 .map(|(v, _)| v)
@@ -943,10 +943,12 @@ impl Shape {
 
             // And sort by z value
             let zs: Vec<_> = groups.iter()
-                .map(|group| reoriented.column(group.first().unwrap().get()).z)
+                .map(|group| {
+                    let z = reoriented.column(group.first().unwrap().get()).z;
+                    NotNan::new(z).expect("Not NaN")
+                })
                 .collect();
-            let ordering = Permutation::ordering_by(&zs, |a, b| a.partial_cmp(b).expect("No NaNs"));
-            ordering.apply_move(groups).expect("ordering_by produces valid Permutation")
+            Permutation::ordering(&zs).apply_move(groups).expect("ordering produces valid permutation")
         };
 
         let vertex_color: HashMap<Vertex, usize> = vertex_groups.iter()

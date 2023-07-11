@@ -531,7 +531,10 @@ mod tests {
         assert!(centroid_norm < 1e-6);
 
         // Longest vector is a unit vector
-        let longest_norm = cloud.column_iter().map(|v| v.norm()).max_by(|a, b| a.partial_cmp(b).expect("Encountered NaNs")).unwrap();
+        let longest_norm = cloud.column_iter()
+            .map(|v| v.norm())
+            .max_by(|a, b| a.partial_cmp(b).expect("Encountered NaNs"))
+            .unwrap();
         approx::assert_relative_eq!(longest_norm, 1.0);
     }
 
