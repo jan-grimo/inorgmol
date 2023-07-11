@@ -6,6 +6,7 @@ use std::collections::{HashSet, HashMap};
 use itertools::Itertools;
 use petgraph::unionfind::UnionFind;
 use thiserror::Error;
+use ordered_float::NotNan;
 
 use crate::strong::{Index, NewTypeIndex};
 use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
@@ -190,7 +191,9 @@ pub enum InvalidVerticesError {
     #[error("Shape vertices are not unit spherical")]
     NotUnitSpherical,
     #[error("There are duplicate vertices in the shape coordinates")]
-    DuplicateVertices
+    DuplicateVertices,
+    #[error("Existing routine for canonicalization is insufficient")]
+    CannotCanonicalize
 }
 
 impl Shape {
@@ -205,6 +208,65 @@ impl Shape {
         (0..n).tuple_combinations().any(|(i, j)| {
             (coordinates.column(i) - coordinates.column(j)).norm_squared() < 1e-3 
         })
+    }
+
+    fn try_canonicalize_rotation(canon: &Matrix3N, rotation: &na::Rotation3::<f64>) -> bool {
+        let rotated = rotation * canon;
+        let scramble = Permutation::new_random(canon.ncols());
+        let scrambled = apply_permutation(&rotated, &scramble);
+        let maybe_canon = Self::canonicalize_coordinates(scrambled);
+
+        let msd = canon.column_iter()
+            .zip(maybe_canon.column_iter())
+            .map(|(r_i, r_j)| (r_i - r_j).norm_squared())
+            .sum::<f64>() / canon.ncols() as f64;
+
+        dbg!(msd) < 1e-3
+    }
+
+    fn can_canonicalize(coordinates: &Matrix3N) -> bool {
+        // Some systematic canonicalization tests
+        // - Rotation around z
+        // - z axis inversion (by rotation around x)
+        //
+        // 10 random mixed rotations
+
+        let canon = Self::canonicalize_coordinates(coordinates.clone());
+
+        let z_rot = na::UnitQuaternion::from_axis_angle(
+            &na::Vector3::z_axis(),
+            std::f64::consts::PI
+        ).to_rotation_matrix();
+
+        if !Self::try_canonicalize_rotation(&canon, &z_rot) {
+            println!("Failed z rot test");
+            return false;
+        }
+
+        let inv_z_rot = na::UnitQuaternion::from_axis_angle(
+            &na::Vector3::x_axis(),
+            std::f64::consts::PI
+        ).to_rotation_matrix();
+
+        if !Self::try_canonicalize_rotation(&canon, &inv_z_rot) {
+            println!("Failed z inversion test");
+            return false;
+        }
+
+        // Three mixed rotations
+        for _ in 0..3 {
+            let rot = na::UnitQuaternion::from_axis_angle(
+                &na::Unit::new_normalize(Vector3::new_random()),
+                std::f64::consts::TAU * rand::random::<f64>()
+            ).to_rotation_matrix();
+
+            if !Self::try_canonicalize_rotation(&canon, &rot) {
+                println!("Failed random rotation");
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Construct a new shape
@@ -227,6 +289,10 @@ impl Shape {
         // Ensure no coordinates are present twice
         if Self::has_duplicate_vertices(&coordinates) {
             return Err(InvalidVerticesError::DuplicateVertices);
+        }
+
+        if !Self::can_canonicalize(&coordinates) {
+            return Err(InvalidVerticesError::CannotCanonicalize);
         }
         
         // Find coordinates-derived properties
@@ -510,7 +576,7 @@ impl Shape {
         }
 
         // Try lowest order rotation (proper and improper)
-        let mut proper = Permutation::identity(n);
+        let mut proper_sigma: Vec<_> = (0..n).collect();
         for p in planes.iter() {
             let anchor = p.vertices.first().expect("Guaranteed three vertices per group");
             let positive_signed_angle = |v: Vertex| {
@@ -532,13 +598,14 @@ impl Shape {
             ordered_vertices.push(*anchor);
 
             for (&i, &j) in ordered_vertices.iter().circular_tuple_windows() {
-                proper.sigma[i.get()] = j.get();
+                proper_sigma[i.get()] = j.get();
             }
         }
         for (i, j) in dipoles.into_iter() {
-            proper.sigma[i.get()] = j.get();
-            proper.sigma[j.get()] = i.get();
+            proper_sigma[i.get()] = j.get();
+            proper_sigma[j.get()] = i.get();
         }
+        let proper = Permutation::try_from(proper_sigma).expect("Valid permutation");
 
         // TODO maybe unnecessary to test
         if Self::permutation_is_rotation(coordinates, &proper) && proper.index() != 0 {
@@ -556,21 +623,21 @@ impl Shape {
         ) * coordinates.clone();
 
         let num_vertices = coordinates.ncols();
-        let mut proper = Permutation::identity(num_vertices);
+        let mut proper_sigma: Vec<_> = (0..num_vertices).collect();
         'outer: for i in 0..num_vertices {
-            if proper[i] != i {
+            if proper_sigma[i] != i {
                 continue;
             }
 
             for j in i..num_vertices {
-                if proper[j] != j {
+                if proper_sigma[j] != j {
                     continue;
                 }
 
                 let distance = (rotated.column(i) - coordinates.column(j)).norm();
                 if distance < 0.1 {
-                    proper.sigma[i] = j;
-                    proper.sigma[j] = i;
+                    proper_sigma[i] = j;
+                    proper_sigma[j] = i;
 
                     continue 'outer;
                 }
@@ -578,6 +645,8 @@ impl Shape {
 
             return None;
         }
+
+        let proper = Permutation::try_from(proper_sigma).expect("Valid permutation");
 
         if proper.index() != 0 && Self::permutation_is_rotation(coordinates, &proper) {
             Some(proper)
@@ -701,7 +770,7 @@ impl Shape {
         let similarity = similarity::polyhedron(inverted, self).ok()?;
         if similarity.csm < 1e-6 && !similarity.bijection.permutation.is_identity() {
             let mut permutation = similarity.bijection.permutation;
-            assert!(permutation.sigma.pop() == Some(self.num_vertices()));
+            assert!(permutation.pop_if_fixed_point() == Some(self.num_vertices()));
             Some(Mirror::new(permutation))
         } else {
             None
@@ -832,31 +901,121 @@ impl Shape {
     }
 
     /// Reorder coordinates into a canonical vertex order
-    ///
-    /// Canonical order is lexicographical in spherical coordinate
-    /// (theta, phi) tuples of vertices after reorienting coordinates
-    /// according to [`crate::inertia::standardize_top`]
-    ///
-    /// As long as top standardization imposes a regular z-axis orientation,
-    /// this relatively arbitrary ordered vector space should allow for vertex order
-    /// canonicalization.
     pub fn canonicalize_coordinates(coords: Matrix3N) -> Matrix3N {
-        let (_, reoriented) = crate::inertia::standardize_top(coords);
+        let (top, mut reoriented) = crate::inertia::standardize_top(coords);
+        let n = reoriented.ncols();
 
-        // Order points by z coordinate first (theta), then by phi
-        let z_phis: Vec<_> = reoriented.column_iter()
-            .map(|v| {
-                let phi = (v.x / (v.x.powi(2) + v.y.powi(2)).sqrt()).acos().copysign(v.y);
-                // Round z coordinates so that coordinates approximately sharing a plane are equal
-                // TODO this isn't going to work so great away from z=0, need something like fuzzy
-                // equality instead
-                const DIGITS: i32 = 4;
-                let rounded_z = (10.0_f64.powi(DIGITS) * v.z).round() / 10.0_f64.powi(DIGITS);
-                (rounded_z, phi)
-            })
+        let rotation_basis = Self::find_rotation_basis(&reoriented);
+        let vertex_groups = {
+            let mut sets = UnionFind::new(n);
+            for rotation in rotation_basis.iter() {
+                for v in 0..n {
+                    sets.union(v, rotation.permutation[v]);
+                }
+            }
+            Self::union_to_groups(sets)
+        };
+
+        if top == crate::inertia::Top::Spherical {
+            // If there's a unique vertex (by rotation), that one should be +z
+            let maybe_unique = vertex_groups.iter()
+                .find_map(|group| (group.len() == 1).then(|| group[0]));
+
+            if let Some(unique_vertex) = maybe_unique {
+                let rotation = na::Rotation::<f64, 3>::rotation_between(
+                    &reoriented.column(unique_vertex.get()),
+                    &na::Vector3::z_axis()
+                ).expect("Can generate rotation for unique vertex");
+                reoriented = rotation * reoriented;
+            }
+        }
+
+        // Group vertices by planes along z 
+        let z_plane_groups = {
+            let mut sets = UnionFind::new(n);
+            for (i, j) in (0..n).tuple_combinations() {
+                let delta_z = reoriented.column(j).z - reoriented.column(i).z;
+                if delta_z.abs() < 1e-2 {
+                    sets.union(i, j);
+                }
+            }
+            let groups = Self::union_to_groups(sets);
+
+            // And sort by z value
+            let zs: Vec<_> = groups.iter()
+                .map(|group| reoriented.column(group.first().unwrap().get()).z)
+                .collect();
+            let ordering = Permutation::ordering_by(&zs, |a, b| a.partial_cmp(b).expect("No NaNs"));
+            ordering.apply_move(groups).expect("ordering_by produces valid Permutation")
+        };
+
+        let vertex_color: HashMap<Vertex, usize> = vertex_groups.iter()
+            .enumerate()
+            .flat_map(|(i, group)| group.iter().map(move |&v| (v, i)))
             .collect();
 
-        let ordering = Permutation::ordering_by(&z_phis, |a, b| a.partial_cmp(b).expect("No NaNs"));
+        // Find a z-plane that contains the smallest unique off-axis vertex group
+        let pivot_plane = z_plane_groups.iter()
+            .filter(|plane_vertices| {
+                if plane_vertices.len() == 1 {
+                    let z_dist = crate::geometry::axis_distance(
+                        &na::Vector3::z_axis(),
+                        &reoriented.column(plane_vertices[0].get())
+                    );
+
+                    if z_dist < 1e-4 {
+                        return false;
+                    }
+                }
+
+                true
+
+            })
+            .min_by_key(|plane_vertices| {
+                let num_colors = plane_vertices.iter()
+                    .map(|v| vertex_color[v])
+                    .unique()
+                    .count();
+
+                (plane_vertices.len(), num_colors)
+            });
+
+        // There is a pivot plane if there is a single vertex off z-axis
+        let pivot_phi = pivot_plane.map(|vertices| {
+            // Pick any vertex in the pivot plane (dubious)
+            let v = reoriented.column(vertices[0].get());
+            (v.x / (v.x.powi(2) + v.y.powi(2)).sqrt()).acos().copysign(v.y)
+        });
+
+        let mut ordering = vec![0; n];
+        let mut label = 0;
+
+        for mut plane_vertices in z_plane_groups {
+            if plane_vertices.len() == 1 {
+                ordering[plane_vertices[0].get()] = label;
+                label += 1;
+            } else {
+                plane_vertices.sort_by_key(|vertex| {
+                    let v = reoriented.column(vertex.get());
+                    let phi = (v.x / (v.x.powi(2) + v.y.powi(2)).sqrt()).acos().copysign(v.y);
+                    if phi < pivot_phi.expect("Pivot exists") - std::f64::consts::TAU / 360.0 {
+                        NotNan::new(phi + std::f64::consts::TAU).unwrap()
+                    } else {
+                        NotNan::new(phi).unwrap()
+                    }
+                });
+
+                for v in plane_vertices {
+                    ordering[v.get()] = label;
+                    label += 1;
+                }
+            }
+        }
+
+        let ordering = Permutation::try_from(ordering)
+            .expect("Generated valid permutation")
+            .inverse();
+
         apply_permutation(&reoriented, &ordering)
     }
 }
@@ -922,41 +1081,14 @@ mod tests {
         }
     }
 
-    fn assert_canonical_vertex_orders_for(shape: &Shape) {
-        let expected_canon = Shape::canonicalize_coordinates(shape.coordinates.clone());
-
-        for _ in 0..3 {
-            let scrambled_coords = {
-                let random_rotation = na::Rotation3::from_axis_angle(
-                    &na::Unit::new_normalize(na::Vector3::new_random()),
-                    rand::random::<f64>() * std::f64::consts::TAU
-                );
-                let random_permutation = Permutation::new_random(shape.num_vertices());
-
-                let rotated = random_rotation * shape.coordinates.clone();
-                apply_permutation(&rotated, &random_permutation)
-            };
-
-            let canonicalized = Shape::canonicalize_coordinates(scrambled_coords);
-
-            let fit = crate::quaternions::fit(&expected_canon, &canonicalized);
-            assert!(fit.msd < 1e-6);
-        }
-    }
-
     #[test]
     fn canonical_vertex_orders() {
-        // Shapes with unique inertial axes
-        assert_canonical_vertex_orders_for(&LINE);
-        assert_canonical_vertex_orders_for(&TRIGONALBIPYRAMID);
-        assert_canonical_vertex_orders_for(&PENTAGONALBIPYRAMID);
-        assert_canonical_vertex_orders_for(&SQUARE);
-
-        // Asymmetric tops
-        // TODO
-
-        // Spherical tops
-        assert_canonical_vertex_orders_for(&TETRAHEDRON);
-        assert_canonical_vertex_orders_for(&OCTAHEDRON);
+        for shape in SHAPES.iter() {
+            assert!(
+                Shape::can_canonicalize(&shape.coordinates),
+                "Shape {} cannot be canonicalized",
+                shape.name
+            );
+        }
     }
 }

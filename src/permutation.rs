@@ -89,8 +89,9 @@ pub fn slice_apply<T: PrimInt, U: Copy>(permutation: &[T], values: &[U]) -> Opti
     } 
 
     let mut permuted = values.to_vec();
-    for i in 0..n {
-        permuted[permutation[i].to_usize().unwrap()] = values[i];
+    for (i, &value) in values.iter().enumerate() {
+        let target = permutation[i].to_usize().unwrap();
+        permuted[target] = value;
     }
     Some(permuted)
 }
@@ -103,7 +104,7 @@ fn random_discrete(n: usize) -> usize {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct Permutation {
     // One-line representation
-    pub sigma: Vec<usize>
+    sigma: Vec<usize>
 }
 
 impl std::fmt::Display for Permutation {
@@ -132,6 +133,11 @@ impl Permutation {
     /// ```
     pub fn identity(n: usize) -> Permutation {
         Permutation {sigma: (0..n).collect()}
+    }
+
+    /// Constructs a new permutation without ensuring the result is valid
+    pub fn new_unchecked(v: Vec<usize>) -> Permutation {
+        Permutation {sigma: v}
     }
 
     /// Initialize the i-th permutation by lexicographic order of size n
@@ -177,6 +183,14 @@ impl Permutation {
         }
 
         Some(Permutation {sigma})
+    }
+
+    pub fn ordering_by_key<T, F, U>(slice: &[T], key: F) -> Permutation 
+        where F: Fn(&T) -> U, U: Ord
+    {
+        let mut p = Permutation::identity(slice.len());
+        p.sigma.sort_by_key(|&i| key(&slice[i]));
+        p.inverse()
     }
 
     /// Find a permutation ordering a slice's elements
@@ -301,6 +315,11 @@ impl Permutation {
         inverse
     }
 
+    /// Finds j so that self[i] == j
+    pub fn inverse_of(&self, index: usize) -> Option<usize> {
+        self.sigma.iter().position(|x| *x == index)
+    }
+
     /// Apply the permutation to a vector
     ///
     /// ```
@@ -313,8 +332,29 @@ impl Permutation {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn apply<T: Copy>(&self, other: &Vec<T>) -> Result<Vec<T>, PermutationError> {
-        slice_apply(self.sigma.as_slice(), other.as_slice()).ok_or(PermutationError::LengthMismatch)
+    pub fn apply<T: Copy>(&self, values: &Vec<T>) -> Result<Vec<T>, PermutationError> {
+        slice_apply(self.sigma.as_slice(), values.as_slice()).ok_or(PermutationError::LengthMismatch)
+    }
+
+    /// Apply the permutation to a vector of values
+    pub fn apply_move<T>(&self, values: Vec<T>) -> Result<Vec<T>, PermutationError> {
+        // TODO change to use MaybeUninit and single-copy as soon as permutation guarantees correct set
+        // elements at function entry call
+        let n = self.set_size();
+        if n != values.len() {
+            return Err(PermutationError::LengthMismatch);
+        }
+
+        let mut permuted_maybe = Vec::with_capacity(n);
+        permuted_maybe.resize_with(n, || std::mem::MaybeUninit::<T>::uninit());
+
+        for (i, value) in values.into_iter().enumerate() {
+            permuted_maybe[self[i]].write(value);
+        }
+
+        // SAFETY: Permutation guarantees contiguous numbers on construction, each
+        // item in permuted_maybe will be written to
+        Ok(unsafe {std::mem::transmute(permuted_maybe) })
     }
 
     pub fn apply_collect<B, T: Copy>(&self, slice: &[T]) -> Result<B, PermutationError> 
@@ -371,6 +411,7 @@ impl Permutation {
         self.sigma[i] == i
     }
 
+    /// Check whether a permutation is the identity permutation
     pub fn is_identity(&self) -> bool {
         self.sigma.iter().enumerate().all(|(i, &v)| i == v)
     }
@@ -407,6 +448,27 @@ impl Permutation {
 
         cycles
     }
+
+    pub fn push(&mut self) {
+        self.sigma.push(self.sigma.len());
+    }
+
+    /// If the last element maps to itself, pops and returns it
+    pub fn pop_if_fixed_point(&mut self) -> Option<usize> {
+        if self.sigma.last().filter(|&&v| v == self.sigma.len() - 1).is_some() {
+            self.sigma.pop()
+        } else {
+            None
+        }
+    }
+
+    pub fn slice_next<R: std::slice::SliceIndex<[usize], Output = [usize]>>(&mut self, range: R) -> bool {
+        slice_next(&mut self.sigma[range])
+    }
+
+    pub fn slice_prev<R: std::slice::SliceIndex<[usize], Output = [usize]>>(&mut self, range: R) -> bool {
+        slice_prev(&mut self.sigma[range])
+    }
 }
 
 /// Implements indexing, letting Permutation behave as a container directly
@@ -436,7 +498,7 @@ impl<I: PrimInt> TryFrom<Vec<I>> for Permutation {
         let has_correct_set_elements = integer_sigma.iter()
             .sorted()
             .enumerate()
-            .all(|(i, v)| v.to_usize().filter(|w| i == *w).is_some());
+            .all(|(i, v)| v.to_usize().is_some_and(|w| i == w));
 
         if !has_correct_set_elements {
             return Err(PermutationError::InvalidSetElements);
@@ -447,7 +509,7 @@ impl<I: PrimInt> TryFrom<Vec<I>> for Permutation {
     }
 }
 
-/// Generate a Permutation from an integer slice
+/// Generate a Permutation from an integer array
 /// ```
 /// # use molassembler::permutation::Permutation;
 /// # use std::convert::TryFrom;

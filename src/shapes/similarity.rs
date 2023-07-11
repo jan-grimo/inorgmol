@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use crate::strong::matrix::StrongPoints;
 use crate::strong::bijection::{Bijection, bijections};
-use crate::permutation::{Permutation, permutations, slice_next};
+use crate::permutation::{Permutation, permutations};
 use crate::shapes::*;
 
 use std::convert::TryFrom;
@@ -215,7 +215,7 @@ impl Iterator for SkipsBijectionGenerator {
         let cached_maybe_next = self.maybe_next.clone();
 
         if let Some(current_bijection) = self.maybe_next.as_mut() {
-            if !slice_next(&mut current_bijection.permutation.sigma[2..]) {
+            if !current_bijection.permutation.slice_next(2..) {
                 self.reset_from_next_pair();
             }
         }
@@ -471,9 +471,9 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
      * NOTE: The bijection is inverted here
      */
     let best_bijection = {
-        let mut p = Permutation::identity(n);
-        narrow.mapping.iter().for_each(|(c, v)| { p.sigma[v.get()] = c.get(); });
-        Occupation::new(p)
+        let mut sigma: Vec<_> = (0..n).collect();
+        narrow.mapping.iter().for_each(|(c, v)| { sigma[v.get()] = c.get(); });
+        Occupation::new(Permutation::try_from(sigma).expect("Valid permutation"))
     };
 
     if cfg!(debug_assertions) {
@@ -571,7 +571,7 @@ mod tests {
         fn random(shape: &Shape) -> Case {
             let bijection = {
                 let mut p = Permutation::new_random(shape.num_vertices());
-                p.sigma.push(p.set_size());
+                p.push();
                 Bijection::new(p)
             };
 
@@ -582,7 +582,7 @@ mod tests {
         fn indexed(shape: &Shape, index: usize) -> Case {
             let bijection = {
                 let mut p = Permutation::try_from_index(shape.num_vertices(), index).expect("Valid index");
-                p.sigma.push(p.set_size());
+                p.push();
                 Bijection::new(p)
             };
 
@@ -608,7 +608,7 @@ mod tests {
     }
 
     fn pop_centroid<T>(mut p: Bijection<Vertex, T>) -> Bijection<Vertex, T> where T: NewTypeIndex {
-        let maybe_centroid = p.permutation.sigma.pop();
+        let maybe_centroid = p.permutation.pop_if_fixed_point();
         // Ensure centroid was at end of permutation
         assert_eq!(maybe_centroid, Some(p.set_size()));
         p
@@ -686,10 +686,10 @@ mod tests {
                 // Need to invert since the centroid is only last in vertex -> column
                 // and need to remove it to rotate in shape vertex space
                 let mut inverted = rotationally_unique.inverse();
-                let centroid_vertex = inverted.permutation.sigma.pop().unwrap();
+                inverted.permutation.pop_if_fixed_point();
                 for rotation in rotations.iter() {
                     let mut rotated = rotation.compose(&inverted).unwrap();
-                    rotated.permutation.sigma.push(centroid_vertex);
+                    rotated.permutation.push();
 
                     // no need to re-invert
                     recovered_bijections.insert(rotated);

@@ -86,13 +86,12 @@ fn signed_angle(a: &na::Vector3<f64>, b: &na::Vector3<f64>, n: &na::Vector3<f64>
 
 struct CoordinateSystem {
     x: na::Unit<na::Vector3<f64>>,
-    // y: na::Unit<na::Vector3<f64>>,
     z: na::Unit<na::Vector3<f64>>,
 }
 
 impl CoordinateSystem {
-    /// Right-handed constructor from two perpendicular vectors
-    fn new<S1, S2>(a: Vec3StoredBy<S1>, b: Vec3StoredBy<S2>) -> CoordinateSystem 
+    /// Right-handed constructor from two perpendicular vectors that will become x and y axes
+    fn new_xy<S1, S2>(a: Vec3StoredBy<S1>, b: Vec3StoredBy<S2>) -> CoordinateSystem 
         where S1: na::Storage<f64, U3, U1>, 
             S2: na::Storage<f64, U3, U1>
     {
@@ -102,7 +101,6 @@ impl CoordinateSystem {
 
         CoordinateSystem {
             x: na::Unit::new_normalize(a.into_owned()),
-      //      y: na::Unit::new_normalize(b.into_owned()),
             z
         }
     }
@@ -164,7 +162,7 @@ pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64
         /* Asymmetric. Rotate the axis with the highest moment of inertia to
          * coincide with z, and the one with second most to coincide with x.
          */
-        let coord = CoordinateSystem::new(
+        let coord = CoordinateSystem::new_xy(
             axes.0.column(1),
             axes.0.column(2).cross(&axes.0.column(1))
         );
@@ -175,7 +173,7 @@ pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64
     if degeneracy == 2 {
         // Line: Ia << Ib = Ic and Ia ≃ 0
         if moments.0.x < 0.1 {
-            let coord = CoordinateSystem::new(axes.0.column(1), axes.0.column(2));
+            let coord = CoordinateSystem::new_xy(axes.0.column(1), axes.0.column(2));
             let rotated = coord.quaternion().to_rotation_matrix() * particles;
             return (Top::Linear, rotated);
         }
@@ -198,13 +196,13 @@ pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64
 
         if kappa < 0.0 {
             // Prolate: Ia is unique
-            let coord = CoordinateSystem::new(axes.0.column(1), axes.0.column(2));
+            let coord = CoordinateSystem::new_xy(axes.0.column(1), axes.0.column(2));
             let rotated = coord.quaternion().to_rotation_matrix() * particles;
             return (Top::Prolate, rotated);
         }
 
         // Oblate: Ic is unique
-        let coord = CoordinateSystem::new(axes.0.column(0), axes.0.column(1));
+        let coord = CoordinateSystem::new_xy(axes.0.column(0), axes.0.column(1));
         let rotated = coord.quaternion().to_rotation_matrix() * particles;
         return (Top::Oblate, rotated);
     }
@@ -249,13 +247,13 @@ mod tests {
         // z == z'
         let mixed_x = (na::Vector3::<f64>::x() + 0.3 * na::Vector3::<f64>::y()).normalize();
         let mixed_y = na::Rotation::<f64, 3>::from_axis_angle(&na::Vector3::z_axis(), std::f64::consts::FRAC_PI_2) * mixed_x;
-        let along_plus_z = CoordinateSystem::new(mixed_x, mixed_y);
+        let along_plus_z = CoordinateSystem::new_xy(mixed_x, mixed_y);
         let rot = along_plus_z.quaternion().to_rotation_matrix();
         approx::assert_relative_eq!(na::Vector3::x(), rot * mixed_x, epsilon=EPSILON);
         approx::assert_relative_eq!(na::Vector3::y(), rot * mixed_y, epsilon=EPSILON);
 
         // z == -z'
-        let along_minus_z = CoordinateSystem::new(mixed_y, mixed_x);
+        let along_minus_z = CoordinateSystem::new_xy(mixed_y, mixed_x);
         let rot = along_minus_z.quaternion().to_rotation_matrix();
         approx::assert_relative_eq!(na::Vector3::x(), rot * mixed_y, epsilon=EPSILON);
         approx::assert_relative_eq!(na::Vector3::y(), rot * mixed_x, epsilon=EPSILON);
@@ -268,7 +266,7 @@ mod tests {
             let v = na::Vector3::<f64>::new_random();
             let y = x.cross(&v).normalize();
 
-            let rot = CoordinateSystem::new(x, y).quaternion().to_rotation_matrix();
+            let rot = CoordinateSystem::new_xy(x, y).quaternion().to_rotation_matrix();
             approx::assert_relative_eq!(na::Vector3::x(), rot * x, epsilon = EPSILON);
             approx::assert_relative_eq!(na::Vector3::y(), rot * y, epsilon = EPSILON);
         }

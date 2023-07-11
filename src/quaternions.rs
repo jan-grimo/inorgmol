@@ -73,7 +73,7 @@ pub fn quaternion_decomposition(mat: Matrix4) -> Fit {
 ///
 /// Postconditions 
 /// - rotor = quat * stator and stator = quat.inverse() * rotor,
-///   see rotate_rotor and rotate_stator fns
+///   see `rotate_rotor` and `rotate_stator` fns
 /// - The resulting quaternion is a proper rotation (no inversions)
 pub fn fit(stator: &Matrix3N, rotor: &Matrix3N) -> Fit {
     // Ensure centroids are removed from matrices
@@ -102,6 +102,21 @@ pub fn fit_with_map(stator: &Matrix3N, rotor: &Matrix3N, vertex_map: &HashMap<us
     }
 
     quaternion_decomposition(a)
+}
+
+fn remove_offset(mut vertices: Matrix3N) -> Matrix3N {
+    let centroid = vertices.column_mean();
+    if centroid.norm_squared() > 1e-3 {
+        for mut v in vertices.column_iter_mut() {
+            v -= centroid;
+        }
+    }
+
+    vertices
+}
+
+pub fn fit_remove_offset(stator: Matrix3N, rotor: Matrix3N) -> Fit {
+    fit(&remove_offset(stator), &remove_offset(rotor))
 }
 
 #[derive(Debug, Clone, From)]

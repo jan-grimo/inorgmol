@@ -39,15 +39,15 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     /// Apply the map to a key and find its corresponding value
     pub fn get(&self, key: &Key) -> Option<Value> {
         let index = key.get().to_usize()?;
-        let value = self.permutation.sigma.get(index)?;
-        Some(Value::from(<Value::Type as FromPrimitive>::from_usize(*value)?))
+        let value = self.permutation[index];
+        Some(Value::from(<Value::Type as FromPrimitive>::from_usize(value)?))
     }
 
     /// Find the key to a corresponding value
     pub fn inverse_of(&self, value: &Value) -> Option<Key> {
-        let v = value.get().to_usize()?;
-        let v_position = self.permutation.sigma.iter().position(|x| *x == v)?;
-        Some(Key::from(<Key::Type as FromPrimitive>::from_usize(v_position)?))
+        let inverse = self.permutation.inverse_of(value.get().to_usize()?)?;
+        let key = Key::from(<Key::Type as FromPrimitive>::from_usize(inverse)?);
+        Some(key)
     }
 
     /// Compose the bijection with another
@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn basics() {
         let f1 = Bijection::<Foo, Bar>::new(Permutation::try_from_index(4, 3).expect("Valid index"));
-        let f1_at_two = Bar::from(f1.permutation.sigma[2]);
+        let f1_at_two = Bar::from(f1.permutation[2]);
         assert_eq!(f1.get(&Foo(2)), Some(f1_at_two));
         assert_eq!(f1.inverse_of(&f1_at_two), Some(Foo::from(2)));
 

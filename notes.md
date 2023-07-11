@@ -1,23 +1,15 @@
 # High level gripes with Molassembler
 
-- List of recognizable shapes is static
 - For large shapes, all stereopermutations are enumerated, which if asymmetric,
   is expensive in time and space. Avoid by laziness/tricks (via index of
   permutation?) or size-gate
   - Not sure this is avoidable as soon as realizeability comes into play with
     multidentate ligands
+
+
+# Improvement ideas
 - Parametrizeable shapes (e.g. for symmetric distortions in octahedron or
   bipyramids)
-- I think that the ordering of stereopermutations is dependent on the ordering
-  of vertices in shape coordinates, and is therefore somewhat arbitrary. Can
-  there be a general canonical order without resorting to choosing a different
-  system for each shape (as in nomenclature)?
-  - Maybe there's some way with inertial moment axes and an ordered vector space
-    (e.g. heaviest axis along z, second heaviest along x, then ordered from
-    positive z to negative and anticlockwise around the x-y plane
-  - Need to expand testing to all shapes, but expecting failure: asymmetric tops
-    need a different form of standardization and there are shapes where even z
-    axis +/- orientation is important, such as square pyramid
 
 look through the GitLab issues again!
 
@@ -78,7 +70,7 @@ Think about this again, and hard! Is this really wanted?
 - Then visit all instances of `StaticName` and fix the complications
 
 
-# Tedious to do
+# To do
 
 - Generalize refinement over floating-point types
   - Missing: `refine<F: Float>`: Maybe needs a PR with argmin or some
@@ -89,16 +81,6 @@ Think about this again, and hard! Is this really wanted?
   - [x] superposable vertex sets
   - [ ] tetrahedra (buggy!)
   - [ ] mirror
-
-
-# Fun to do
-
-- Improve the polyhedron functions with the new ideas (see inline TODOs)
-
-
-# Ideas
-
-- Maybe revisit point group elements and overall symmetries with csm?
 
 
 # Cargo flamegraph

@@ -144,9 +144,9 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
      * NOTE: The bijection is inverted here
      */
     let best_bijection = {
-        let mut p = Permutation::identity(n);
-        narrow.mapping.iter().for_each(|(c, v)| { p.sigma[v.get()] = c.get(); });
-        Occupation::new(p)
+        let mut sigma: Vec<_> = (0..n).collect();
+        narrow.mapping.iter().for_each(|(c, v)| { sigma[v.get()] = c.get(); });
+        Occupation::new(Permutation::try_from(sigma).expect("Valid permutation"))
     };
 
     if cfg!(debug_assertions) {
@@ -185,7 +185,7 @@ impl Case {
     fn permute(mat: Matrix3N) -> (Matrix3N, Bijection<Vertex, Column>) {
         let bijection: Bijection<Vertex, Column> = {
             let mut p = Permutation::new_random(mat.ncols() - 1);
-            p.sigma.push(p.set_size());
+            p.push();
             Bijection::new(p)
         };
 
@@ -195,7 +195,7 @@ impl Case {
     }
 
     fn pop_centroid(mut bijection: Bijection<Vertex, Column>) -> Bijection<Vertex, Column> {
-        let _ = bijection.permutation.sigma.pop().expect("No zero-length bijections");
+        let _ = bijection.permutation.pop_if_fixed_point().expect("No zero-length bijections");
         bijection
     }
 

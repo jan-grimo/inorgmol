@@ -16,7 +16,7 @@ const ICO_1: f64 = 0.5257311121191336;
 const ICO_2: f64 = 0.85065080835204;
 
 fn make_rotation(slice: &[usize]) -> Rotation {
-    Rotation::new(Permutation {sigma: slice.to_vec()})
+    Rotation::new(Permutation::new_unchecked(slice.to_vec()))
 }
 
 lazy_static! {
@@ -73,7 +73,7 @@ lazy_static! {
              0.0,  1.0,  0.0,
              1.0,  0.0,  0.0,
         ]),
-        rotation_basis: vec![Rotation::new(Permutation {sigma: vec![2, 1, 0]})],
+        rotation_basis: vec![make_rotation(&[2, 1, 0])],
     };
 
     pub static ref TETRAHEDRON: Shape = Shape {
@@ -648,7 +648,7 @@ mod tests {
     use crate::strong::matrix::StrongPoints;
 
     fn make_rotation(slice: &[usize]) -> Rotation {
-        Rotation::new(Permutation {sigma: slice.to_vec()})
+        Rotation::new(Permutation::new_unchecked(slice.to_vec()))
     }
 
     #[test]
