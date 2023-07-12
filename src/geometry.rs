@@ -5,12 +5,16 @@ extern crate nalgebra as na;
 type Matrix3N = na::Matrix3xX<f64>;
 type Vector3 = na::Vector3<f64>;
 
+/// Three-dimensional plane
 pub struct Plane {
+    /// Normal vector
     pub normal: Vector3,
+    /// Offset vector
     pub offset: Vector3
 }
 
 impl Plane {
+    /// Find the plane of best fit to a cloud of particles
     pub fn fit_matrix(mut cloud: Matrix3N) -> Plane {
         // Remove centroid
         let centroid: Vector3 = cloud.column_sum() / (cloud.ncols() as f64);
@@ -26,20 +30,25 @@ impl Plane {
         Plane {normal, offset: centroid}
     }
 
-    pub fn fit_matrix_points<T: Copy + Into<usize>>(matrix: &Matrix3N, point_indices: &[T]) -> Plane {
-        let n = point_indices.len();
+    /// Find the plane of best fit to a subset of particles in a matrix
+    pub fn fit_matrix_points<T: Copy + Into<usize>>(matrix: &Matrix3N, particle_indices: &[T]) -> Plane {
+        let n = particle_indices.len();
         let mut plane_vertices = Matrix3N::zeros(n);
-        for (i, &v) in point_indices.iter().enumerate() {
+        for (i, &v) in particle_indices.iter().enumerate() {
             plane_vertices.set_column(i, &matrix.column(v.into()));
         }
 
         Self::fit_matrix(plane_vertices)
     }
 
+    /// Signed distance of a point to the plane
+    ///
+    /// Points in the halfspace indicated by the plane normal have positive distance.
     pub fn signed_distance<S>(&self, point: &na::Matrix<f64, na::Const<3>, na::Const<1>, S>) -> f64 where S: na::Storage<f64, na::Const<3>, na::Const<1>> {
         self.normal.dot(&(point - self.offset))
     }
 
+    /// Root-mean-square deviation of plane fit
     pub fn rmsd(&self, cloud: &Matrix3N, vertices: &[usize]) -> f64 {
         let sum_of_squares: f64 = vertices.iter()
             .map(|&v| self.signed_distance(&cloud.column(v)).powi(2))
@@ -47,22 +56,15 @@ impl Plane {
         (sum_of_squares / (vertices.len() as f64)).sqrt()
     }
 
-    pub fn parallel(&self, other: &Plane) -> bool {
+    /// Check whether this plane is parallel to another plane
+    pub fn is_parallel_to(&self, other: &Plane) -> bool {
         self.normal.cross(&other.normal).norm() < 1e-6 
             || self.normal.cross(&-other.normal).norm() < 1e-6
-    }
-
-    pub fn signed_angle<S1, S2>(
-        &self, 
-        a: &na::Matrix<f64, na::Const<3>, na::Const<1>, S1>,
-        b: &na::Matrix<f64, na::Const<3>, na::Const<1>, S2>) -> f64 where 
-        S1: na::Storage<f64, na::Const<3>, na::Const<1>>, 
-        S2: na::Storage<f64, na::Const<3>, na::Const<1>> {
-        a.cross(b).dot(&self.normal).atan2(a.dot(b))
     }
 }
 
 
+/// Find perpendicular vector to a point from an axis
 pub fn axis_perpendicular_component<S1, S2>(
     axis: &na::Matrix<f64, na::Const<3>, na::Const<1>, S1>, 
     point: &na::Matrix<f64, na::Const<3>, na::Const<1>, S2>) -> Vector3
@@ -71,6 +73,7 @@ where S1: na::Storage<f64, na::Const<3>, na::Const<1>>,
     point - (point.dot(axis)) * axis
 }
 
+/// Find distance of a point from an axis
 pub fn axis_distance<S1, S2>(
     axis: &na::Matrix<f64, na::Const<3>, na::Const<1>, S1>, 
     point: &na::Matrix<f64, na::Const<3>, na::Const<1>, S2>) -> f64 
@@ -79,6 +82,7 @@ where S1: na::Storage<f64, na::Const<3>, na::Const<1>>,
     axis_perpendicular_component(axis, point).norm()
 }
 
+/// Calculate the signed tetrahedron volume spanned by four points
 pub fn signed_tetrahedron_volume<S>(
     a: na::Matrix<f64, na::Const<3>, na::Const<1>, S>,
     b: na::Matrix<f64, na::Const<3>, na::Const<1>, S>,
@@ -88,6 +92,7 @@ pub fn signed_tetrahedron_volume<S>(
     (a - d.clone()).dot(&(b - d.clone()).cross(&(c - d))) / 6.0
 }
 
+/// Calculate the signed tetrahedron voluem spanned by four points
 pub fn signed_tetrahedron_volume_with_array<S>(positions: [na::Matrix<f64, na::Const<3>, na::Const<1>, S>; 4]) -> f64 where S: na::Storage<f64, na::Const<3>, na::Const<1>> + Clone {
     let [a, b, c, d] = positions;
     signed_tetrahedron_volume(a, b, c, d)
@@ -308,15 +313,22 @@ pub fn tetrahedra_overlap(a: &na::Matrix3x4<f64>, b: &na::Matrix3x4<f64>) -> boo
     true
 }
 
+/// Relation between a point and tetrahedron in space
 #[derive(PartialEq, Debug)]
 pub enum PointTetrahedronRelation {
+    /// Point is inside tetrahedron
     Inside,
+    /// Point is on a face of the tetrahedron
     OnFace,
+    /// Point is on an edge of the tetrahedron
     OnEdge,
+    /// Point is a vertex of the tetrahedron
     Vertex,
+    /// Point is outside the tetrahedron
     Outside
 }
 
+/// Determine the geometric relation between a point and a tetrahedron
 pub fn point_tetrahedron_relation(tetrahedron: &na::Matrix3x4<f64>, point: &na::Vector3<f64>) -> Option<PointTetrahedronRelation> {
     const EPSILON: f64 = 1e-6;
     let mut a: na::Matrix3<f64> = tetrahedron.fixed_view::<3, 3>(0, 0).into();
@@ -374,6 +386,10 @@ pub fn random_point_in_tetrahedron(tetrahedron: &na::Matrix3x4<f64>) -> Vector3 
     [a, s, t, u].into_iter().zip(tetrahedron.column_iter()).fold(Vector3::zeros(), |acc, (l, c)| acc + l * c)
 }
 
+/// Find the approximate overlap volume between two tetrahedra
+///
+/// Calculates overlap by Monte Carlo integration.
+///
 /// TODO: rewrite to statistical digit convergence criterion instead of number of samples
 pub fn approximate_tetrahedron_overlap_volume(a: &na::Matrix3x4<f64>, b: &na::Matrix3x4<f64>) -> f64 {
     // TODO try std::simd?

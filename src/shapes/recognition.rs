@@ -6,8 +6,17 @@ use rand::distributions::Distribution;
 use statrs::distribution::{Continuous, ContinuousCDF, Normal, Beta, ChiSquared};
 use statrs::statistics::Statistics;
 
+/// Rescaling parameter for beta distribution fitting of continuous shape measures
+///
+/// In order to fit beta distributions to continuous shape measure values, values
+/// must be rescaled to [0, 1). `CSM_RESCALE` indicates the maximum possible
+/// continuous shape measure.
 pub const CSM_RESCALE: f64 = 150.0;
 
+/// Sample the continuous shape measure distribution for a particular shape
+///
+/// The coordinates of the shape are distorted by scaling vertices by a normal
+/// distribution with a standard deviation of 0.2.
 pub fn sample(s: Name) -> f64 {
     let shape = shape_from_name(s);
     let n = shape.num_vertices();
@@ -27,16 +36,18 @@ pub fn sample(s: Name) -> f64 {
     polyhedron(cloud, shape).expect("No algorithm failures").csm
 }
 
-fn beta_parameters(samples: &Vec<f64>) -> (f64, f64) {
+/// Calculates beta distribution parameters from samples
+fn beta(samples: &Vec<f64>) -> Beta {
     let mean = samples.mean();
     let variance = samples.variance();
 
     let alpha = mean * (mean * (1.0 - mean) / variance - 1.0);
     let beta = (1.0 - mean) * (mean * (1.0 - mean) / variance - 1.0);
 
-    (alpha, beta)
+    Beta::new(alpha, beta).unwrap()
 }
 
+/// Calculate beta distribution for a shape by sampling and fitting
 pub fn random_cloud_distribution(s: Name, n: usize) -> Beta {
     let mut samples = vec![f64::default(); n];
     for v in samples.iter_mut() {
@@ -44,10 +55,10 @@ pub fn random_cloud_distribution(s: Name, n: usize) -> Beta {
     }
 
     assert!(samples.as_slice().max() <= 1.0);
-    let (alpha, beta) = beta_parameters(&samples);
-    Beta::new(alpha, beta).unwrap()
+    beta(&samples)
 }
 
+/// Embedded beta distributions for each shape
 pub fn embedded_distribution(s: Name) -> Beta {
     match s {
         Name::Line => Beta::new(3.7709, 19.3418).unwrap(),
@@ -83,6 +94,7 @@ pub fn embedded_distribution(s: Name) -> Beta {
     }
 }
 
+/// Calculate the reduced chi squared statistic for a beta fit to samples
 pub fn reduced_chi_squared(samples: &[f64], beta: Beta) -> f64 {
     assert!(samples.len() >= 10);
 
@@ -128,10 +140,12 @@ pub fn reduced_chi_squared(samples: &[f64], beta: Beta) -> f64 {
     chi_squared / dof as f64
 }
 
+/// Calculate the goodness of fit of a beta distribution to a set of samples
 pub fn goodness_of_fit(samples: &[f64], beta: Beta) -> f64 {
     ChiSquared::new(2.0).unwrap().pdf(reduced_chi_squared(samples, beta))
 }
 
+/// Choose the shape for which particles are least likely to be random
 pub fn least_likely_random(cloud: &Matrix3N) -> (Name, f64) {
     let likelihood_random = |shape: &Shape| {
         let csm = polyhedron(cloud.clone(), shape).expect("Similarities worked fine").csm;
@@ -143,9 +157,4 @@ pub fn least_likely_random(cloud: &Matrix3N) -> (Name, f64) {
         .map(|s| (s.name, likelihood_random(s)))
         .min_by(|(_, p), (_, q)| p.partial_cmp(q).expect("No NaNs from similarities"))
         .expect("At least one fitting shape size")
-}
-
-#[cfg(test)]
-mod tests {
-
 }

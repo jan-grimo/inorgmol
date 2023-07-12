@@ -3,10 +3,13 @@ use crate::permutation::Permutation;
 extern crate nalgebra as na;
 use na::base::dimension::{U1, U3};
 
+/// Moments of inertia Ia, Ib, Ic in ascending order
 pub struct Moments(pub na::Vector3<f64>);
+/// Axes of inertia a, b, c corresponding to [Moments]
 pub struct Axes(pub na::Matrix3<f64>);
 
 impl Moments {
+    /// Calculate the number of degenerate moments of inertia
     pub fn degeneracy(&self) -> usize {
         const EPSILON: f64 = 0.05;
         let m = self.0;
@@ -18,6 +21,9 @@ impl Moments {
     }
 }
 
+/// Moments and axes of inertia for a collection of particles
+///
+/// Does not remove the centroid for these particles. Rotation is about the origin.
 pub fn moments_axes(particles: &na::Matrix3xX<f64>) -> (Moments, Axes) {
     let mut inertial_mat = na::Matrix3::<f64>::zeros();
 
@@ -49,7 +55,7 @@ pub fn moments_axes(particles: &na::Matrix3xX<f64>) -> (Moments, Axes) {
 
     let ordered_eigenvectors = {
         let columns: Vec<_> = decomposition.eigenvectors.column_iter().collect();
-        let permuted = ordering.apply(&columns).expect("Matching permutation length");
+        let permuted = ordering.apply_ref(&columns).expect("Matching permutation length");
         na::Matrix3::from_columns(permuted.as_slice())
     };
 

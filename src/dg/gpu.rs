@@ -244,8 +244,7 @@ mod tests {
         let shape = &crate::shapes::SQUAREANTIPRISM;
         let bounds = crate::dg::modeling::solitary_shape::shape_into_bounds(shape);
         let distances = DistanceMatrix::try_from_distance_bounds(bounds.clone(), MetrizationPartiality::Complete).expect("Successful metrization");
-        let metric = MetricMatrix::from_distance_matrix(distances);
-        let coords = metric.embed().scale(0.7);
+        let coords = MetricMatrix::from(distances).embed().scale(0.7);
         let n = coords.len();
         let linear_coords = coords.reshape_generic(na::Dyn(n), na::Const::<1>);
         let refinement_bounds = Bounds::new(bounds, Vec::new());

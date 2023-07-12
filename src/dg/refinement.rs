@@ -813,7 +813,7 @@ mod tests {
         let shape = &TETRAHEDRON;
         let bounds = crate::dg::modeling::solitary_shape::shape_into_bounds(shape);
         let distances = DistanceMatrix::try_from_distance_bounds(bounds, MetrizationPartiality::Complete).expect("Successful metrization");
-        let metric = MetricMatrix::from_distance_matrix(distances);
+        let metric = MetricMatrix::from(distances);
         let coords = metric.embed();
         let n = coords.len();
         let mut linear_coords = coords.reshape_generic(na::Dyn(n), na::Const::<1>);

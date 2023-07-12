@@ -11,7 +11,7 @@ fn main() {
     let tetrahedra = shape.find_tetrahedra();
     let iterations: Vec<f64> = (0..REPETITIONS).filter_map(|_| {
         let distances = DistanceMatrix::try_from_distance_bounds(bounds.clone(), MetrizationPartiality::Complete).expect("Successful metrization");
-        let metric = MetricMatrix::from_distance_matrix(distances);
+        let metric = MetricMatrix::from(distances);
         let coords = metric.embed();
         let chirals: Vec<Chiral<f64>> = tetrahedra.iter()
             .map(|&tetr| modeling::solitary_shape::chiral_from_tetrahedron(tetr, shape, 0.1))

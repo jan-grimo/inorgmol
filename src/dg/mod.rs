@@ -1,6 +1,7 @@
 use rand::prelude::SliceRandom;
 use rand::Rng;
 use thiserror::Error;
+use core::convert::From;
 
 extern crate nalgebra as na;
 type Matrix4N = na::Matrix4xX<f64>;
@@ -8,6 +9,7 @@ type Matrix4N = na::Matrix4xX<f64>;
 /// Number of spatial dimensions embedding and refinement operate in
 const DIMENSIONS: usize = 4;
 
+/// Distance bounds between particles
 #[derive(Clone)]
 pub struct DistanceBounds {
     /// Empty diagonal, lower bounds in lower triangle, upper above
@@ -15,6 +17,7 @@ pub struct DistanceBounds {
 }
 
 impl DistanceBounds {
+    /// Generate a new instance for a particular number of particles `n`
     pub fn new(n: usize) -> DistanceBounds {
         const DEFAULT_LOWER: f64 = 0.0;
         const DEFAULT_UPPER: f64 = 100.0;
@@ -28,10 +31,12 @@ impl DistanceBounds {
         DistanceBounds {mat}
     }
 
+    /// Number of particles / size of the system
     pub fn n(&self) -> usize {
         self.mat.ncols()
     }
 
+    /// Order two passed indices in ascending order
     pub fn order_indices(mut i: usize, mut j: usize) -> (usize, usize) {
         assert!(i != j);
         if i > j {
@@ -50,37 +55,51 @@ impl DistanceBounds {
         (i, j)
     }
 
+    /// Access the lower bound between two particles with ordered vertices
+    ///
+    /// Precondition: `i < j`, checked only in debug builds
     pub fn ordered_lower(&self, i: usize, j: usize) -> &f64 {
         debug_assert!(i < j);
         &self.mat[Self::lower_tuple(i, j)]
     }
 
+    /// Access the lower bound between two particles
     pub fn lower(&self, i: usize, j: usize) -> &f64 {
         let (i, j) = Self::order_indices(i, j);
         self.ordered_lower(i, j)
     }
 
+    /// Access the upper bound between two particles with ordered vertices
+    ///
+    /// Precondition: `i < j`, checked only in debug builds
     pub fn ordered_upper(&self, i: usize, j: usize) -> &f64 {
         debug_assert!(i < j);
         &self.mat[Self::upper_tuple(i, j)]
     }
 
+    /// Access the upper bound between two particles
     pub fn upper(&self, i: usize, j: usize) -> &f64 {
         let (i, j) = Self::order_indices(i, j);
         self.ordered_upper(i, j)
     }
 
+    /// Get the lower and upper bounds between a pair of vertices
     pub fn lower_upper(&self, i: usize, j: usize) -> (f64, f64) {
         let (i, j) = Self::order_indices(i, j);
         (*self.ordered_lower(i, j), *self.ordered_upper(i, j))
     }
 
+    /// Set the lower and upper bounds to the same value
     pub fn collapse(&mut self, i: usize, j: usize, value: f64) {
         assert!(i != j);
         self.mat[(i, j)] = value;
         self.mat[(j, i)] = value;
     }
 
+    /// Increase the lower bound between two particles to a new value
+    ///
+    /// If the new value is between the current bounds, sets the lower bound to the new value and
+    /// returns `true`. Otherwise, returns `false`.
     pub fn increase_lower_bound(&mut self, i: usize, j: usize, value: f64) -> bool {
         let (i, j) = Self::order_indices(i, j);
         if (self.mat[Self::lower_tuple(i, j)]..self.mat[Self::upper_tuple(i, j)]).contains(&value) {
@@ -91,6 +110,10 @@ impl DistanceBounds {
         false
     }
 
+    /// Decrease the upper bound between two particles to a new value
+    ///
+    /// If the new value is between the current bounds, sets the upper bound to the new value and
+    /// returns `true`. Otherwise, returns `false`.
     pub fn decrease_upper_bound(&mut self, i: usize, j: usize, value: f64) -> bool {
         let (i, j) = Self::order_indices(i, j);
         if self.mat[Self::upper_tuple(i, j)] >= value
@@ -103,11 +126,12 @@ impl DistanceBounds {
         false
     }
 
-    /// Try to smooth the triangle inequalities with Floyd's algorithm: O(N^3)
-    /// 
-    /// If triangle bound inversion is encountered, returns None
+    /// Try to smooth the triangle inequalities with Floyd's algorithm
     ///
-    /// TODO more helpful error type
+    /// If triangle bound inversion is encountered, returns `None`. Floyd's algorithm has cubic
+    /// complexity in the number of particles.
+    ///
+    /// TODO error type with data on where the inversion was encountered
     pub fn floyd_triangle_smooth(mut self) -> Option<Self> {
         let n = self.mat.ncols();
 
@@ -152,29 +176,39 @@ impl DistanceBounds {
         Some(self)
     }
 
+    /// Extract the underlying matrix
     pub fn take_matrix(self) -> na::DMatrix<f64> {
         self.mat
     }
 }
 
+/// Particle-pairwise distances in three dimensional space
 pub struct DistanceMatrix {
+    // Symmetric, diagonal zero
     mat: na::DMatrix<f64>
 }
 
 /// For what subset of particles to repeat triangle inequality smoothing during distance generation
 pub enum MetrizationPartiality {
+    /// Minimal metrization: In principle, four particles can be sufficient for collapsing all bounds.
+    /// In practice it sometimes doesn't, but is generally good enough.
     FourAtom,
+    /// Metrize ten percent of all particles
     TenPercent,
+    /// Metrize all particles
     Complete
 }
 
+/// Errors encountered in distance geometry embedding
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum DistanceGeometryError {
+    /// Supplied graph is impossible to realize in three dimensions
     #[error("Impossible graph")]
     GraphImpossible
 }
 
 impl DistanceMatrix {
+    /// Generate a distance matrix from distance bounds
     pub fn try_from_distance_bounds(mut bounds: DistanceBounds, metrization: MetrizationPartiality) -> Result<DistanceMatrix, DistanceGeometryError> {
         let n = bounds.n(); 
         let mut index_order: Vec<usize> = (0..n).collect();
@@ -196,7 +230,7 @@ impl DistanceMatrix {
                     continue;
                 }
 
-                // Bound reversals during metrization are errors
+                // Bound reversals during metrization are errors, but not afterwards
                 if lower > upper && count < metrization_boundary {
                     return Err(DistanceGeometryError::GraphImpossible);
                 }
@@ -212,21 +246,24 @@ impl DistanceMatrix {
         Ok(DistanceMatrix {mat: bounds.take_matrix()})
     }
 
+    /// Number of particles / system size 
     pub fn n(&self) -> usize {
         self.mat.ncols()
     }
 
+    /// Extract matrix
     pub fn take_matrix(self) -> na::DMatrix<f64> {
         self.mat
     }
 }
 
+/// Metric matrix, intermediate data during embedding
 pub struct MetricMatrix {
     mat: na::DMatrix<f64>
 }
 
-impl MetricMatrix {
-    pub fn from_distance_matrix(distances: DistanceMatrix) -> MetricMatrix {
+impl From<DistanceMatrix> for MetricMatrix {
+    fn from(distances: DistanceMatrix) -> MetricMatrix {
         let n = distances.n();
         let mut mat: na::DMatrix<f64> = na::DMatrix::zeros(n, n);
 
@@ -270,7 +307,10 @@ impl MetricMatrix {
 
         MetricMatrix {mat}
     }
+}
 
+impl MetricMatrix {
+    /// Embed into four dimensional space
     pub fn embed(self) -> Matrix4N {
         let n = self.mat.ncols();
         let decomposition = self.mat.symmetric_eigen();
@@ -293,8 +333,12 @@ impl MetricMatrix {
     }
 }
 
+/// Improve embedded coordinates by optimization using the initial distance bounds
 pub mod refinement;
+/// Transformation functions generating distance bounds from various things
 pub mod modeling;
 
+// TODO move into refinement mod
+/// Refinement functions on the gpu
 #[cfg(feature = "gpu")]
 pub mod gpu;

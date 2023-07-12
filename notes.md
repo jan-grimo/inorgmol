@@ -81,6 +81,8 @@ Think about this again, and hard! Is this really wanted?
   - [x] superposable vertex sets
   - [ ] tetrahedra (buggy!)
   - [ ] mirror
+- Is `shape::recognition::sample` correct? shouldn't it distort more than just
+  scaling vertices, but in random directions?
 
 
 # Cargo flamegraph

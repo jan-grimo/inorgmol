@@ -13,7 +13,9 @@ use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
 use crate::permutation::{Permutation, permutations};
 use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
 
+/// Name of a coordination polyhedron
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+#[allow(missing_docs)]
 pub enum Name {
     // 2
     Line,
@@ -68,6 +70,7 @@ pub enum Name {
 }
 
 impl Name {
+    /// String representation of coordination polyhedron name
     pub fn repr(&self) -> &'static str {
         use Name::*;
 
@@ -134,10 +137,12 @@ pub type Rotation = Bijection<Vertex, Vertex>;
 /// A mirror is a sigma symmetry element of a shape, in vertex space
 pub type Mirror = Bijection<Vertex, Vertex>;
 
-/// Shape particles are either vertices, or the implicit origin
+/// Shape particles are either vertices or the implicit origin
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Particle {
+    /// Vertex particle
     Vertex(Vertex),
+    /// Implicit origin
     Origin
 }
 
@@ -161,13 +166,16 @@ impl std::fmt::Display for Particle {
 }
 
 // TODO move to where needed
+/// Unordered index space
 #[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Column(usize);
 
+/// Type alias for tetrahedra defined over shape vertices and the origin
 pub type Tetrahedron = [Particle; 4];
 
 /// A coordination polyhedron
 pub struct Shape {
+    /// Name of the coordination polyhedron
     pub name: Name,
     /// Unit sphere coordinates without a centroid
     pub coordinates: Matrix3N,
@@ -186,12 +194,16 @@ pub struct VertexPlane {
 /// Reasons why a shape's coordinates could be invalid
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum InvalidVerticesError {
+    /// Shape coordinates contain an explicit centroid
     #[error("Coordinates contain an explicit centroid. Centroids are not vertices and are implicitly at the origin")]
     ExplicitCentroid,
+    /// Shape is not precisely unit spherical
     #[error("Shape vertices are not unit spherical")]
     NotUnitSpherical,
+    /// There are duplicate vertices in the shape coordinates
     #[error("There are duplicate vertices in the shape coordinates")]
     DuplicateVertices,
+    /// This shape cannot be canonicalized (library error, not client error)
     #[error("Existing routine for canonicalization is insufficient")]
     CannotCanonicalize
 }
@@ -426,6 +438,9 @@ impl Shape {
         Self::union_to_groups(sets)
     }
 
+    /// Subsets vertices by superposability, disallowing rotation of held vertices
+    ///
+    /// Like [`Shape::vertex_groups`], but holding rotation about some set of vertices
     pub fn vertex_groups_holding(&self, held: &[Vertex], rotations: &HashSet<Rotation>) -> Vec<Vec<Vertex>> {
         let shape_size = self.num_vertices();
         let mut sets = UnionFind::new(shape_size);
@@ -478,7 +493,7 @@ impl Shape {
         let mut parallel_plane_set_finder: UnionFind<usize> = UnionFind::new(f);
         for (i, a) in flat.iter().enumerate() {
             for (j, b) in flat.iter().enumerate().skip(i + 1) {
-                if a.plane.parallel(&b.plane) {
+                if a.plane.is_parallel_to(&b.plane) {
                     parallel_plane_set_finder.union(i, j);
                 }
             }
@@ -948,7 +963,7 @@ impl Shape {
                     NotNan::new(z).expect("Not NaN")
                 })
                 .collect();
-            Permutation::ordering(&zs).apply_move(groups).expect("ordering produces valid permutation")
+            Permutation::ordering(&zs).apply(groups).expect("ordering produces valid permutation")
         };
 
         let vertex_color: HashMap<Vertex, usize> = vertex_groups.iter()
@@ -1022,6 +1037,7 @@ impl Shape {
     }
 }
 
+/// Statically embedded shapes
 pub mod statics;
 pub use statics::*;
 
@@ -1032,7 +1048,10 @@ pub fn shape_from_name(name: Name) -> &'static Shape {
     shape
 }
 
+/// Methods for calculating continuous shape measures
 pub mod similarity;
+
+/// Methods for recognizing shapes in particle clouds
 pub mod recognition;
 
 #[cfg(test)]

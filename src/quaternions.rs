@@ -1,7 +1,10 @@
 extern crate nalgebra as na;
 
+/// Three dimensional matrix type
 pub type Matrix3N = na::Matrix3xX<f64>;
+/// Square three dimensional matrix type
 pub type Matrix3 = na::Matrix3<f64>;
+/// Quaternion type
 pub type Quaternion = na::UnitQuaternion<f64>;
 type Matrix4 = na::Matrix4<f64>;
 
@@ -9,12 +12,14 @@ use std::collections::HashMap;
 
 use derive_more::From;
 
+/// Generate a random rotation quaternion
 pub fn random_rotation() -> Quaternion {
     let random_axis = na::Unit::new_normalize(na::Vector3::new_random());
     let random_angle = rand::random::<f64>() * std::f64::consts::PI;
     Quaternion::from_axis_angle(&random_axis, random_angle)
 }
 
+/// Calculate quaternion matrix contribution for a pair of points
 pub fn quaternion_pair_contribution<'a>(stator_col: &na::MatrixView3x1<'a, f64>, rotor_col: &na::MatrixView3x1<'a, f64>) -> Matrix4 {
     let mut a = Matrix4::zeros();
 
@@ -34,23 +39,37 @@ pub fn quaternion_pair_contribution<'a>(stator_col: &na::MatrixView3x1<'a, f64>,
     a.transpose() * a
 }
 
+/// Fitting result between two matrices
 pub struct Fit {
+    /// Quaternion transforming the stator into the rotor
     pub quaternion: Quaternion,
+    /// Mean square deviation
     pub msd: f64
 }
 
 impl Fit {
+    /// Rotate the stator to align with the rotor
+    ///
+    /// See [`Stator`] for a strongly-typed solution to avoiding passing the wrong matrix
     pub fn rotate_stator(&self, stator: &Matrix3N) -> Matrix3N {
         self.quaternion.to_rotation_matrix() * stator
     }
+
+    /// Rotate the rotor to align with the stator
+    ///
+    /// See [`Stator`] for a strongly-typed solution to avoid passing the wrong matrix
     pub fn rotate_rotor(&self, rotor: &Matrix3N) -> Matrix3N {
         self.quaternion.inverse().to_rotation_matrix() * rotor
     }
 }
 
+/// Decompose the sum of pair contributions into a fit
+///
+/// See [`quaternion_pair_contribution`] to compose `mat`.
 pub fn quaternion_decomposition(mat: Matrix4) -> Fit {
     let decomposition = na::SymmetricEigen::new(mat);
     // Eigenvalues are unsorted here, we seek the minimum value
+    //
     // NOTE: Best inverted fit uses eigenvector of largest eigenvector l_3 
     // with msd of 0.5 * (l_0 + l_1 + l_2 - l_3), so can check if inversion
     // better quite easily if desired
@@ -70,11 +89,6 @@ pub fn quaternion_decomposition(mat: Matrix4) -> Fit {
 }
 
 /// Find a quaternion that best transforms the stator into the rotor
-///
-/// Postconditions 
-/// - rotor = quat * stator and stator = quat.inverse() * rotor,
-///   see `rotate_rotor` and `rotate_stator` fns
-/// - The resulting quaternion is a proper rotation (no inversions)
 pub fn fit(stator: &Matrix3N, rotor: &Matrix3N) -> Fit {
     // Ensure centroids are removed from matrices
     assert!(stator.column_mean().norm_squared() < 1e-8);
@@ -89,6 +103,12 @@ pub fn fit(stator: &Matrix3N, rotor: &Matrix3N) -> Fit {
     quaternion_decomposition(a)
 }
 
+/// Fit a quaternion onto two point clouds with an index mapping between them
+///
+/// Only adds pair contributions of vertex pairs in `vertex_map`. Unmapped vertices do not
+/// contribute to the quaternion fit.
+///
+/// Requires that both matrices have their offset centroid removed.
 pub fn fit_with_map(stator: &Matrix3N, rotor: &Matrix3N, vertex_map: &HashMap<usize, usize>) -> Fit {
     // Ensure centroids are removed from matrices
     assert!(stator.column_mean().norm_squared() < 1e-8);
@@ -115,31 +135,44 @@ fn remove_offset(mut vertices: Matrix3N) -> Matrix3N {
     vertices
 }
 
+/// Fit a quaternion between two point clouds
+///
+/// Removes any offset centroid that is present
 pub fn fit_remove_offset(stator: Matrix3N, rotor: Matrix3N) -> Fit {
     fit(&remove_offset(stator), &remove_offset(rotor))
 }
 
+/// New type stator matrix
 #[derive(Debug, Clone, From)]
 pub struct Stator(pub Matrix3N);
 
+/// New type rotor matrix
 #[derive(Debug, Clone, From)]
 pub struct Rotor(pub Matrix3N);
 
 impl Stator {
+    /// Find a quaternion fit between this stator and a rotor
+    ///
+    /// See [`fit`]
     pub fn fit(&self, rotor: &Rotor) -> Fit {
         crate::quaternions::fit(&self.0, &rotor.0)
     }
 
+    /// Find a quaternion fit between this stator and a rotor with an index mapping
+    ///
+    /// See [`fit_with_map`]
     pub fn fit_with_map(&self, rotor: &Rotor, vertex_map: &HashMap<usize, usize>) -> Fit {
         crate::quaternions::fit_with_map(&self.0, &rotor.0, vertex_map)
     }
 
+    /// Rotate the stator to best fit the rotor
     pub fn rotate(self, fit: &Fit) -> Matrix3N {
         fit.quaternion.to_rotation_matrix() * self.0
     }
 }
 
 impl Rotor {
+    /// Rotate the rotor to best fit the stator
     pub fn rotate(self, fit: &Fit) -> Matrix3N {
         fit.quaternion.inverse().to_rotation_matrix() * self.0
     }

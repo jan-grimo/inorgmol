@@ -44,8 +44,7 @@ fn refinement(c: &mut Criterion) {
         let bounds = dg::modeling::solitary_shape::shape_into_bounds(shape);
         let tetrahedra = shape.find_tetrahedra();
         let distances = dg::DistanceMatrix::try_from_distance_bounds(bounds.clone(), dg::MetrizationPartiality::Complete).expect("Successful metrization");
-        let metric = dg::MetricMatrix::from_distance_matrix(distances);
-        let coords = metric.embed();
+        let coords = dg::MetricMatrix::from(distances).embed();
         let n = coords.len();
         let linear_positions = coords.reshape_generic(na::Dyn(n), na::Const::<1>);
         let chirals: Vec<dg::refinement::Chiral<f64>> = tetrahedra.iter()

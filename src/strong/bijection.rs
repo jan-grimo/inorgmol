@@ -6,8 +6,10 @@ use delegate::delegate;
 use crate::permutation::{Permutation, PermutationError};
 use crate::strong::NewTypeIndex;
 
+/// Struct representing a bijection between index spaces
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
+    /// Underlying weakly index-typed Permutation 
     pub permutation: Permutation,
     key_type: PhantomData<Key>,
     value_type: PhantomData<Value>
@@ -19,14 +21,27 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
         Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
     }
 
+    /// Generates a random bijection (identity inclusive)
     pub fn new_random(n: usize) -> Bijection<Key, Value> {
         Bijection::new(Permutation::new_random(n))
     }
 
+    /// Initialize the `i`-th bijection by lexicographic order of size `n`
+    ///
+    /// Initializes a particular permutation identified by its position
+    /// (zero-indexed) in the lexicographic order `i` of all permutations of
+    /// size `n`.
+    ///
+    /// If `i` is larger than the final position of all permutations of that
+    /// size, i.e. $ i >= n! $, `None` is returned.
     pub fn try_from_index(n: usize, i: usize) -> Option<Bijection<Key, Value>> {
         Permutation::try_from_index(n, i).map(Bijection::new)
     }
 
+    /// Initialize an identity bijection of specific size
+    ///
+    /// The identity bijection maps each number onto itself. It has index
+    /// zero within the lexicographical order of bijections.
     pub fn identity(n: usize) -> Bijection<Key, Value> {
         Bijection::new(Permutation::identity(n))
     }
@@ -58,17 +73,23 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
 
     delegate! {
         to self.permutation {
+            /// Determine the index of a bijection in its lexicographic order
             pub fn index(&self) -> usize;
+            /// Transform into the next permutation within the partial order of its set
             pub fn next_permutation(&mut self) -> bool;
+            /// Transform into the previous permutation within its set's partial order
             pub fn prev_permutation(&mut self) -> bool;
+            /// Number of elements being bijected
             pub fn set_size(&self) -> usize;
         }
     }
 
+    /// Number of possible bijections
     pub fn group_order(n: usize) -> usize {
         Permutation::group_order(n)
     }
 
+    /// Fixed points are values that the bijection maps onto itself
     pub fn is_fixed_point(&self, key: Key) -> bool {
         self.permutation.is_fixed_point(key.get().to_usize().unwrap())
     }
@@ -80,6 +101,9 @@ impl<Key, Value> std::fmt::Display for Bijection<Key, Value> where Key: NewTypeI
     }
 }
 
+/// Iterator adaptor for iterating through all bijections of a set size
+///
+/// See [`bijections`]
 pub struct BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
     bijection: Bijection<T, U>,
     increment: bool
@@ -110,6 +134,7 @@ impl<T, U> Iterator for BijectionIterator<T, U> where T: NewTypeIndex, U: NewTyp
     }
 }
 
+/// Yields bijections in increasing lexicographic order
 pub fn bijections<T, U>(n: usize) -> BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
     BijectionIterator::<T, U>::new(Bijection::new(Permutation::identity(n)))
 }

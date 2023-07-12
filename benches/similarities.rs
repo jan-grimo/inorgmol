@@ -42,7 +42,7 @@ fn similarities(c: &mut Criterion) {
         let shape_rotated: StrongPoints<shapes::Vertex> = StrongPoints::new(shapes::similarity::unit_sphere_normalize(rotation * shape_coordinates));
         let bijection: Bijection<shapes::Vertex, shapes::Column> = {
             let mut p = permutation::Permutation::new_random(shape.num_vertices());
-            p.sigma.push(p.set_size());
+            p.push();
             strong::bijection::Bijection::new(p)
         };
         let cloud = shape_rotated.apply_bijection(&bijection);
