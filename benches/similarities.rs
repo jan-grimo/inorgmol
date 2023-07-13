@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput, BenchmarkId};
 use molassembler::*;
-use strong::matrix::StrongPoints;
+use strong::matrix::Positions;
 use strong::bijection::Bijection;
 
 use itertools::Itertools;
@@ -39,7 +39,7 @@ fn similarities(c: &mut Criterion) {
 
         let shape_coordinates = shape.coordinates.clone().insert_column(size, 0.0);
         let rotation = quaternions::random_rotation().to_rotation_matrix();
-        let shape_rotated: StrongPoints<shapes::Vertex> = StrongPoints::new(shapes::similarity::unit_sphere_normalize(rotation * shape_coordinates));
+        let shape_rotated: Positions<shapes::Vertex> = Positions::new(shapes::similarity::unit_sphere_normalize(rotation * shape_coordinates));
         let bijection: Bijection<shapes::Vertex, shapes::Column> = {
             let mut p = permutation::Permutation::new_random(shape.num_vertices());
             p.push();

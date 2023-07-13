@@ -8,7 +8,7 @@ use petgraph::unionfind::UnionFind;
 use thiserror::Error;
 use ordered_float::NotNan;
 
-use crate::strong::{Index, NewTypeIndex};
+use crate::strong::{IndexBase, Index};
 use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
 use crate::permutation::{Permutation, permutations};
 use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
@@ -123,7 +123,7 @@ impl std::fmt::Display for Name {
 use crate::strong::bijection::Bijection;
 
 /// Index wrapper for shape vertices
-#[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(IndexBase, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Vertex(usize);
 
 impl std::fmt::Display for Vertex {
@@ -167,7 +167,7 @@ impl std::fmt::Display for Particle {
 
 // TODO move to where needed
 /// Unordered index space
-#[derive(Index, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(IndexBase, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Column(usize);
 
 /// Type alias for tetrahedra defined over shape vertices and the origin
@@ -391,7 +391,7 @@ impl Shape {
     }
 
     /// Test whether one vertex bijection is a rotation of another
-    pub fn is_rotation<T: NewTypeIndex>(a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
+    pub fn is_rotation<T: Index>(a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
         rotations.iter().any(|r| r.compose(a).expect("Bad occupations") == *b)
     }
 

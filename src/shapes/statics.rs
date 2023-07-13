@@ -645,7 +645,7 @@ lazy_static! {
 mod tests {
     use crate::shapes::*;
     use crate::shapes::similarity::unit_sphere_normalize;
-    use crate::strong::matrix::StrongPoints;
+    use crate::strong::matrix::Positions;
 
     fn make_rotation(slice: &[usize]) -> Rotation {
         Rotation::new(Permutation::new_unchecked(slice.to_vec()))
@@ -654,7 +654,7 @@ mod tests {
     #[test]
     fn rotations_are_rotations() {
         for shape in SHAPES.iter() {
-            let strong_coords = StrongPoints::new(unit_sphere_normalize(shape.coordinates.clone()));
+            let strong_coords = Positions::new(unit_sphere_normalize(shape.coordinates.clone()));
             // Apply each rotation and quaternion fit without a mapping
             for rotation in shape.rotation_basis.iter() {
                 let rotated_coords = strong_coords.apply_bijection(rotation);

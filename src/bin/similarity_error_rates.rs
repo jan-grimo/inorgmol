@@ -1,5 +1,5 @@
-use molassembler::strong::Index;
-use molassembler::strong::matrix::StrongPoints;
+use molassembler::strong::IndexBase;
+use molassembler::strong::matrix::Positions;
 use molassembler::shapes::similarity::{skip_vertices, polyhedron_reference, unit_sphere_normalize, apply_permutation, SimilarityError};
 use molassembler::quaternions::Matrix3N;
 use molassembler::permutation::Permutation;
@@ -47,12 +47,12 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
             .map(|s| SimilarityAnalysis {bijection: s.bijection, csm: s.csm, msd_dev: 0.0});
     }
 
-    let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x));
+    let cloud = Positions::<Column>::new(unit_sphere_normalize(x));
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
-    let shape_coordinates = StrongPoints::<Vertex>::new(shape_coordinates);
+    let shape_coordinates = Positions::<Vertex>::new(shape_coordinates);
 
     type PartialPermutation = HashMap<Column, Vertex>;
 
@@ -93,9 +93,9 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
 
                 let v = left_free.len();
                 let prematch_rotated_shape = partial_fit.rotate_rotor(&shape_coordinates.matrix.clone());
-                let prematch_rotated_shape = StrongPoints::<Vertex>::new(prematch_rotated_shape);
+                let prematch_rotated_shape = Positions::<Vertex>::new(prematch_rotated_shape);
 
-                let cost_fn = |i, j| (cloud.column(left_free[i]) - prematch_rotated_shape.column(right_free[j])).norm_squared();
+                let cost_fn = |i, j| (cloud.point(left_free[i]) - prematch_rotated_shape.point(right_free[j])).norm_squared();
                 let sub_permutation = match LAP_JV {
                     true => similarity::linear_assignment::optimal(v, &cost_fn),
                     false => similarity::linear_assignment::brute_force(v, &cost_fn)
@@ -159,7 +159,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
     let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
     let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
-    let csm = similarity::scaling::minimize_csm(&cloud.matrix, &rotated_shape);
+    let csm = similarity::scaling::optimize_csm(&cloud.matrix, &rotated_shape);
     Ok(SimilarityAnalysis {bijection: best_bijection, csm, msd_dev})
 }
 

@@ -1,5 +1,5 @@
 use crate::dg::DIMENSIONS;
-use crate::dg::refinement::{Stage, Bounds, DistanceBound, RefinementErrorFunction, ParallelRefinement, StrictUpperTriangleIndices, four_mut};
+use crate::dg::refinement::{Stage, Bounds, DistanceBound, RefinementErrorFunction, ParallelRefinement, four_mut};
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 
@@ -63,7 +63,7 @@ impl GpuHandles {
         // TODO this is an unnecessary copy if F is f32
         let f32_positions = na::DVector::<f32>::from_iterator(positions.len(), positions.iter().map(|f| f.to_f32().unwrap()));
 
-        let linear_length = StrictUpperTriangleIndices::new(n).total_len();
+        let linear_length = (n.pow(2) - n) / 2;
         let linear_slice_size = linear_length * 4 * std::mem::size_of::<f32>();
         let linear_size = linear_slice_size as wgpu::BufferAddress;
 

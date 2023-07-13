@@ -4,18 +4,18 @@ use num_traits::FromPrimitive;
 use delegate::delegate;
 
 use crate::permutation::{Permutation, PermutationError};
-use crate::strong::NewTypeIndex;
+use crate::strong::Index;
 
 /// Struct representing a bijection between index spaces
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
-pub struct Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
+pub struct Bijection<Key, Value> where Key: Index, Value: Index {
     /// Underlying weakly index-typed Permutation 
     pub permutation: Permutation,
     key_type: PhantomData<Key>,
     value_type: PhantomData<Value>
 }
 
-impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
+impl<Key, Value> Bijection<Key, Value> where Key: Index, Value: Index {
     /// Initialize by wrapping a Permutation
     pub fn new(p: Permutation) -> Bijection<Key, Value> {
         Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
@@ -66,7 +66,7 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     }
 
     /// Compose the bijection with another
-    pub fn compose<OtherValue>(&self, other: &Bijection<Value, OtherValue>) -> Result<Bijection<Key, OtherValue>, PermutationError> where OtherValue: NewTypeIndex {
+    pub fn compose<OtherValue>(&self, other: &Bijection<Value, OtherValue>) -> Result<Bijection<Key, OtherValue>, PermutationError> where OtherValue: Index {
         let p = self.permutation.compose(&other.permutation)?;
         Ok(Bijection::new(p))
     }
@@ -95,7 +95,7 @@ impl<Key, Value> Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIn
     }
 }
 
-impl<Key, Value> std::fmt::Display for Bijection<Key, Value> where Key: NewTypeIndex, Value: NewTypeIndex {
+impl<Key, Value> std::fmt::Display for Bijection<Key, Value> where Key: Index, Value: Index {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.permutation)
     }
@@ -104,18 +104,18 @@ impl<Key, Value> std::fmt::Display for Bijection<Key, Value> where Key: NewTypeI
 /// Iterator adaptor for iterating through all bijections of a set size
 ///
 /// See [`bijections`]
-pub struct BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
+pub struct BijectionIterator<T, U> where T: Index, U: Index {
     bijection: Bijection<T, U>,
     increment: bool
 }
 
-impl<T, U> BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
+impl<T, U> BijectionIterator<T, U> where T: Index, U: Index {
     fn new(bijection: Bijection<T, U>) -> BijectionIterator<T, U> {
         BijectionIterator {bijection, increment: false}
     }
 }
 
-impl<T, U> Iterator for BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
+impl<T, U> Iterator for BijectionIterator<T, U> where T: Index, U: Index {
     type Item = Bijection<T, U>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -135,7 +135,7 @@ impl<T, U> Iterator for BijectionIterator<T, U> where T: NewTypeIndex, U: NewTyp
 }
 
 /// Yields bijections in increasing lexicographic order
-pub fn bijections<T, U>(n: usize) -> BijectionIterator<T, U> where T: NewTypeIndex, U: NewTypeIndex {
+pub fn bijections<T, U>(n: usize) -> BijectionIterator<T, U> where T: Index, U: Index {
     BijectionIterator::<T, U>::new(Bijection::new(Permutation::identity(n)))
 }
 
@@ -143,15 +143,15 @@ pub fn bijections<T, U>(n: usize) -> BijectionIterator<T, U> where T: NewTypeInd
 mod tests {
     use crate::permutation::Permutation;
     use crate::strong::bijection::Bijection;
-    use crate::strong::Index;
+    use crate::strong::IndexBase;
 
-    #[derive(Index, Debug, Copy, Clone, PartialEq)]
+    #[derive(IndexBase, Debug, Copy, Clone, PartialEq)]
     struct Foo(usize);
 
-    #[derive(Index, Debug, Copy, Clone, PartialEq)]
+    #[derive(IndexBase, Debug, Copy, Clone, PartialEq)]
     struct Bar(usize);
 
-    #[derive(Index, Debug, Copy, Clone, PartialEq)]
+    #[derive(IndexBase, Debug, Copy, Clone, PartialEq)]
     struct Baz(usize);
 
     #[test]

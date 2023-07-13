@@ -83,6 +83,8 @@ Think about this again, and hard! Is this really wanted?
   - [ ] mirror
 - Is `shape::recognition::sample` correct? shouldn't it distort more than just
   scaling vertices, but in random directions?
+- Is it okay to unit rescale vectors just so that `scaling::minimize` has a
+  simple domain to minimize over?
 
 
 # Cargo flamegraph

@@ -1,6 +1,6 @@
 use molassembler::shapes::SQUAREANTIPRISM;
 use molassembler::dg::*;
-use molassembler::dg::refinement::{Chiral, SerialRefinement, Bounds, Stage};
+use molassembler::dg::refinement::{Chiral, SerialRefinement, Bounds};
 use statrs::statistics::Statistics;
 
 const REPETITIONS: usize = 100;
@@ -17,7 +17,7 @@ fn main() {
             .map(|&tetr| modeling::solitary_shape::chiral_from_tetrahedron(tetr, shape, 0.1))
             .collect();
         let refinement_bounds = Bounds::new(bounds.clone(), chirals);
-        let problem = SerialRefinement {bounds: refinement_bounds, stage: Stage::FixChirals};
+        let problem = SerialRefinement::new(refinement_bounds);
         refinement::refine(problem, coords).map(|results| results.steps as f64).ok()
     }).collect();
 

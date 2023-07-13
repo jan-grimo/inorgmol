@@ -1,18 +1,20 @@
+/// Modeling for embedding a single shape
 pub mod solitary_shape {
 
-use crate::strong::Index;
+use crate::strong::IndexBase;
 use itertools::Itertools;
 use crate::dg::DistanceBounds;
 use crate::dg::refinement::Chiral;
 use crate::shapes::{Shape, Vertex, Particle};
 
-pub fn particle_index(p: &Particle, shape: &Shape) -> usize {
+fn particle_index(p: &Particle, shape: &Shape) -> usize {
     match p {
         Particle::Vertex(v) => v.get(),
         Particle::Origin => shape.num_vertices()
     }
 }
 
+/// Generate distance bounds from a shape
 pub fn shape_into_bounds(shape: &Shape) -> DistanceBounds {
     // Include the origin particle
     let mut bounds = DistanceBounds::new(shape.num_vertices() + 1);
@@ -36,6 +38,7 @@ pub fn shape_into_bounds(shape: &Shape) -> DistanceBounds {
     bounds.floyd_triangle_smooth().expect("Valid bounds")
 }
 
+/// Generate a chiral constraint from a shape tetrahedron
 pub fn chiral_from_tetrahedron(tetrahedron: [Particle; 4], shape: &Shape, relative_tolerance: f64) -> Chiral<f64> {
     let adjusted_volume = 6.0 * crate::geometry::signed_tetrahedron_volume_with_array(tetrahedron.map(|p| shape.particle_position(p)));
     debug_assert!(adjusted_volume > 0.0);

@@ -1,8 +1,10 @@
 use rayon::prelude::*;
+use itertools::Itertools;
 use crate::dg::{DistanceBounds, DIMENSIONS};
 use thiserror::Error;
 extern crate nalgebra as na;
 
+/// Float for use in Distance Geometry
 pub trait Float: num_traits::Float + num_traits::NumAssign + num_traits::NumAssignRef + num_traits::NumRef + na::RealField + std::iter::Sum {}
 
 impl<F> Float for F where 
@@ -36,73 +38,6 @@ type VectorViewMut4<'a, T> = na::Matrix<T, na::Const<4>, na::Const<1>, na::ViewS
 use argmin::core::{Executor, TerminationStatus, TerminationReason, IterState};
 use argmin::solver::quasinewton::LBFGS;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
-
-/// Iterator for direct tuple use of i < j indices
-pub struct StrictUpperTriangleIndices {
-    pub n: usize,
-    pub indices: Option<(usize, usize)>
-}
-
-impl StrictUpperTriangleIndices {
-    /// Construct an i < j iterator for a matrix of size n
-    pub fn new(n: usize) -> StrictUpperTriangleIndices {
-        let indices = (n > 1).then_some((0, 1));
-        StrictUpperTriangleIndices {n, indices}
-    }
-
-    /// Advance the iterator
-    pub fn increment(&mut self) {
-        self.indices = match self.indices {
-            Some((mut i, mut j)) => {
-                j += 1;
-
-                let mut incomplete = true;
-                if j == self.n {
-                    i += 1;
-                    j = i + 1;
-                    if j == self.n {
-                        incomplete = false;
-                    } 
-                }
-
-                incomplete.then_some((i, j))
-            },
-            None => None
-        };
-    }
-
-    /// Yield the total number of upper triangular entries
-    pub fn total_len(&self) -> usize {
-        (self.n.pow(2) - self.n) / 2
-    }
-
-    /// Yield the linear index of the (i, j) pair
-    pub fn linear_index(&self) -> usize {
-        if let Some((i, j)) = self.indices {
-            // valid indices and n > 1
-            debug_assert!(i < j);
-            i * self.n - i * (i + 1) / 2 + j - i - 1
-        } else {
-            self.total_len()
-        }
-    }
-}
-
-impl Iterator for StrictUpperTriangleIndices {
-    type Item = (usize, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let indices = self.indices;
-        self.increment();
-        indices
-    }
-}
-
-impl ExactSizeIterator for StrictUpperTriangleIndices {
-    fn len(&self) -> usize {
-        self.total_len() - self.linear_index()
-    }
-}
 
 /// Gradient contribution of a distance bound
 #[derive(PartialEq, Debug)]
@@ -319,7 +254,9 @@ pub enum Stage {
 /// Distance and chiral constraints for refinement
 #[derive(Clone)]
 pub struct Bounds<F: Float> {
+    /// Distance bounds
     pub distances: Vec<DistanceBound<F>>,
+    /// Chiral bounds
     pub chirals: Vec<Chiral<F>>,
 }
 
@@ -333,7 +270,7 @@ impl<F: Float> Bounds<F> {
     fn linearize_bounds(bounds: DistanceBounds) -> Vec<DistanceBound<F>> {
         let n = bounds.n();
         let bounds_squared = bounds.take_matrix().map(|v| v.powi(2));
-        StrictUpperTriangleIndices::new(n)
+        (0..n).tuple_combinations()
             .map(|(i, j)| DistanceBound::<F> {
                 indices: (i, j),
                 square_bounds: (F::from(bounds_squared[(j, i)]).unwrap(), F::from(bounds_squared[(i, j)]).unwrap()),
@@ -344,15 +281,16 @@ impl<F: Float> Bounds<F> {
 
 /// Serial computation of error function
 pub struct SerialRefinement<F: Float> {
-    pub bounds: Bounds<F>,
-    pub stage: Stage
+    bounds: Bounds<F>,
+    stage: Stage
 }
 
 fn four<F>(line: &na::DVector<F>, index: usize) -> VectorView4<F> {
     line.fixed_view::<4, 1>(DIMENSIONS * index, 0)
 }
 
-pub fn four_mut<F>(line: &mut na::DVector<F>, index: usize) -> VectorViewMut4<F> {
+/// Mutable four-dimensional view of linearized positions
+pub(crate) fn four_mut<F>(line: &mut na::DVector<F>, index: usize) -> VectorViewMut4<F> {
     line.fixed_view_mut::<4, 1>(DIMENSIONS * index, 0)
 }
 
@@ -363,16 +301,6 @@ fn three<F>(line: &na::DVector<F>, index: usize) -> VectorView3<F> {
 fn three_mut<F>(line: &mut na::DVector<F>, index: usize) -> VectorViewMut3<F> {
     line.fixed_view_mut::<3, 1>(DIMENSIONS * index, 0)
 }
-
-// fn site_four(line: &na::DVector<F>, site: &Vec<usize>) -> na::Vector4<F> {
-//     if site.len() == 1 {
-//         return four(line, site[0]).into();
-//     }
-// 
-//     let sum = site.iter()
-//         .fold(na::Vector4::zeros(), |acc, &index| acc + four(line, index));
-//     sum / F::from(site.len()).unwrap()
-// }
 
 // TODO try alteration where return type is an enum of Vector3 and VectorView3
 // or where site is a smallvec
@@ -409,12 +337,19 @@ fn array_of_ref<T, const N:usize>(arr: &[T;N])->[&T;N] {
 }
 
 impl<F: Float> SerialRefinement<F> {
+    /// Construct a new instance
+    pub fn new(bounds: Bounds<F>) -> SerialRefinement<F> {
+        SerialRefinement {bounds, stage: Stage::FixChirals}
+    }
+
+    /// Calculate distance error value
     pub fn distance_error(bounds: &[DistanceBound<F>], positions: &na::DVector<F>) -> F {
         bounds.iter()
             .map(|bound| bound.error(positions))
             .sum()
     }
 
+    /// Calculate distance gradient vector
     pub fn distance_gradient(bounds: &[DistanceBound<F>], positions: &na::DVector<F>) -> na::DVector<F> {
         let mut gradient: na::DVector<F> = na::DVector::zeros(positions.nrows());
 
@@ -427,12 +362,14 @@ impl<F: Float> SerialRefinement<F> {
         gradient
     }
 
+    /// Calculate chiral error value
     pub fn chiral_error(bounds: &[Chiral<F>], positions: &na::DVector<F>) -> F {
         bounds.iter()
             .map(|constraint| constraint.error(positions))
             .sum()
     }
 
+    /// Calculate chiral gradient vector
     pub fn chiral_gradient(bounds: &[Chiral<F>], positions: &na::DVector<F>) -> na::DVector<F> {
         let mut gradient: na::DVector<F> = na::DVector::zeros(positions.nrows());
 
@@ -445,6 +382,7 @@ impl<F: Float> SerialRefinement<F> {
         gradient
     }
 
+    /// Calculate fourth dimension error value
     pub fn fourth_dimension_error(positions: &na::DVector<F>, stage: &Stage) -> F {
         match stage {
             Stage::FixChirals => F::zero(),
@@ -456,6 +394,7 @@ impl<F: Float> SerialRefinement<F> {
         }
     }
 
+    /// Add fourth dimension gradient to existing gradient
     pub fn fourth_dimension_gradient(positions: &na::DVector<F>, mut gradient: na::DVector<F>, stage: &Stage) -> na::DVector<F> {
         match stage {
             Stage::FixChirals => gradient,
@@ -490,17 +429,24 @@ impl<F: Float> RefinementErrorFunction<F> for SerialRefinement<F> {
 
 /// Parallel computation of error function
 pub struct ParallelRefinement<F: Float> {
-    pub bounds: Bounds<F>,
-    pub stage: Stage
+    bounds: Bounds<F>,
+    stage: Stage
 }
 
 impl<F: Float> ParallelRefinement<F> {
+    /// Construct a new instance
+    pub fn new(bounds: Bounds<F>) -> ParallelRefinement<F> {
+        ParallelRefinement {bounds, stage: Stage::FixChirals}
+    }
+
+    /// Calculate distance error value
     pub fn distance_error(bounds: &[DistanceBound<F>], positions: &na::DVector<F>) -> F {
         bounds.par_iter()
             .map(|bound| bound.error(positions))
             .sum()
     }
 
+    /// Calculate distance gradient vector
     pub fn distance_gradient(bounds: &[DistanceBound<F>], positions: &na::DVector<F>) -> na::DVector<F> {
         // Calculate gradient contributions for each bound
         let contributions: Vec<Option<DistanceBoundGradient<F>>> = bounds.par_iter()
@@ -517,12 +463,14 @@ impl<F: Float> ParallelRefinement<F> {
         gradient
     }
 
+    /// Calculate chiral error value
     pub fn chiral_error(bounds: &[Chiral<F>], positions: &na::DVector<F>) -> F {
         bounds.par_iter()
             .map(|constraint| constraint.error(positions))
             .sum()
     }
 
+    /// Calculate chiral gradient vector
     pub fn chiral_gradient(bounds: &[Chiral<F>], positions: &na::DVector<F>) -> na::DVector<F> {
         // Calculate chiral gradient contributions in parallel
         let contributions: Vec<Option<ChiralGradient<F>>> = bounds.par_iter()
@@ -539,6 +487,7 @@ impl<F: Float> ParallelRefinement<F> {
         gradient
     }
 
+    /// Calculate fourth dimension error value
     pub fn fourth_dimension_error(positions: &na::DVector<F>, stage: &Stage) -> F {
         match stage {
             Stage::FixChirals => F::zero(),
@@ -551,6 +500,7 @@ impl<F: Float> ParallelRefinement<F> {
         }
     }
 
+    /// Add fourth dimension gradient to existing gradient
     pub fn fourth_dimension_gradient(positions: &na::DVector<F>, gradient: na::DVector<F>, stage: &Stage) -> na::DVector<F> {
         match stage {
             Stage::FixChirals => gradient,
@@ -594,8 +544,11 @@ impl<F: Float> RefinementErrorFunction<F> for ParallelRefinement<F> {
 
 /// Interface between various error function implementations and argmin
 pub trait RefinementErrorFunction<F> {
+    /// Calculate the error function value
     fn error(&self, positions: &na::DVector<F>) -> F;
+    /// Calculate the error function gradient
     fn gradient(&self, positions: &na::DVector<F>) -> na::DVector<F>;
+    /// Set the stage of refinement
     fn set_stage(&mut self, stage: Stage);
 }
 
@@ -643,13 +596,19 @@ impl<F: Float> argmin::core::Gradient for &dyn RefinementErrorFunction<F> {
 
 /// Result data of a refinement
 pub struct Refinement<F: Float> {
+    /// Refined coordinates
     pub coords: na::Matrix3xX<F>,
+    /// Number of minimization steps
     pub steps: usize
 }
 
 /// Possible errors in refinement
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum RefinementError {
+    /// Function minimization optimizer ran into an issue
+    ///
+    /// Either the error function value and gradient methods are not correctly implemented 
+    /// or there is an issue with the chosen argmin optimizer and/or line search method.
     #[error("Solver failure")]
     SolverFailure,
 }
@@ -706,37 +665,11 @@ pub fn refine(mut problem: impl RefinementErrorFunction<f64>, positions: na::Mat
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools;
     use crate::dg::{DistanceMatrix, MetricMatrix, MetrizationPartiality};
     use crate::dg::refinement::*;
     use crate::shapes::TETRAHEDRON;
 
     extern crate nalgebra as na;
-
-    #[test]
-    fn index_iterator() {
-        for i in 0..6 {
-            assert_eq!(StrictUpperTriangleIndices::new(i).linear_index(), 0);
-
-            assert_eq!(
-                StrictUpperTriangleIndices::new(i).len(),
-                StrictUpperTriangleIndices::new(i).count()
-            );
-
-            itertools::assert_equal(
-                StrictUpperTriangleIndices::new(i), 
-                (0..i).tuple_combinations()
-            );
-
-            let mut iter = StrictUpperTriangleIndices::new(i);
-            assert_eq!(iter.linear_index(), 0);
-            let mut count = 1;
-            while let Some(_) = iter.next() {
-                assert_eq!(iter.linear_index(), count);
-                count += 1;
-            }
-        }
-    }
 
     /// Central difference numerical gradient
     fn numerical_gradient<F: Float>(cost: &dyn Fn(&na::DVector<F>) -> F, args: &na::DVector<F>) -> na::DVector<F> {

@@ -8,13 +8,14 @@ use thiserror::Error;
 use itertools::Itertools;
 use std::collections::HashMap;
 
-use crate::strong::matrix::StrongPoints;
+use crate::strong::matrix::Positions;
 use crate::strong::bijection::{Bijection, bijections};
 use crate::permutation::{Permutation, permutations};
 use crate::shapes::*;
 
 use std::convert::TryFrom;
 
+/// Remove the offset centroid and rescale all distances so that the longest is a unit vector
 pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     // Remove centroid
     let centroid = x.column_mean();
@@ -31,27 +32,29 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     x
 }
 
-pub fn apply_permutation_static<C: nalgebra::base::Dim, S>(x: &na::Matrix<f64, na::Const<3>, C, S>, p: &Permutation) -> na::Matrix<f64, na::Const<3>, C, <na::DefaultAllocator as na::allocator::Allocator<f64, na::Const<3>, C>>::Buffer>
+/// Apply a column permutation to a fixed-width matrix
+pub fn apply_permutation_static<C: nalgebra::base::Dim, S>(x: &na::Matrix<f64, na::Const<3>, C, S>, p: &Permutation) 
+    -> na::Matrix<f64, na::Const<3>, C, <na::DefaultAllocator as na::allocator::Allocator<f64, na::Const<3>, C>>::Buffer>
 where 
     S: na::RawStorage<f64, na::Const<3>, C>,
     C: na::DimName,
     na::DefaultAllocator: na::allocator::Allocator<f64, na::Const<3>, C>
 {
-
     assert_eq!(x.ncols(), p.set_size());
     let inverse = p.inverse();
     na::OMatrix::<f64, na::Const<3>, C>::from_fn(|i, j| x[(i, inverse[j])])
 }
 
-// Column-permute a matrix
-//
-// Post-condition is x.column(i) == result.column(p(i))
+/// Apply a column permutation to a dynamic-width matrix
+///
+/// Post-condition is x.column(i) == result.column(p(i))
 pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
     assert_eq!(x.ncols(), p.set_size());
     let inverse = p.inverse();
     Matrix3N::from_fn(x.ncols(), |i, j| x[(i, inverse[j])])
 }
 
+/// Find the optimal scaling between shape and cloud
 pub mod scaling {
     use crate::shapes::Matrix3N;
 
@@ -85,12 +88,16 @@ pub mod scaling {
         100.0 * msd / cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
     }
 
-    pub struct Minimum {
+    /// Result of optimizing the scaling factor between shape vertices and particle cloud
+    pub struct Optimum {
+        /// Scaling factor for shape to best approximate cloud
         pub factor: f64,
+        /// Mean square deviation of best scaling factor fit
         pub msd: f64
     }
 
-    pub fn minimize(cloud: &Matrix3N, shape: &Matrix3N) -> Minimum {
+    /// Find the optimum scaling factor between cloud and shape
+    pub fn optimize(cloud: &Matrix3N, shape: &Matrix3N) -> Optimum {
         const DEFAULT_MIN: f64 = 0.3;
         const DEFAULT_MAX: f64 = 1.8;
         let precondition = direct_factor(cloud, shape);
@@ -103,25 +110,30 @@ pub mod scaling {
             .run()
             .unwrap();
 
-        Minimum {factor: result.state.best_param.unwrap(), msd: result.state.best_cost}
+        Optimum {factor: result.state.best_param.unwrap(), msd: result.state.best_cost}
     }
 
-    pub fn minimize_csm(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
-        csm_from_msd(cloud, minimize(cloud, shape).msd)
+    /// Optimize the continuous shape measure by scaling between cloud and shape
+    pub fn optimize_csm(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
+        csm_from_msd(cloud, optimize(cloud, shape).msd)
     }
 
-    // Final scale formula of section 2E in "Closed-form solution of absolute orientation with
-    // quaternions" by Berthold K.P. Horn in J. Opt. Soc. Am. A, 1986
-    //
-    // Works (empirically) only for undistorted cases, but useful for 
-    // preconditioning the minimization
+    /// Directly calculate an approximate scaling factor between cloud and shape
+    ///
+    /// Final scale formula of section 2E in "Closed-form solution of absolute orientation with
+    /// quaternions" by Berthold K.P. Horn in J. Opt. Soc. Am. A, 1986
+    ///
+    /// Works (empirically) only for undistorted cases, but useful for 
+    /// preconditioning the minimization.
     pub fn direct_factor(cloud: &Matrix3N, shape: &Matrix3N) -> f64 {
         (cloud.column_iter().map(|v| v.norm_squared()).sum::<f64>()
             / shape.column_iter().map(|v| v.norm_squared()).sum::<f64>()).sqrt()
     }
 }
 
-// Bool matrix indicating which vertex pairs are rotationally unique
+/// Bool matrix indicating which vertex pairs are not rotationally unique
+///
+/// Vertex pair entries that are `true` can be skipped without loss of generality.
 pub fn skip_vertices(shape: &Shape) -> na::DMatrix<bool> {
     let s = shape.num_vertices();
     let mut skips = na::DMatrix::<bool>::from_element(s + 1, s + 1, true);
@@ -224,8 +236,10 @@ impl Iterator for SkipsBijectionGenerator {
     } 
 }
 
+/// Errors arising in similarity calculation
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum SimilarityError {
+    /// Number of particles does not match shape size
     #[error("Number of particles does not match shape size")]
     ParticleNumberMismatch,
 }
@@ -238,10 +252,11 @@ pub struct Similarity {
     pub csm: f64,
 }
 
-pub fn polyhedron_reference_base_inner(
+#[inline(always)]
+fn polyhedron_reference_base_inner(
     generator: impl Iterator<Item = Bijection<Column, Vertex>>,
-    cloud: &StrongPoints<Column>,
-    shape_coordinates: &StrongPoints<Vertex>
+    cloud: &Positions<Column>,
+    shape_coordinates: &Positions<Vertex>
 ) -> (Bijection<Column, Vertex>, crate::quaternions::Fit)
 {
     generator.map(|p| {
@@ -252,18 +267,21 @@ pub fn polyhedron_reference_base_inner(
         .expect("There is always at least one permutation available to try")
 }
 
-/// Polyhedron similarity performing quaternion fits on all rotationally distinct bijections
+/// Polyhedron similarity performing quaternion fits on all considered bijections
+///
+/// If `USE_SKIPS` is `true`, only considers rotationally distinct bijections.
+/// Otherwise, considers all permutationally possible bijections.
 pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
     let n = x.ncols();
     if n != shape.num_vertices() + 1 {
         return Err(SimilarityError::ParticleNumberMismatch);
     }
 
-    let cloud = StrongPoints::new(unit_sphere_normalize(x));
+    let cloud: Positions<Column> = Positions::new(unit_sphere_normalize(x));
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
-    let shape_coordinates = StrongPoints::new(unit_sphere_normalize(shape_coordinates));
+    let shape_coordinates: Positions<Vertex> = Positions::new(unit_sphere_normalize(shape_coordinates));
 
     let (best_bijection, best_fit) = match USE_SKIPS {
         true => polyhedron_reference_base_inner(SkipsBijectionGenerator::new(shape), &cloud, &shape_coordinates),
@@ -275,14 +293,18 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Sha
     let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
     let rotated_shape = best_fit.rotate_stator(&permuted_shape.matrix);
 
-    let csm = scaling::minimize_csm(&cloud.matrix, &rotated_shape);
+    let csm = scaling::optimize_csm(&cloud.matrix, &rotated_shape);
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
+/// Slow reference implementation of continuous shape measure calculation
+///
+/// Performs quaternion fits on all rotationally distinct bijections.
 pub fn polyhedron_reference(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
     polyhedron_reference_base::<true>(x, shape)
 }
 
+/// Linear assignment algorithms
 pub mod linear_assignment {
     use std::convert::TryFrom;
     use crate::shapes::similarity::{Permutation, permutations};
@@ -335,7 +357,7 @@ pub mod linear_assignment {
 }
 
 /// Polyhedron similarity performing quaternion fits only on a limited number of 
-/// vertices before assigning the rest by brute force linear assignment
+/// vertices before assigning the rest by linear assignment
 pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_JV: bool>(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
     const MIN_PREMATCH: usize = 2;
     assert!(MIN_PREMATCH <= PREMATCH); // TODO trigger compilation failure? static assert?
@@ -350,13 +372,13 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
         return polyhedron_reference_base::<USE_SKIPS>(x, shape);
     }
 
-    let cloud = StrongPoints::<Column>::new(unit_sphere_normalize(x));
+    let cloud = Positions::<Column>::new(unit_sphere_normalize(x));
     // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
-    let shape_coordinates = StrongPoints::<Vertex>::new(shape_coordinates);
+    let shape_coordinates = Positions::<Vertex>::new(shape_coordinates);
 
     type PartialPermutation = HashMap<Column, Vertex>;
 
@@ -398,17 +420,17 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
 
                 let v = left_free.len();
                 let prematch_rotated_shape = partial_fit.rotate_rotor(&shape_coordinates.matrix.clone());
-                let prematch_rotated_shape = StrongPoints::<Vertex>::new(prematch_rotated_shape);
+                let prematch_rotated_shape = Positions::<Vertex>::new(prematch_rotated_shape);
 
                 if cfg!(debug_assertions) {
                     let partial_msd: f64 = vertices.iter()
                         .enumerate()
-                        .map(|(i, j)| (cloud.matrix.column(i) - prematch_rotated_shape.column(*j)).norm_squared())
+                        .map(|(i, j)| (cloud.matrix.column(i) - prematch_rotated_shape.point(*j)).norm_squared())
                         .sum();
                     approx::assert_relative_eq!(partial_fit.msd, partial_msd, epsilon=1e-6);
                 }
 
-                let cost_fn = |i, j| (cloud.column(left_free[i]) - prematch_rotated_shape.column(right_free[j])).norm_squared();
+                let cost_fn = |i, j| (cloud.point(left_free[i]) - prematch_rotated_shape.point(right_free[j])).norm_squared();
                 let sub_permutation = match LAP_JV {
                     true => linear_assignment::optimal(v, &cost_fn),
                     false => linear_assignment::brute_force(v, &cost_fn)
@@ -486,10 +508,15 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
     let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
-    let csm = scaling::minimize_csm(&cloud.matrix, &rotated_shape);
+    let csm = scaling::optimize_csm(&cloud.matrix, &rotated_shape);
     Ok(Similarity {bijection: best_bijection, csm})
 }
 
+/// Calculate continuous shape measure w.r.t. a particular polyhedron with tricks
+///
+/// Performs quaternion fits only on five vertices before assigning the rest by linear assignment.
+/// Skips rotationally equivalent five-vertex sets. Uses Jonker-Volgenant linear assignment if
+/// there are sufficient remaining vertices for it to be faster than brute force.
 pub fn polyhedron(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
     polyhedron_base::<5, true, true>(x, shape)
 }
@@ -544,7 +571,7 @@ mod tests {
         let factor = 0.5 + 0.5 * rand::random::<f64>();
         assert!(factor <= 1.0);
 
-        let result = scaling::minimize(&cloud.scale(factor), &cloud);
+        let result = scaling::optimize(&cloud.scale(factor), &cloud);
         approx::assert_relative_eq!(factor, result.factor);
         approx::assert_relative_eq!(0.0, result.msd);
     }
@@ -561,14 +588,14 @@ mod tests {
     struct Case {
         shape_name: Name,
         bijection: Bijection<Vertex, Column>,
-        cloud: StrongPoints<Column>
+        cloud: Positions<Column>
     }
 
     impl Case {
-        fn random_shape_rotation(shape: &Shape) -> StrongPoints<Vertex> {
+        fn random_shape_rotation(shape: &Shape) -> Positions<Vertex> {
             let shape_coords = shape.coordinates.clone().insert_column(shape.num_vertices(), 0.0);
             let rotation = random_rotation().to_rotation_matrix();
-            StrongPoints::new(unit_sphere_normalize(rotation * shape_coords))
+            Positions::new(unit_sphere_normalize(rotation * shape_coords))
         }
 
         fn random(shape: &Shape) -> Case {
@@ -610,7 +637,7 @@ mod tests {
         }
     }
 
-    fn pop_centroid<T>(mut p: Bijection<Vertex, T>) -> Bijection<Vertex, T> where T: NewTypeIndex {
+    fn pop_centroid<T>(mut p: Bijection<Vertex, T>) -> Bijection<Vertex, T> where T: Index {
         let maybe_centroid = p.permutation.pop_if_fixed_point();
         // Ensure centroid was at end of permutation
         assert_eq!(maybe_centroid, Some(p.set_size()));

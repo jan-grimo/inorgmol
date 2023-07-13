@@ -5,7 +5,7 @@ use syn::{parse_macro_input, DeriveInput};
 
 use proc_macro::TokenStream;
 
-#[proc_macro_derive(Index)]
+#[proc_macro_derive(IndexBase)]
 pub fn impl_index(input: TokenStream) -> TokenStream {
     // Parse the string representation
     let ast = parse_macro_input!(input as DeriveInput);
@@ -20,7 +20,7 @@ pub fn impl_index(input: TokenStream) -> TokenStream {
         let field_type = &head_field.ty;
 
         let expanded = quote! {
-            impl Index for #name {
+            impl IndexBase for #name {
                 type Type = #field_type;
 
                 fn get(&self) -> #field_type {
