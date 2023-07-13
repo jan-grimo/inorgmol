@@ -337,8 +337,3 @@ impl MetricMatrix {
 pub mod refinement;
 /// Transformation functions generating distance bounds from various things
 pub mod modeling;
-
-// TODO move into refinement mod
-/// Refinement functions on the gpu
-#[cfg(feature = "gpu")]
-pub mod gpu;

@@ -20,6 +20,7 @@ fn make_rotation(slice: &[usize]) -> Rotation {
 }
 
 lazy_static! {
+    /// Linear two-vertex coordination polyhedron
     pub static ref LINE: Shape = Shape {
         name: Name::Line,
         coordinates: Matrix3N::from_column_slice(&[
@@ -29,7 +30,7 @@ lazy_static! {
         rotation_basis: vec![make_rotation(&[1, 0])],
     };
 
-    /// Bent at 107°
+    /// Bent two-vertex coordination polyhedron at 107°
     pub static ref BENT: Shape = Shape {
         name: Name::Bent,
         coordinates: Matrix3N::from_column_slice(&[
@@ -39,6 +40,7 @@ lazy_static! {
         rotation_basis: vec![make_rotation(&[1, 0])],
     };
 
+    /// Equilateral triangle three-vertex coordination polyhedron
     pub static ref EQUILATERAL_TRIANGLE: Shape = Shape {
         name: Name::EquilateralTriangle,
         coordinates: Matrix3N::from_column_slice(&[
@@ -52,7 +54,7 @@ lazy_static! {
         ],
     };
 
-    /// Monovacant tetrahedron. 
+    /// Monovacant tetrahedron coordination polyhedron
     ///
     /// Widely called trigonal pyramidal, but easily confusable with a 
     /// face-centered trigonal pyramid.
@@ -66,6 +68,7 @@ lazy_static! {
         rotation_basis: vec![make_rotation(&[2, 0, 1])]
     };
 
+    /// T-shape coordination polyhedron
     pub static ref TSHAPE: Shape = Shape {
         name: Name::T,
         coordinates: Matrix3N::from_column_slice(&[
@@ -76,6 +79,7 @@ lazy_static! {
         rotation_basis: vec![make_rotation(&[2, 1, 0])],
     };
 
+    /// Tetrahedron coordination polyhedron
     pub static ref TETRAHEDRON: Shape = Shape {
         name: Name::Tetrahedron,
         coordinates: Matrix3N::from_column_slice(&[
@@ -92,6 +96,7 @@ lazy_static! {
         ],
     };
 
+    /// Square coordination polyhedron
     pub static ref SQUARE: Shape = Shape {
         name: Name::Square,
         coordinates: Matrix3N::from_column_slice(&[
@@ -161,6 +166,7 @@ lazy_static! {
         ],
     };
 
+    /// Pentagon coordination polyhedron
     pub static ref PENTAGON: Shape = Shape {
         name: Name::Pentagon,
         coordinates: Matrix3N::from_column_slice(&[
@@ -176,6 +182,7 @@ lazy_static! {
         ],
     };
 
+    /// Octahedron coordination polyhedron
     pub static ref OCTAHEDRON: Shape = Shape {
         name: Name::Octahedron,
         coordinates: Matrix3N::from_column_slice(&[
@@ -193,6 +200,7 @@ lazy_static! {
         ],
     };
 
+    /// Trigonal prism six-vertex coordination polyhedron
     pub static ref TRIGONALPRISM: Shape = Shape {
         name: Name::TrigonalPrism,
         coordinates: Matrix3N::from_column_slice(&[
@@ -209,7 +217,7 @@ lazy_static! {
         ],
     };
     
-    /// J2 solid
+    /// J2 solid pentagonal pyramid six-vertex coordination polyhedron
     pub static ref PENTAGONALPYRAMID: Shape = Shape {
         name: Name::PentagonalPyramid,
         coordinates: Matrix3N::from_column_slice(&[
@@ -225,6 +233,7 @@ lazy_static! {
         ],
     };
 
+    /// Hexagon coordination polyhedron
     pub static ref HEXAGON: Shape = Shape {
         name: Name::Hexagon,
         coordinates: Matrix3N::from_column_slice(&[
@@ -308,6 +317,7 @@ lazy_static! {
         ],
     };
 
+    /// Square antiprism eight-vertex coordination polyhedron
     pub static ref SQUAREANTIPRISM: Shape = Shape {
         name: Name::SquareAntiprism,
         coordinates: Matrix3N::from_column_slice(&[
@@ -326,6 +336,7 @@ lazy_static! {
         ],
     };
     
+    /// Cube eight-vertex coordination polyhedron
     pub static ref CUBE: Shape = Shape {
         name: Name::Cube,
         coordinates: Matrix3N::from_column_slice(&[
@@ -363,6 +374,7 @@ lazy_static! {
         ],
     };
 
+    /// Hexagonal bipyramid eight-vertex coordination polyhedron
     pub static ref HEXAGONALBIPYRAMID: Shape = Shape {
         name: Name::HexagonalBipyramid,
         coordinates: Matrix3N::from_column_slice(&[
@@ -423,6 +435,7 @@ lazy_static! {
         ],
     };
 
+    /// Heptagonal bipyramid nine-vertex coordination polyhedron
     pub static ref HEPTAGONALBIPYRAMID: Shape = Shape {
         name: Name::HeptagonalBipyramid,
         coordinates: Matrix3N::from_column_slice(&[
@@ -486,6 +499,7 @@ lazy_static! {
         ],
     };
 
+    /// Icosahedron twelve-vertex coordination polyhedron
     pub static ref ICOSAHEDRON: Shape = Shape {
         name: Name::Icosahedron,
         coordinates: Matrix3N::from_column_slice(&[
@@ -509,6 +523,7 @@ lazy_static! {
         ],
     };
 
+    /// Cuboctahedron twelve-vertex coordination polyhedron
     pub static ref CUBOCTAHEDRON: Shape = Shape {
         name: Name::Cuboctahedron,
         coordinates: Matrix3N::from_column_slice(&[

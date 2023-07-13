@@ -1,5 +1,5 @@
 use crate::dg::DIMENSIONS;
-use crate::dg::refinement::{Stage, Bounds, DistanceBound, RefinementErrorFunction, ParallelRefinement, four_mut};
+use crate::dg::refinement::{Stage, Bounds, DistanceBound, RefinementErrorFunction, Parallel, four_mut};
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 
@@ -143,14 +143,14 @@ impl GpuHandles {
 }
 
 /// Gpu-offloaded distance bounds gradient calculation and parallel otherwise
-pub struct GpuRefinement<F: Float> {
+pub struct Gpu<F: Float> {
     bounds: Bounds<F>,
     gpu_linear_squared_bounds: na::Matrix2xX<f32>,
     gpu_handles: Option<GpuHandles>,
     stage: Stage,
 }
 
-impl<F: Float> GpuRefinement<F> {
+impl<F: Float> Gpu<F> {
     /// Transform distance bounds for transfer to gpu
     fn into_matrix(bounds: &[DistanceBound<F>]) -> na::Matrix2xX<f32> {
         let n = bounds.len();
@@ -165,10 +165,10 @@ impl<F: Float> GpuRefinement<F> {
     }
 
     /// Construct from bounds
-    pub fn new(bounds: Bounds<F>) -> GpuRefinement<F> {
+    pub fn new(bounds: Bounds<F>) -> Gpu<F> {
         let gpu_linear_squared_bounds = Self::into_matrix(&bounds.distances);
         let gpu_handles = GpuHandles::new();
-        GpuRefinement {bounds, gpu_linear_squared_bounds, gpu_handles, stage: Stage::FixChirals}
+        Gpu {bounds, gpu_linear_squared_bounds, gpu_handles, stage: Stage::FixChirals}
     }
 
     /// Run compute shader on gpu to calculate distance gradient contributions
@@ -202,7 +202,7 @@ impl<F: Float> GpuRefinement<F> {
 
     /// Wraps parallel computation of chiral gradient
     async fn chiral_gradient(&self, positions: &na::DVector<F>) -> na::DVector<F> {
-        ParallelRefinement::chiral_gradient(&self.bounds.chirals, positions)
+        Parallel::chiral_gradient(&self.bounds.chirals, positions)
     }
 
     /// Calculate gradients asynchronously, offloading distance gradients to gpu if possible
@@ -211,17 +211,17 @@ impl<F: Float> GpuRefinement<F> {
         let chiral_fut = self.chiral_gradient(positions); // parallel on CPU
         let (maybe_distance_grad, chiral_grad) = futures::join!(distance_fut, chiral_fut);
         // Fallback onto parallel impl if gpu doesn't work
-        let distance_grad = maybe_distance_grad.unwrap_or_else(|| ParallelRefinement::distance_gradient(&self.bounds.distances, positions));
+        let distance_grad = maybe_distance_grad.unwrap_or_else(|| Parallel::distance_gradient(&self.bounds.distances, positions));
         let grad = distance_grad + chiral_grad;
-        ParallelRefinement::fourth_dimension_gradient(positions, grad, &self.stage)
+        Parallel::fourth_dimension_gradient(positions, grad, &self.stage)
     }
 }
 
-impl<F: Float> RefinementErrorFunction<F> for GpuRefinement<F> {
+impl<F: Float> RefinementErrorFunction<F> for Gpu<F> {
     fn error(&self, positions: &na::DVector<F>) -> F {
-        ParallelRefinement::distance_error(&self.bounds.distances, positions)
-            + ParallelRefinement::chiral_error(&self.bounds.chirals, positions)
-            + ParallelRefinement::fourth_dimension_error(positions, &self.stage)
+        Parallel::distance_error(&self.bounds.distances, positions)
+            + Parallel::chiral_error(&self.bounds.chirals, positions)
+            + Parallel::fourth_dimension_error(positions, &self.stage)
     }
 
     fn gradient(&self, positions: &na::DVector<F>) -> na::DVector<F> {
@@ -236,8 +236,8 @@ impl<F: Float> RefinementErrorFunction<F> for GpuRefinement<F> {
 #[cfg(test)]
 mod tests {
     use crate::dg::{DistanceMatrix, MetricMatrix, MetrizationPartiality};
-    use crate::dg::refinement::{SerialRefinement, Stage};
-    use crate::dg::gpu::*;
+    use crate::dg::refinement::{Serial, Stage};
+    use crate::dg::refinement::gpu::*;
 
     #[test]
     fn gpu_gradient() {
@@ -249,10 +249,10 @@ mod tests {
         let linear_coords = coords.reshape_generic(na::Dyn(n), na::Const::<1>);
         let refinement_bounds = Bounds::new(bounds, Vec::new());
 
-        let serial_errf = SerialRefinement {bounds: refinement_bounds.clone(), stage: Stage::FixChirals};
+        let serial_errf = Serial {bounds: refinement_bounds.clone(), stage: Stage::FixChirals};
         let serial_grad = serial_errf.gradient(&linear_coords);
 
-        let gpu_errf = GpuRefinement::new(refinement_bounds);
+        let gpu_errf = Gpu::new(refinement_bounds);
         let gpu_grad = gpu_errf.gradient(&linear_coords);
 
         approx::assert_relative_eq!(serial_grad, gpu_grad, epsilon=1e-4);

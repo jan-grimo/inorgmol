@@ -16,7 +16,7 @@ fn gpu_bench<T>(
 ) 
     where T: criterion::measurement::Measurement 
 {
-    let gpu = dg::gpu::GpuRefinement::new(refinement_bounds);
+    let gpu = dg::refinement::gpu::Gpu::new(refinement_bounds);
     bench_group.bench_with_input(
         BenchmarkId::new("gpu", refinement_n),
         &refinement_n,
@@ -56,14 +56,14 @@ fn refinement(c: &mut Criterion) {
 
         let refinement_bounds = dg::refinement::Bounds::new(bounds, chirals);
 
-        let serial = dg::refinement::SerialRefinement {bounds: refinement_bounds.clone(), stage: dg::refinement::Stage::FixChirals};
+        let serial = dg::refinement::Serial::new(refinement_bounds.clone());
         bench_group.bench_with_input(
             BenchmarkId::new("serial", refinement_n),
             &refinement_n,
             |b, _| b.iter(|| serial.gradient(black_box(&linear_positions)))
         );
 
-        let parallel = dg::refinement::ParallelRefinement {bounds: refinement_bounds.clone(), stage: dg::refinement::Stage::FixChirals};
+        let parallel = dg::refinement::Parallel::new(refinement_bounds.clone());
         bench_group.bench_with_input(
             BenchmarkId::new("parallel", refinement_n),
             &refinement_n,

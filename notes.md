@@ -85,6 +85,11 @@ Think about this again, and hard! Is this really wanted?
   scaling vertices, but in random directions?
 - Is it okay to unit rescale vectors just so that `scaling::minimize` has a
   simple domain to minimize over?
+- Have another close look at the failure thresholds in the similarity matching
+  tricks binary. Maybe it's better not just to take the smallest one you found
+  but look at the percentage of failures at each value of the quaternion fit
+  msd and model it as a cumulative distribution function. That way you could
+  choose what probability of failure you're willing to accept.
 
 
 # Cargo flamegraph

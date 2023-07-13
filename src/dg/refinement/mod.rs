@@ -280,7 +280,7 @@ impl<F: Float> Bounds<F> {
 }
 
 /// Serial computation of error function
-pub struct SerialRefinement<F: Float> {
+pub struct Serial<F: Float> {
     bounds: Bounds<F>,
     stage: Stage
 }
@@ -336,10 +336,10 @@ fn array_of_ref<T, const N:usize>(arr: &[T;N])->[&T;N] {
     unsafe { out.assume_init() }
 }
 
-impl<F: Float> SerialRefinement<F> {
+impl<F: Float> Serial<F> {
     /// Construct a new instance
-    pub fn new(bounds: Bounds<F>) -> SerialRefinement<F> {
-        SerialRefinement {bounds, stage: Stage::FixChirals}
+    pub fn new(bounds: Bounds<F>) -> Serial<F> {
+        Serial {bounds, stage: Stage::FixChirals}
     }
 
     /// Calculate distance error value
@@ -409,7 +409,7 @@ impl<F: Float> SerialRefinement<F> {
     }
 }
 
-impl<F: Float> RefinementErrorFunction<F> for SerialRefinement<F> {
+impl<F: Float> RefinementErrorFunction<F> for Serial<F> {
     fn error(&self, positions: &na::DVector<F>) -> F {
         Self::distance_error(&self.bounds.distances, positions)
             + Self::chiral_error(&self.bounds.chirals, positions)
@@ -428,15 +428,15 @@ impl<F: Float> RefinementErrorFunction<F> for SerialRefinement<F> {
 }
 
 /// Parallel computation of error function
-pub struct ParallelRefinement<F: Float> {
+pub struct Parallel<F: Float> {
     bounds: Bounds<F>,
     stage: Stage
 }
 
-impl<F: Float> ParallelRefinement<F> {
+impl<F: Float> Parallel<F> {
     /// Construct a new instance
-    pub fn new(bounds: Bounds<F>) -> ParallelRefinement<F> {
-        ParallelRefinement {bounds, stage: Stage::FixChirals}
+    pub fn new(bounds: Bounds<F>) -> Parallel<F> {
+        Parallel {bounds, stage: Stage::FixChirals}
     }
 
     /// Calculate distance error value
@@ -524,7 +524,7 @@ impl<F: Float> ParallelRefinement<F> {
     }
 }
 
-impl<F: Float> RefinementErrorFunction<F> for ParallelRefinement<F> {
+impl<F: Float> RefinementErrorFunction<F> for Parallel<F> {
     fn error(&self, positions: &na::DVector<F>) -> F {
         Self::distance_error(&self.bounds.distances, positions)
             + Self::chiral_error(&self.bounds.chirals, positions)
@@ -662,6 +662,10 @@ pub fn refine(mut problem: impl RefinementErrorFunction<f64>, positions: na::Mat
 
     Ok(Refinement {coords, steps})
 }
+
+/// Refinement functions on the gpu
+#[cfg(feature = "gpu")]
+pub mod gpu;
 
 #[cfg(test)]
 mod tests {
