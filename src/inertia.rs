@@ -51,11 +51,11 @@ pub fn moments_axes(particles: &na::Matrix3xX<f64>) -> (Moments, Axes) {
         return (Moments(decomposition.eigenvalues), Axes(decomposition.eigenvectors));
     }
 
-    let ordered_eigenvalues = na::Vector3::from_vec(ordering.apply_collect(decomposition.eigenvalues.as_slice()).expect("Matching permutation length"));
+    let ordered_eigenvalues = na::Vector3::from_vec(ordering.apply_slice(decomposition.eigenvalues.as_slice()).expect("Matching permutation length"));
 
     let ordered_eigenvectors = {
         let columns: Vec<_> = decomposition.eigenvectors.column_iter().collect();
-        let permuted = ordering.apply_ref(&columns).expect("Matching permutation length");
+        let permuted = ordering.apply_slice(&columns).expect("Matching permutation length");
         na::Matrix3::from_columns(permuted.as_slice())
     };
 

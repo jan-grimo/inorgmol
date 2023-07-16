@@ -5,24 +5,25 @@ use delegate::delegate;
 
 use crate::permutation::{Permutation, PermutationError};
 use crate::strong::Index;
+use std::convert::TryFrom;
 
 /// Struct representing a bijection between index spaces
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
-pub struct Bijection<Key, Value> where Key: Index, Value: Index {
+pub struct Bijection<T: Index, U: Index> {
     /// Underlying weakly index-typed Permutation 
     pub permutation: Permutation,
-    key_type: PhantomData<Key>,
-    value_type: PhantomData<Value>
+    key_type: PhantomData<T>,
+    value_type: PhantomData<U>
 }
 
-impl<Key, Value> Bijection<Key, Value> where Key: Index, Value: Index {
+impl<T: Index, U: Index> Bijection<T, U> {
     /// Initialize by wrapping a Permutation
-    pub fn new(p: Permutation) -> Bijection<Key, Value> {
+    pub fn new(p: Permutation) -> Bijection<T, U> {
         Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
     }
 
     /// Generates a random bijection (identity inclusive)
-    pub fn new_random(n: usize) -> Bijection<Key, Value> {
+    pub fn new_random(n: usize) -> Bijection<T, U> {
         Bijection::new(Permutation::new_random(n))
     }
 
@@ -34,7 +35,7 @@ impl<Key, Value> Bijection<Key, Value> where Key: Index, Value: Index {
     ///
     /// If `i` is larger than the final position of all permutations of that
     /// size, i.e. $ i >= n! $, `None` is returned.
-    pub fn try_from_index(n: usize, i: usize) -> Option<Bijection<Key, Value>> {
+    pub fn try_from_index(n: usize, i: usize) -> Option<Bijection<T, U>> {
         Permutation::try_from_index(n, i).map(Bijection::new)
     }
 
@@ -42,31 +43,37 @@ impl<Key, Value> Bijection<Key, Value> where Key: Index, Value: Index {
     ///
     /// The identity bijection maps each number onto itself. It has index
     /// zero within the lexicographical order of bijections.
-    pub fn identity(n: usize) -> Bijection<Key, Value> {
+    pub fn identity(n: usize) -> Bijection<T, U> {
         Bijection::new(Permutation::identity(n))
     }
 
     /// Invert the bijection
-    pub fn inverse(&self) -> Bijection<Value, Key> {
+    pub fn inverse(&self) -> Bijection<U, T> {
         Bijection::new(self.permutation.inverse())
     }
 
     /// Apply the map to a key and find its corresponding value
-    pub fn get(&self, key: &Key) -> Option<Value> {
+    pub fn get(&self, key: &T) -> Option<U> {
         let index = key.get().to_usize()?;
+        if index >= self.permutation.set_size() {
+            return None;
+        }
+
         let value = self.permutation[index];
-        Some(Value::from(<Value::Type as FromPrimitive>::from_usize(value)?))
+        Some(U::from(<U::Type as FromPrimitive>::from_usize(value)?))
     }
 
     /// Find the key to a corresponding value
-    pub fn inverse_of(&self, value: &Value) -> Option<Key> {
+    pub fn inverse_of(&self, value: &U) -> Option<T> {
         let inverse = self.permutation.inverse_of(value.get().to_usize()?)?;
-        let key = Key::from(<Key::Type as FromPrimitive>::from_usize(inverse)?);
+        let key = T::from(<T::Type as FromPrimitive>::from_usize(inverse)?);
         Some(key)
     }
 
     /// Compose the bijection with another
-    pub fn compose<OtherValue>(&self, other: &Bijection<Value, OtherValue>) -> Result<Bijection<Key, OtherValue>, PermutationError> where OtherValue: Index {
+    pub fn compose<V: Index>(&self, other: &Bijection<U, V>) 
+    -> Result<Bijection<T, V>, PermutationError> 
+    {
         let p = self.permutation.compose(&other.permutation)?;
         Ok(Bijection::new(p))
     }
@@ -90,32 +97,43 @@ impl<Key, Value> Bijection<Key, Value> where Key: Index, Value: Index {
     }
 
     /// Fixed points are values that the bijection maps onto itself
-    pub fn is_fixed_point(&self, key: Key) -> bool {
+    pub fn is_fixed_point(&self, key: T) -> bool {
         self.permutation.is_fixed_point(key.get().to_usize().unwrap())
     }
 }
 
-impl<Key, Value> std::fmt::Display for Bijection<Key, Value> where Key: Index, Value: Index {
+impl<Key: Index, Value: Index> std::fmt::Display for Bijection<Key, Value> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.permutation)
+    }
+}
+
+impl<Key: Index, Value: Index> TryFrom<Vec<Value>> for Bijection<Key, Value> {
+    type Error = PermutationError;
+
+    fn try_from(strong_vec: Vec<Value>) -> Result<Bijection<Key, Value>, Self::Error> {
+        let weak_vec: Vec<usize> = strong_vec.into_iter()
+            .map(|v| v.get().to_usize().unwrap())
+            .collect();
+        Permutation::try_from(weak_vec).map(|p| Bijection::new(p))
     }
 }
 
 /// Iterator adaptor for iterating through all bijections of a set size
 ///
 /// See [`bijections`]
-pub struct BijectionIterator<T, U> where T: Index, U: Index {
+pub struct BijectionIterator<T: Index, U: Index> {
     bijection: Bijection<T, U>,
     increment: bool
 }
 
-impl<T, U> BijectionIterator<T, U> where T: Index, U: Index {
+impl<T: Index, U: Index> BijectionIterator<T, U> {
     fn new(bijection: Bijection<T, U>) -> BijectionIterator<T, U> {
         BijectionIterator {bijection, increment: false}
     }
 }
 
-impl<T, U> Iterator for BijectionIterator<T, U> where T: Index, U: Index {
+impl<T: Index, U: Index> Iterator for BijectionIterator<T, U> {
     type Item = Bijection<T, U>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -135,8 +153,8 @@ impl<T, U> Iterator for BijectionIterator<T, U> where T: Index, U: Index {
 }
 
 /// Yields bijections in increasing lexicographic order
-pub fn bijections<T, U>(n: usize) -> BijectionIterator<T, U> where T: Index, U: Index {
-    BijectionIterator::<T, U>::new(Bijection::new(Permutation::identity(n)))
+pub fn bijections<T: Index, U: Index>(n: usize) -> BijectionIterator<T, U> {
+    BijectionIterator::<T, U>::new(Bijection::identity(n))
 }
 
 #[cfg(test)]

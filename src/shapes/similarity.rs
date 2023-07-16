@@ -161,17 +161,17 @@ pub fn skip_vertices(shape: &Shape) -> na::DMatrix<bool> {
     skips
 }
 
-/// Bijections iterator whose first two target vertices are rotationally unqiue
-struct SkipsBijectionGenerator {
+/// Bijection iterable whose first two target vertices are a rotationally unique pair
+struct RotUniqueBijectionGenerator {
     /// Reversed order rotationally unique pairs of vertices
     starting_pairs: Vec<(Vertex, Vertex)>,
     /// Next bijection to return during iteration
     maybe_next: Option<Bijection<Column, Vertex>>
 }
 
-impl SkipsBijectionGenerator {
+impl RotUniqueBijectionGenerator {
     /// Construct a bijection generator for a shape
-    pub fn new(shape: &Shape) -> SkipsBijectionGenerator {
+    pub fn new(shape: &Shape) -> RotUniqueBijectionGenerator {
         let skips = skip_vertices(shape);
         let s = skips.ncols();
 
@@ -180,11 +180,11 @@ impl SkipsBijectionGenerator {
             .map(|(i, j)| (Vertex(i), Vertex(j)))
             .collect();
 
-        // We want to pop off items off the end of the vec for efficiency
+        // We want to pop off items off the end of the Vec for efficiency
         // during iteration, so reverse it
         pairs.reverse();
 
-        let mut generator = SkipsBijectionGenerator {
+        let mut generator = RotUniqueBijectionGenerator {
             starting_pairs: pairs,
             maybe_next: Some(Bijection::identity(s))
         };
@@ -195,30 +195,24 @@ impl SkipsBijectionGenerator {
     /// Helper function for iteration, resets bijection to minimal
     /// lexicographic order after new rotationally unique vertex pair
     fn reset_from_next_pair(&mut self) {
-        if let Some((a, b)) = self.starting_pairs.pop() {
-            let mut initial = Vec::new();
-            initial.push(a.get());
-            initial.push(b.get());
+        self.maybe_next = self.starting_pairs.pop().map(|(a, b)| {
+            let mut initial = vec![a, b];
 
             let previous = self.maybe_next.as_ref();
             let s = previous.expect("As long as there's pairs, this should be set").set_size();
 
-            for i in 0..s {
-                if i != a.get() && i != b.get() {
+            for i in (0..s).map(Vertex::from) {
+                if i != a && i != b {
                     initial.push(i);
                 }
             }
 
-            let first = Permutation::try_from(initial).unwrap();
-
-            self.maybe_next = Some(Bijection::new(first));
-        } else {
-            self.maybe_next = None;
-        }
+            Bijection::try_from(initial).expect("Valid permutation")
+        });
     }
 }
 
-impl Iterator for SkipsBijectionGenerator {
+impl Iterator for RotUniqueBijectionGenerator {
     /// Bijection from an input coordinate matrix onto shape vertices
     type Item = Bijection<Column, Vertex>;
 
@@ -227,7 +221,7 @@ impl Iterator for SkipsBijectionGenerator {
         let cached_maybe_next = self.maybe_next.clone();
 
         if let Some(current_bijection) = self.maybe_next.as_mut() {
-            if !current_bijection.permutation.slice_next(2..) {
+            if !current_bijection.permutation.range_next(2..) {
                 self.reset_from_next_pair();
             }
         }
@@ -284,7 +278,7 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Sha
     let shape_coordinates: Positions<Vertex> = Positions::new(unit_sphere_normalize(shape_coordinates));
 
     let (best_bijection, best_fit) = match USE_SKIPS {
-        true => polyhedron_reference_base_inner(SkipsBijectionGenerator::new(shape), &cloud, &shape_coordinates),
+        true => polyhedron_reference_base_inner(RotUniqueBijectionGenerator::new(shape), &cloud, &shape_coordinates),
         false => polyhedron_reference_base_inner(bijections(n), &cloud, &shape_coordinates),
     };
 
@@ -518,6 +512,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
 /// Skips rotationally equivalent five-vertex sets. Uses Jonker-Volgenant linear assignment if
 /// there are sufficient remaining vertices for it to be faster than brute force.
 pub fn polyhedron(x: Matrix3N, shape: &Shape) -> Result<Similarity, SimilarityError> {
+    // TODO lower PREMATCH
     polyhedron_base::<5, true, true>(x, shape)
 }
 
@@ -712,14 +707,11 @@ mod tests {
             let rotations = shape.generate_rotations();
 
             let mut recovered_bijections = HashSet::new();
-            for rotationally_unique in SkipsBijectionGenerator::new(shape) {
-                // Need to invert since the centroid is only last in vertex -> column
-                // and need to remove it to rotate in shape vertex space
-                let mut inverted = rotationally_unique.inverse();
-                inverted.permutation.pop_if_fixed_point();
+            for rotationally_unique in RotUniqueBijectionGenerator::new(shape) {
+                // Need to invert since we can only rotate in vertex space
+                let inverted = rotationally_unique.inverse();
                 for rotation in rotations.iter() {
-                    let mut rotated = rotation.compose(&inverted).unwrap();
-                    rotated.permutation.push();
+                    let rotated = rotation.compose(&inverted).unwrap();
 
                     // no need to re-invert
                     recovered_bijections.insert(rotated);
@@ -738,7 +730,7 @@ mod tests {
             itertools::assert_equal(
                 bijections(shape.num_vertices() + 1)
                     .filter(|b| !skips[(b.permutation[0], b.permutation[1])]),
-                SkipsBijectionGenerator::new(shape)
+                RotUniqueBijectionGenerator::new(shape)
             );
         }
     }

@@ -82,21 +82,6 @@ pub fn slice_prev<T: PartialOrd>(slice: &mut [T]) -> bool {
     }
 }
 
-/// Apply a permutation to a slice of values
-pub fn slice_apply<T: PrimInt, U: Copy>(permutation: &[T], values: &[U]) -> Option<Vec<U>> {
-    let n = permutation.len();
-    if n != values.len() {
-        return None;
-    } 
-
-    let mut permuted = values.to_vec();
-    for (i, &value) in values.iter().enumerate() {
-        let target = permutation[i].to_usize().unwrap();
-        permuted[target] = value;
-    }
-    Some(permuted)
-}
-
 fn random_discrete(n: usize) -> usize {
     let float = rand::random::<f32>();
     (float * n as f32) as usize
@@ -326,7 +311,7 @@ impl Permutation {
         self.sigma.iter().position(|x| *x == index)
     }
 
-    /// Apply the permutation to a vector
+    /// Apply the permutation by moving elements to a new vector
     ///
     /// ```
     /// # use molassembler::permutation::{Permutation, PermutationError};
@@ -334,7 +319,8 @@ impl Permutation {
     /// # fn main() -> Result<(), PermutationError> {
     /// let p = Permutation::try_from([1, 2, 0])?;
     /// let v = vec!["I", "am", "Yoda"];
-    /// assert_eq!(p.apply(v), Ok(vec!["Yoda", "I", "am"]));
+    /// let w = p.apply(v)?; // This consumes v
+    /// assert_eq!(w, vec!["Yoda", "I", "am"]);
     /// # Ok(())
     /// # }
     /// ```
@@ -356,18 +342,71 @@ impl Permutation {
         Ok(unsafe {std::mem::transmute(permuted_maybe) })
     }
 
-    /// Apply the permutation
-    pub fn apply_ref<T: Copy>(&self, values: &Vec<T>) -> Result<Vec<T>, PermutationError> {
-        slice_apply(self.sigma.as_slice(), values.as_slice()).ok_or(PermutationError::LengthMismatch)
+    /// Apply the permutation by generating a new vector with element copies
+    ///
+    /// ```
+    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use std::convert::TryFrom;
+    /// # fn main() -> Result<(), PermutationError> {
+    /// let p = Permutation::try_from([1, 2, 0])?;
+    /// let v = vec!["I", "am", "Yoda"];
+    /// let w = p.apply_slice(&v)?; // Preserves p and v
+    /// assert_eq!(w, vec!["Yoda", "I", "am"]);
+    /// assert_ne!(v, w);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn apply_slice<T: Copy>(&self, values: &[T]) -> Result<Vec<T>, PermutationError> {
+        let n = self.sigma.len();
+        if n != values.len() {
+            return Err(PermutationError::LengthMismatch);
+        } 
+
+        let mut permuted_maybe = Vec::with_capacity(n);
+        permuted_maybe.resize_with(n, || std::mem::MaybeUninit::<T>::uninit());
+
+        for (i, &value) in values.iter().enumerate() {
+            permuted_maybe[self[i]].write(value);
+        }
+
+        // SAFETY: Permutation guarantees contiguous numbers on construction, each
+        // item in permuted_maybe will be written to
+        Ok(unsafe {std::mem::transmute(permuted_maybe) })
     }
 
-    /// Apply the permutation to a slice of values and collect the result
-    pub fn apply_collect<B, T: Copy>(&self, slice: &[T]) -> Result<B, PermutationError> 
-        where B: FromIterator<T>
-    {
-        slice_apply(self.sigma.as_slice(), slice)
-            .map(|v| B::from_iter(v.into_iter()))
-            .ok_or(PermutationError::LengthMismatch)
+    /// Apply the permutation by swapping values in place
+    ///
+    /// Note: Consumes the permutation, as it is used to track swaps during application.
+    ///
+    /// ```
+    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use std::convert::TryFrom;
+    /// # fn main() -> Result<(), PermutationError> {
+    /// let p = Permutation::try_from([1, 2, 0])?;
+    /// let mut v = vec!["I", "am", "Yoda"];
+    /// p.permute(&mut v)?; // This drops p
+    /// assert_eq!(v, vec!["Yoda", "I", "am"]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn permute<T>(mut self, values: &mut [T]) -> Result<(), PermutationError> {
+        let n = self.sigma.len();
+        if n != values.len() {
+            return Err(PermutationError::LengthMismatch);
+        }
+
+        while let Some(start) = self.sigma.iter().enumerate().find_map(|(i, &j)| (i != j).then_some(i)) {
+            for i in start..n {
+                let j = self.sigma[i];
+
+                if i != j {
+                    values.swap(i, j);
+                    self.sigma.swap(i, j);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Compose two permutations into a new permutation
@@ -383,11 +422,11 @@ impl Permutation {
     /// let p = Permutation::try_from([1, 2, 0])?;
     /// let q = Permutation::try_from([1, 0, 2])?;
     /// assert_ne!(p.inverse(), q);
-    /// assert_eq!(p.compose(&q)?.sigma, vec![0, 2, 1]);
+    /// assert_eq!(p.compose(&q)?, Permutation::try_from([0, 2, 1])?);
     /// assert_ne!(p.compose(&q)?, q.compose(&p)?);
     ///
     /// let v = vec![-3, 4, 0];
-    /// assert_eq!(p.compose(&q)?.apply_ref(&v)?, q.apply(p.apply_ref(&v)?)?); 
+    /// assert_eq!(p.compose(&q)?.apply_slice(&v)?, q.apply(p.apply_slice(&v)?)?); 
     ///
     /// // If permutations are inverses of one another, their compositions are commutative
     /// let r = Permutation::try_from([2, 0, 1])?;
@@ -397,8 +436,26 @@ impl Permutation {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// Composition with larger permutations is valid, whereas composition with smaller
+    /// permutations is not:
+    ///
+    /// ```
+    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use std::convert::TryFrom;
+    /// # fn main() -> Result<(), PermutationError> {
+    /// let p = Permutation::try_from([1, 2, 0])?;
+    /// let q = Permutation::try_from([3, 1, 0, 2])?;
+    ///
+    /// assert_eq!(p.compose(&q), Ok(Permutation::try_from([1, 0, 3, 2])?));
+    /// assert_eq!(q.compose(&p), Err(PermutationError::LengthMismatch));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn compose(&self, other: &Permutation) -> Result<Permutation, PermutationError> {
-        Ok(Permutation {sigma: self.inverse().apply_ref(&other.sigma)?})
+        let mut sigma = other.sigma.clone();
+        self.inverse().permute(&mut sigma[..self.sigma.len()])?;
+        Ok(Permutation {sigma})
     }
 
     /// Iterate through the one-line representation in `(i, sigma[i])` pairs
@@ -493,7 +550,7 @@ impl Permutation {
         }
     }
 
-    /// Advance a slice of the one-line representation to its next permutation
+    /// Advance a part of the one-line representation to its next permutation
     ///
     /// The slice of the one-line representation to advance can be indicated by any range
     /// expression.
@@ -508,14 +565,18 @@ impl Permutation {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn slice_next<R: std::slice::SliceIndex<[usize], Output = [usize]>>(&mut self, range: R) -> bool {
+    pub fn range_next<R>(&mut self, range: R) -> bool 
+        where R: std::slice::SliceIndex<[usize], Output = [usize]>
+    {
         slice_next(&mut self.sigma[range])
     }
 
-    /// Decrement a slice of the one-line representation to its previous permutation
+    /// Decrement a part of the one-line representation to its previous permutation
     ///
-    /// See [`Permutation::slice_next`] and [`slice_prev`]
-    pub fn slice_prev<R: std::slice::SliceIndex<[usize], Output = [usize]>>(&mut self, range: R) -> bool {
+    /// See [`Permutation::range_next`] and [`slice_prev`]
+    pub fn range_prev<R>(&mut self, range: R) -> bool 
+        where R: std::slice::SliceIndex<[usize], Output = [usize]>
+    {
         slice_prev(&mut self.sigma[range])
     }
 }
@@ -654,8 +715,8 @@ mod tests {
             let p = Permutation::new_random(n);
             let q = Permutation::new_random(n);
 
-            let compose_apply = p.compose(&q)?.apply_ref(&v)?;
-            let apply_twice = q.apply_ref(&p.apply_ref(&v)?)?;
+            let compose_apply = p.compose(&q)?.apply_slice(&v)?;
+            let apply_twice = q.apply_slice(&p.apply_slice(&v)?)?;
             assert_eq!(compose_apply, apply_twice);
         }
 
@@ -672,9 +733,31 @@ mod tests {
         for _ in 0..repeats {
             let p = Permutation::new_random(n);
 
-            let w = p.apply_ref(&v)?;
-            let v_reconstructed = p.inverse().apply_ref(&w)?;
+            let w = p.apply_slice(&v)?;
+            let v_reconstructed = p.inverse().apply_slice(&w)?;
             assert_eq!(v, v_reconstructed);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn apply_variants() -> Result<(), PermutationError> {
+        let n = 6;
+        let repeats = 100;
+
+        let v: Vec<usize> = (0..n).map(|_| random_discrete(100)).collect();
+
+        for _ in 0..repeats {
+            let p = Permutation::new_random(n);
+
+            let a = p.apply(v.clone())?;
+            let b = p.apply_slice(&v)?;
+            let mut c = v.clone();
+            p.permute(&mut c)?;
+
+            assert_eq!(a, b);
+            assert_eq!(b, c);
         }
 
         Ok(())
@@ -684,10 +767,10 @@ mod tests {
     fn ordering_permutation() -> Result<(), PermutationError> {
         let indices: Vec<usize> = (0..10).collect();
         let disordering = Permutation::new_random(indices.len());
-        let disordered = disordering.apply_ref(&indices)?;
+        let disordered = disordering.apply_slice(&indices)?;
 
         let ordering = Permutation::ordering(&disordered);
-        let ordered = ordering.apply_ref(&disordered)?;
+        let ordered = ordering.apply_slice(&disordered)?;
 
         assert_eq!(indices, ordered);
         assert_eq!(disordering.inverse(), ordering);
