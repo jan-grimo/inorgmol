@@ -4,20 +4,20 @@ type Matrix3N = na::Matrix3xX<f64>;
 use num_traits::ToPrimitive;
 
 use crate::strong::Index;
-use crate::shapes::similarity::apply_permutation;
-use crate::strong::bijection::Bijection;
+use crate::strong::bijection::{Bijection, Bijectable};
+use crate::permutation::{PermutationError, Permutatable};
 use crate::quaternions;
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
 /// Matrix indexed by a new type
-pub struct AsPositions<'a, I> where I: Index {
+pub struct AsPositions<'a, I: Index> {
     matrix: &'a Matrix3N,
     index_type: PhantomData<I>
 }
 
-impl<'a, I> AsPositions<'a, I> where I: Index {
+impl<'a, I: Index> AsPositions<'a, I> {
     /// Wrap a matrix
     pub fn new(matrix: &'a Matrix3N) -> AsPositions<'a, I> {
         AsPositions {matrix, index_type: PhantomData}
@@ -34,7 +34,7 @@ impl<'a, I> AsPositions<'a, I> where I: Index {
     }
 
     /// Quaternion fit a matrix (in a possibly different index space) with an index mapping
-    pub fn quaternion_fit_with_map<J>(&self, rotor: AsPositions<J>, map: &HashMap<I, J>) -> quaternions::Fit where J: Index {
+    pub fn quaternion_fit_map<J: Index>(&self, rotor: AsPositions<J>, map: &HashMap<I, J>) -> quaternions::Fit {
         assert!(self.matrix.column_mean().norm_squared() < 1e-8);
         assert!(rotor.matrix.column_mean().norm_squared() < 1e-8);
         
@@ -47,21 +47,30 @@ impl<'a, I> AsPositions<'a, I> where I: Index {
 
         quaternions::quaternion_decomposition(a)
     }
+}
 
-    /// Permute the matrix into a different index space
-    pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> Positions<J> where J: Index {
-        Positions::new(apply_permutation(self.matrix, &bijection.permutation))
+impl<'a, I: Index, U: Index> Bijectable<U> for AsPositions<'a, I> {
+    type T = I;
+    type Output = Positions<U>;
+
+    fn biject(&self, bijection: &Bijection<I, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError> {
+        if bijection.set_size() != self.matrix.ncols() {
+            return Err(PermutationError::LengthMismatch);
+        }
+
+        let matrix = self.matrix.permute(&bijection.permutation)?;
+        Ok(Positions::new(matrix))
     }
 }
 
 /// Owned positions matrix indexed by a new type
-pub struct Positions<I> where I: Index {
+pub struct Positions<I: Index> {
     /// The underlying matrix
     pub matrix: Matrix3N,
     index_type: PhantomData<I>
 }
 
-impl<I> Positions<I> where I: Index {
+impl<I: Index> Positions<I> {
     fn raise(&self) -> AsPositions<I> {
         AsPositions::new(&self.matrix)
     }
@@ -77,18 +86,13 @@ impl<I> Positions<I> where I: Index {
     }
 
     /// Quaternion fit a matrix in the same index space
-    pub fn quaternion_fit_with_rotor(&self, rotor: &Positions<I>) -> quaternions::Fit {
+    pub fn quaternion_fit_rotor(&self, rotor: &Positions<I>) -> quaternions::Fit {
         self.raise().quaternion_fit_rotor(rotor.raise())
     }
 
     /// Quaternion fit a matrix (in a possibly different index space) with an index mapping
-    pub fn quaternion_fit_with_map<J>(&self, rotor: &Positions<J>, map: &HashMap<I, J>) -> quaternions::Fit where J: Index {
-        self.raise().quaternion_fit_with_map(rotor.raise(), map)
-    }
-
-    /// Apply a bijection
-    pub fn apply_bijection<J>(&self, bijection: &Bijection<I, J>) -> Positions<J> where J: Index {
-        self.raise().apply_bijection(bijection)
+    pub fn quaternion_fit_map<J: Index>(&self, rotor: &Positions<J>, map: &HashMap<I, J>) -> quaternions::Fit {
+        self.raise().quaternion_fit_map(rotor.raise(), map)
     }
 
     /// Extract the underlying matrix
@@ -97,4 +101,11 @@ impl<I> Positions<I> where I: Index {
     }
 }
 
+impl<I: Index, U: Index> Bijectable<U> for Positions<I> {
+    type T = I;
+    type Output = Positions<U>;
 
+    fn biject(&self, bijection: &Bijection<I, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError> {
+        self.raise().biject(bijection)
+    }
+}

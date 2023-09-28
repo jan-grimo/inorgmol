@@ -1,9 +1,12 @@
 use std::cmp::Ordering;
 use std::ops::Index;
+use std::iter::IntoIterator;
 use core::convert::TryFrom;
 use num_traits::int::PrimInt;
 use itertools::Itertools;
 use thiserror::Error;
+
+extern crate nalgebra as na;
 
 /// Slice-level permutation incrementation
 pub fn slice_next<T: PartialOrd>(slice: &mut [T]) -> bool {
@@ -357,7 +360,7 @@ impl Permutation {
     /// # }
     /// ```
     pub fn apply_slice<T: Copy>(&self, values: &[T]) -> Result<Vec<T>, PermutationError> {
-        let n = self.sigma.len();
+        let n = self.set_size();
         if n != values.len() {
             return Err(PermutationError::LengthMismatch);
         } 
@@ -459,7 +462,7 @@ impl Permutation {
     }
 
     /// Iterate through the one-line representation in `(i, sigma[i])` pairs
-    pub fn iter_pairs(&self) -> std::iter::Enumerate<std::slice::Iter<usize>> {
+    pub fn iter(&self) -> std::iter::Enumerate<std::slice::Iter<usize>> {
         self.sigma.iter().enumerate()
     }
 
@@ -480,7 +483,7 @@ impl Permutation {
 
     /// Derangements permute all elements, i.e. there are no fixed points
     pub fn is_derangement(&self) -> bool {
-        self.iter_pairs().all(|(i, &v)| i != v)
+        self.iter().all(|(i, &v)| i != v)
     }
 
     /// Destructure a permutation into cycles, not including fixed points
@@ -635,6 +638,16 @@ impl<I: PrimInt, const N: usize> TryFrom<[I; N]> for Permutation {
     }
 }
 
+impl IntoIterator for Permutation {
+    type Item = (usize, usize);
+    type IntoIter = std::iter::Enumerate<std::vec::IntoIter<usize>>;
+
+    /// Iterate, consuming self
+    fn into_iter(self) -> Self::IntoIter {
+        self.sigma.into_iter().enumerate()
+    }
+}
+
 /// Iterator adaptor for iterating through all permutations of a set size
 ///
 /// See [`permutations`]
@@ -679,6 +692,43 @@ impl Iterator for PermutationIterator {
 /// ```
 pub fn permutations(n: usize) -> PermutationIterator {
     PermutationIterator::new(Permutation::identity(n))
+}
+
+/// Trait indicating a type can be permutated by a Permutation
+pub trait Permutatable {
+    /// Result of permutating the type
+    type Output;
+
+    /// Permute a type by a Permutation
+    fn permute(&self, permutation: &Permutation) -> Result<Self::Output, PermutationError>;
+}
+
+impl<T: Copy> Permutatable for Vec<T> {
+    type Output = Vec<T>;
+
+    fn permute(&self, permutation: &Permutation) -> Result<Self::Output, PermutationError> {
+        permutation.apply_slice(self)
+    }
+}
+
+/// Column permutation for any dimension of matrix
+impl<T: na::RealField + Copy, R: na::Dim, C: na::Dim, S: na::Storage<T, R, C>> Permutatable for na::Matrix<T, R, C, S>
+where 
+    na::DefaultAllocator: na::allocator::Allocator<T, R, C>
+        + na::allocator::Allocator<T, R>
+        + na::allocator::Allocator<T, C>,
+{
+    type Output = na::OMatrix<T, R, C>;
+
+    fn permute(&self, permutation: &Permutation) -> Result<Self::Output, PermutationError> {
+        let (nrows, ncols) = self.shape_generic();
+        if self.ncols() == permutation.set_size() {
+            let inverse = permutation.inverse();
+            Ok(Self::Output::from_fn_generic(nrows, ncols, |i, j| self[(i, inverse[j])]))
+        } else {
+            Err(PermutationError::LengthMismatch)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -791,5 +841,26 @@ mod tests {
         let perm = Permutation {sigma: vec![1, 4, 3, 2, 0]};
         let expected_cycles = vec![vec![0, 1, 4], vec![2, 3]];
         assert!(perm.cycles() == expected_cycles);
+    }
+
+    #[test]
+    fn permutatable_trait() {
+        let perm = Permutation {sigma: vec![1, 2, 0]};
+
+        let values = vec![4, 5, 6];
+        let values = values.permute(&perm);
+        assert_eq!(values, Ok(vec![6, 4, 5]));
+
+        let static_matrix = na::SMatrix::<f64, 4, 3>::new_random();
+        let permuted = static_matrix.permute(&perm);
+        assert!(permuted.is_ok());
+
+        let dynamic_matrix = na::DMatrix::<f64>::new_random(4, 3);
+        let permuted = dynamic_matrix.permute(&perm);
+        assert!(permuted.is_ok());
+
+        let mixed_matrix = na::Matrix2xX::<f64>::new_random(3);
+        let permuted = mixed_matrix.permute(&perm);
+        assert!(permuted.is_ok());
     }
 }

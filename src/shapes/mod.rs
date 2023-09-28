@@ -10,8 +10,8 @@ use ordered_float::NotNan;
 
 use crate::strong::{IndexBase, Index};
 use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
-use crate::permutation::{Permutation, permutations};
-use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
+use crate::permutation::{Permutation, permutations, Permutatable};
+use crate::shapes::similarity::unit_sphere_normalize;
 
 /// Name of a coordination polyhedron
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
@@ -222,16 +222,25 @@ impl Shape {
         })
     }
 
+    pub(crate) fn round_mat(mat: &Matrix3N) -> Matrix3N {
+        mat.map(|v| (v * 100.0).round() / 100.0)
+    }
+
     fn try_canonicalize_rotation(canon: &Matrix3N, rotation: &na::Rotation3::<f64>) -> bool {
         let rotated = rotation * canon;
         let scramble = Permutation::new_random(canon.ncols());
-        let scrambled = apply_permutation(&rotated, &scramble);
+        let scrambled = rotated.permute(&scramble).expect("Matching size");
         let maybe_canon = Self::canonicalize_coordinates(scrambled);
 
         let msd = canon.column_iter()
             .zip(maybe_canon.column_iter())
             .map(|(r_i, r_j)| (r_i - r_j).norm_squared())
             .sum::<f64>() / canon.ncols() as f64;
+
+        if msd > 1e-3 {
+            println!("a: {}", Self::round_mat(canon));
+            println!("b: {}", Self::round_mat(&maybe_canon));
+        }
 
         dbg!(msd) < 1e-3
     }
@@ -524,8 +533,9 @@ impl Shape {
 
     /// Test whether a permutation is a rotation by quaternion fit
     fn permutation_is_rotation(coordinates: &Matrix3N, permutation: &Permutation) -> bool {
+        // TODO can fit without removing centroid
         let normalized_points = unit_sphere_normalize(coordinates.clone());
-        let permuted = unit_sphere_normalize(apply_permutation(&normalized_points, permutation));
+        let permuted = unit_sphere_normalize(normalized_points.permute(permutation).expect("Matching size"));
         let fit = crate::quaternions::fit(&normalized_points, &permuted);
         fit.msd < 1e-6
     }
@@ -559,12 +569,22 @@ impl Shape {
         let mut dipoles: Vec<(Vertex, Vertex)> = Vec::new();
         if minimal_order % 2 == 0 {
             'outer: for (i, &a) in remaining_vertices.iter().enumerate() {
+                // Axis perpendicular component not zero?
                 let component_a = axis_perpendicular_component(&axis, &coordinates.column(a.into()));
                 if component_a.norm_squared() < 1e-3 {
                     continue;
                 }
 
+                let a_axis_factor = axis.dot(&coordinates.column(a.into()));
+
                 for &b in remaining_vertices.iter().skip(i + 1) {
+                    // In same plane regarding axis as a?
+                    let b_axis_factor = axis.dot(&coordinates.column(b.into()));
+                    if (a_axis_factor - b_axis_factor).abs() > 0.1 {
+                        continue;
+                    }
+
+                    // Axis perpendicular component not zero?
                     let component_b = axis_perpendicular_component(&axis, &coordinates.column(b.into()));
                     if component_b.norm_squared() < 1e-3 {
                         continue;
@@ -578,6 +598,7 @@ impl Shape {
                     }
                 }
             }
+
             // Remove found dipoles from remaining_vertices
             remaining_vertices.retain(|v| !dipoles.iter().any(|(a, b)| a == v || b == v));
         }
@@ -917,7 +938,9 @@ impl Shape {
 
     /// Reorder coordinates into a canonical vertex order
     pub fn canonicalize_coordinates(coords: Matrix3N) -> Matrix3N {
+        println!("passing {coords}");
         let (top, mut reoriented) = crate::inertia::standardize_top(coords);
+
         let n = reoriented.ncols();
 
         let rotation_basis = Self::find_rotation_basis(&reoriented);
@@ -931,17 +954,53 @@ impl Shape {
             Self::union_to_groups(sets)
         };
 
-        if top == crate::inertia::Top::Spherical {
+        println!("Standardized: {}", Self::round_mat(&reoriented));
+
+        if top == crate::inertia::Top::Spherical && vertex_groups.len() > 1 {
             // If there's a unique vertex (by rotation), that one should be +z
             let maybe_unique = vertex_groups.iter()
                 .find_map(|group| (group.len() == 1).then(|| group[0]));
 
             if let Some(unique_vertex) = maybe_unique {
+                println!("Rotating unique vertex to +z");
                 let rotation = na::Rotation::<f64, 3>::rotation_between(
                     &reoriented.column(unique_vertex.get()),
                     &na::Vector3::z_axis()
                 ).expect("Can generate rotation for unique vertex");
                 reoriented = rotation * reoriented;
+
+                println!("Unique at +z: {}", Self::round_mat(&reoriented));
+            } else {
+                // Find the highest order rotation and use its axis instead
+                let rotation_cycles = rotation_basis.iter()
+                    .map(|rotation| rotation.permutation.cycles())
+                    .max_by_key(|cycles| {
+                        cycles.iter()
+                            .map(|cycle| cycle.len())
+                            .max()
+                            .expect("At least one cycle in every rotation")
+                    }).expect("At least one rotation");
+
+                // It doesn't matter which cycle we use to find the axis
+                let axis = rotation_cycles[0].iter()
+                    .fold(Vector3::zeros(), |acc, &vertex| acc + reoriented.column(vertex))
+                    .normalize();
+
+                println!("Rotating C{} to z-axis of spherical top", rotation_cycles[0].len());
+
+                let rotation = na::Rotation3::<f64>::rotation_between(
+                    &axis,
+                    &na::Vector3::z_axis()
+                ).expect("Can generate rotation for rotation axis");
+                reoriented = rotation * reoriented;
+
+                // Invert by rotation around x if particles asymmetric along new z axis
+                if reoriented.row(2).mean() > 0.1 {
+                    reoriented.row_mut(1).neg_mut();
+                    reoriented.row_mut(2).neg_mut();
+                }
+
+                println!("Reoriented: {}", Self::round_mat(&reoriented));
             }
         }
 
@@ -965,6 +1024,8 @@ impl Shape {
                 .collect();
             Permutation::ordering(&zs).apply(groups).expect("ordering produces valid permutation")
         };
+
+        println!("Z plane groups: {:?}", z_plane_groups);
 
         let vertex_color: HashMap<Vertex, usize> = vertex_groups.iter()
             .enumerate()
@@ -997,12 +1058,55 @@ impl Shape {
                 (plane_vertices.len(), num_colors)
             });
 
+        println!("Picked pivot plane: {:?}", pivot_plane);
+
+        let phi = |v: &Vertex| {
+            let r = reoriented.column(v.get());
+            (r.x / (r.x.powi(2) + r.y.powi(2)).sqrt()).acos().copysign(r.y)
+        };
+
         // There is a pivot plane if there is a single vertex off z-axis
-        let pivot_phi = pivot_plane.map(|vertices| {
-            // Pick any vertex in the pivot plane (dubious)
-            let v = reoriented.column(vertices[0].get());
-            (v.x / (v.x.powi(2) + v.y.powi(2)).sqrt()).acos().copysign(v.y)
+        let pivot = pivot_plane.map(|vertices| {
+            if vertices.len() == 1 {
+                return vertices[0];
+            }
+
+            // TODO: Is there a rotation around z that transforms all vertices 
+            // in the plane? Then you could pick at random. Note that this isn't 
+            // homogeneous vertex colors!
+
+            // Anticlockwise ordering by phi values
+            let phi_pairs: Vec<_> = vertices.iter()
+                .map(|v| (NotNan::new(phi(v)).expect("Pivot plane vertices have non-NaN phi"), v))
+                .sorted()
+                .collect();
+
+            // Choose ordering so that sum of vertex-to-vertex phis is minimal
+            let angles: Vec<_> = phi_pairs.iter()
+                .circular_tuple_windows()
+                .map(|((phi1, _), (phi2, _))| {
+                    let mut diff = phi2 - phi1;
+                    if diff < NotNan::new(0.0).unwrap() {
+                        diff += std::f64::consts::TAU;
+                    }
+                    diff
+                })
+                .collect();
+
+            // Find the maximum angle and start ordering immediately after it
+            let max_angle_index = angles.iter()
+                .enumerate()
+                .max_by_key(|(_, angle)| *angle)
+                .expect("Homogeneous case passed, there are at least two elements")
+                .0;
+
+            // angles[0] is the angle between phi_pairs[1] and phi_pairs[0],
+            // but you can go out of bounds, so
+            let pair = phi_pairs.get(max_angle_index + 1).unwrap_or(&phi_pairs[0]);
+            *pair.1
         });
+
+        let pivot_phi = pivot.map(|v| phi(&v));
 
         let mut ordering = vec![0; n];
         let mut label = 0;
@@ -1013,8 +1117,7 @@ impl Shape {
                 label += 1;
             } else {
                 plane_vertices.sort_by_key(|vertex| {
-                    let v = reoriented.column(vertex.get());
-                    let phi = (v.x / (v.x.powi(2) + v.y.powi(2)).sqrt()).acos().copysign(v.y);
+                    let phi = phi(vertex);
                     if phi < pivot_phi.expect("Pivot exists") - std::f64::consts::TAU / 360.0 {
                         NotNan::new(phi + std::f64::consts::TAU).unwrap()
                     } else {
@@ -1029,11 +1132,16 @@ impl Shape {
             }
         }
 
-        let ordering = Permutation::try_from(ordering)
-            .expect("Generated valid permutation")
-            .inverse();
+        // Rotate pivot point to +x around z axis, if a pivot exists
+        if let Some(phi) = pivot_phi {
+            let rotation = na::Rotation3::from_axis_angle(&na::Vector3::z_axis(), -phi);
+            reoriented = rotation * reoriented;
+        }
 
-        apply_permutation(&reoriented, &ordering)
+        let ordering = Permutation::try_from(ordering)
+            .expect("Generated valid permutation");
+
+        reoriented.permute(&ordering).expect("Matching size")
     }
 }
 
@@ -1105,6 +1213,7 @@ mod tests {
     #[test]
     fn canonical_vertex_orders() {
         for shape in SHAPES.iter() {
+            println!("{} coords: {}", shape.name, Shape::round_mat(&shape.coordinates));
             assert!(
                 Shape::can_canonicalize(&shape.coordinates),
                 "Shape {} cannot be canonicalized",

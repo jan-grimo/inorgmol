@@ -29,3 +29,6 @@ pub mod dg;
 
 /// Moments and axes of rotational inertia
 pub mod inertia;
+
+/// Stereopermutation
+pub mod stereo;

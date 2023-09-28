@@ -1,9 +1,9 @@
 use molassembler::strong::IndexBase;
 use molassembler::strong::matrix::Positions;
-use molassembler::shapes::similarity::{skip_vertices, polyhedron_reference, unit_sphere_normalize, apply_permutation, SimilarityError};
+use molassembler::shapes::similarity::{skip_vertices, polyhedron_reference, unit_sphere_normalize, SimilarityError};
 use molassembler::quaternions::Matrix3N;
-use molassembler::permutation::Permutation;
-use molassembler::strong::bijection::Bijection;
+use molassembler::permutation::{Permutation, Permutatable};
+use molassembler::strong::bijection::{Bijection, Bijectable};
 use molassembler::quaternions::random_rotation;
 use molassembler::shapes::*;
 
@@ -78,7 +78,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
             |best, vertices| -> PartialMsd {
                 let mut partial_map = PartialPermutation::with_capacity(n);
                 vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c), *v); });
-                let partial_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
+                let partial_fit = cloud.quaternion_fit_map(&shape_coordinates, &partial_map);
 
                 // If the msd caused only by the partial map is already worse, skip
                 if partial_fit.msd > best.msd {
@@ -102,12 +102,12 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
                 };
 
                 // Fuse pre-match and best subpermutation
-                for (i, j) in sub_permutation.iter_pairs() {
+                for (i, j) in sub_permutation.iter() {
                     partial_map.insert(left_free[i], right_free[*j]);
                 }
 
                 // Make a clean quaternion fit with the full mapping
-                let full_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
+                let full_fit = cloud.quaternion_fit_map(&shape_coordinates, &partial_map);
                 if full_fit.msd < best.msd {
                     PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: partial_fit.msd}
                 } else {
@@ -155,8 +155,8 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
         }
     }
 
-    let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
-    let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
+    let permuted_shape = shape_coordinates.biject(&best_bijection).expect("Matching size");
+    let fit = cloud.quaternion_fit_rotor(&permuted_shape);
     let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
     let csm = similarity::scaling::optimize_csm(&cloud.matrix, &rotated_shape);
@@ -189,7 +189,7 @@ impl Case {
             Bijection::new(p)
         };
 
-        let permuted = apply_permutation(&mat, &bijection.permutation);
+        let permuted = mat.permute(&bijection.permutation).expect("Matching size");
 
         (permuted, bijection)
     }

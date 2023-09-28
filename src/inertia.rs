@@ -2,6 +2,7 @@ use crate::permutation::Permutation;
 
 extern crate nalgebra as na;
 use na::base::dimension::{U1, U3};
+use nalgebra_lapack::SymmetricEigen;
 
 /// Moments of inertia Ia, Ib, Ic in ascending order
 pub struct Moments(pub na::Vector3<f64>);
@@ -32,20 +33,15 @@ pub fn moments_axes(particles: &na::Matrix3xX<f64>) -> (Moments, Axes) {
         inertial_mat[(1, 1)] += col.x.powi(2) + col.z.powi(2);
         inertial_mat[(2, 2)] += col.x.powi(2) + col.y.powi(2);
 
-        let xy = col.x * col.y;
-        inertial_mat[(1, 0)] -= xy;
-        inertial_mat[(0, 1)] -= xy;
-
-        let xz = col.x * col.z;
-        inertial_mat[(2, 0)] -= xz;
-        inertial_mat[(0, 2)] -= xz;
-
-        let yz = col.y * col.z;
-        inertial_mat[(2, 1)] -= yz;
-        inertial_mat[(1, 2)] -= yz;
+        inertial_mat[(1, 0)] -= col.x * col.y;
+        inertial_mat[(2, 0)] -= col.x * col.z;
+        inertial_mat[(2, 1)] -= col.y * col.z;
     }
 
-    let decomposition = na::SymmetricEigen::new(inertial_mat);
+    // TODO try removing nalgebra-lapack once nalgebra/{#379, #693 and #1109} are fixed
+    // There must be some catastrophic cancellation here in some cases
+    let decomposition = SymmetricEigen::new(inertial_mat);
+    
     let ordering = Permutation::ordering_by(decomposition.eigenvalues.as_slice(), |a, b| a.partial_cmp(b).expect("No NaNs"));
     if ordering.is_identity() {
         return (Moments(decomposition.eigenvalues), Axes(decomposition.eigenvectors));
@@ -152,15 +148,7 @@ impl Default for CoordinateSystem {
     }
 }
 
-/// Determine top type of particle collection and reorient main axis along +z
-///
-/// Handles tops differently:
-/// - Asymmetric: Axis with largest moment of inertia to z, second most to x
-/// - Line: Orient along z
-/// - Oblate (disc) and prolate (football): Unique axis along z
-/// - Spherical: Arbitrary particle to +z
-///
-pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64>) {
+fn align_to_z(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64>) {
     let (moments, axes) = moments_axes(&particles);
     let degeneracy = moments.degeneracy();
 
@@ -170,7 +158,7 @@ pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64
          */
         let coord = CoordinateSystem::new_xy(
             axes.0.column(1),
-            axes.0.column(2).cross(&axes.0.column(1))
+            axes.0.column(0)
         );
         let rotated = coord.quaternion().to_rotation_matrix() * particles;
         return (Top::Asymmetric, rotated);
@@ -205,7 +193,7 @@ pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64
             let coord = CoordinateSystem::new_xy(axes.0.column(1), axes.0.column(2));
             let rotated = coord.quaternion().to_rotation_matrix() * particles;
             return (Top::Prolate, rotated);
-        }
+        } 
 
         // Oblate: Ic is unique
         let coord = CoordinateSystem::new_xy(axes.0.column(0), axes.0.column(1));
@@ -238,12 +226,35 @@ pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64
         &na::Vector3::z_axis()
     ).expect("Can generate rotation for selected particle standardizing spherical top");
     (Top::Spherical, rotation * particles)
+
+}
+
+/// Determine top type of particle collection and reorient main axis along +z
+///
+/// Handles tops differently:
+/// - Asymmetric: Axis with largest moment of inertia to z, second most to x
+/// - Line: Orient along z
+/// - Oblate (disc) and prolate (football): Unique axis along z
+/// - Spherical: Arbitrary particle to +z
+///
+pub fn standardize_top(particles: na::Matrix3xX<f64>) -> (Top, na::Matrix3xX<f64>) {
+    let (top, mut reoriented) = align_to_z(particles);
+
+    // There can be asymmetrically distributed particles along z
+    if reoriented.row(2).mean() > 0.1 {
+        reoriented.row_mut(1).neg_mut();
+        reoriented.row_mut(2).neg_mut();
+    }
+
+    (top, reoriented)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use crate::inertia::*;
-    use crate::shapes::{Name, shape_from_name};
+    use crate::shapes::{Name, shape_from_name, SHAPES};
+    use crate::permutation::Permutatable;
     extern crate nalgebra as na;
 
     const EPSILON: f64 = 1e-6;
@@ -298,46 +309,66 @@ mod tests {
         }
     }
 
-    fn indices_along_z(mat: &na::Matrix3xX::<f64>) -> Vec<usize> {
-        mat.column_iter()
-            .enumerate()
-            .filter_map(|(idx, v)| {
-                let z_dist = crate::geometry::axis_distance(&na::Vector3::z_axis(), &v);
-                if z_dist < 1e-6 {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
+    #[test]
+    fn consistent_z_axis_reorientation() {
+        for shape in SHAPES.iter() {
+            if shape.name == Name::Line || shape.name == Name::T {
+                // Skip line and t-shape, because quaternion fits are degenerate (Cinfv)
+                continue;
+            }
 
-    fn test_indices_along_z(shape_name: Name, expected_count: usize) {
-        let linear = shape_from_name(shape_name).coordinates.clone();
-        let (expected_top, expected_reorientation) = standardize_top(linear.clone());
-        let expected_indices_along_z = indices_along_z(&expected_reorientation);
-        assert_eq!(expected_indices_along_z.len(), expected_count);
+            let (a_top, a) = standardize_top(shape.coordinates.clone());
 
-        for _ in 0..3 {
-            let random_rotation = na::Rotation3::from_axis_angle(
-                &na::Unit::new_normalize(na::Vector3::new_random()),
-                rand::random::<f64>() * std::f64::consts::TAU
-            );
-            let (top, reoriented) = standardize_top(random_rotation * linear.clone());
-            assert_eq!(top, expected_top);
-            assert_eq!(expected_indices_along_z, indices_along_z(&reoriented));
+            for _ in 0..10 {
+                let rot = na::UnitQuaternion::from_axis_angle(
+                    &na::Unit::new_normalize(na::Vector3::new_random()),
+                    std::f64::consts::TAU * rand::random::<f64>()
+                ).to_rotation_matrix();
+
+                let (b_top, b) = standardize_top(rot * shape.coordinates.clone());
+                assert_eq!(a_top, b_top);
+
+                // For all rotations of vertex indices, find the quaternion fit 
+                // that has the closest fit axis to +z or -z
+                let aligned = shape.generate_rotations().into_iter()
+                    .any(|rotation| {
+                        let map = HashMap::from_iter(rotation.permutation.into_iter());
+                        let fit = crate::quaternions::fit_with_map(&a, &b, &map);
+                        let angle_near_zero = fit.quaternion.angle().abs() < std::f64::consts::PI / 180.0;
+                        // axis() is None if the rotation is zero, which means perfect overlap
+                        let axis_near_z = fit.quaternion.axis()
+                            .map(|axis| axis.z.abs())
+                            .unwrap_or(1.00) > 0.99;
+
+                        angle_near_zero || axis_near_z
+                    });
+
+                assert!(aligned, "Shape {} isn't consistently oriented", shape.name);
+            }
         }
     }
 
     #[test]
-    fn consistent_z_axis_reorientation() {
-        // Tops with unique axes
-        test_indices_along_z(Name::Line, 2); // Linear
-        test_indices_along_z(Name::TrigonalBipyramid, 2); // Prolate
-        test_indices_along_z(Name::PentagonalBipyramid, 2); // Oblate
-        test_indices_along_z(Name::Square, 0); // Oblate
+    fn seesaw() {
+        let seesaw = shape_from_name(Name::Seesaw);
+        let coords = seesaw.coordinates.clone();
+        let (_, a) = standardize_top(coords);
+        let z_rot = na::UnitQuaternion::from_axis_angle(
+            &na::Vector3::z_axis(),
+            std::f64::consts::PI
+        ).to_rotation_matrix();
+        let rotated = z_rot * a.clone();
+        let scramble = Permutation::new_random(rotated.ncols());
+        let scrambled = rotated.permute(&scramble).expect("Matching size");
+        let (_, b) = standardize_top(scrambled);
+        
+        println!("{}", crate::shapes::Shape::round_mat(&a));
+        println!("{}", crate::shapes::Shape::round_mat(&b));
 
-        // Tops without unique axes
-        // TODO asymmetric and spherical
+        // if !b.column_iter().all(|col| {
+        //     col.x.abs() < 1e-3 || (col.x.abs() - 0.87) < 0.1
+        // }) {
+        //     println!("{}", crate::shapes::Shape::round_mat(&standardized));
+        // }
     }
 }

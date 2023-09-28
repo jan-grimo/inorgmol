@@ -5,6 +5,8 @@
   permutation?) or size-gate
   - Not sure this is avoidable as soon as realizeability comes into play with
     multidentate ligands
+- Never fuzzed `Molecule` properly, i.e. generated a set of things you could
+  do with it that don't fail and then property tested manipulations of it
 
 
 # Improvement ideas
@@ -76,9 +78,10 @@ Think about this again, and hard! Is this really wanted?
   - Missing: `refine<F: Float>`: Maybe needs a PR with argmin or some
     trait specializations
 - Documentation (deny undocumented and work through all)
-- Check shape analysis methods
+- Check shape methods
   - [x] rotation finding
   - [x] superposable vertex sets
+  - [ ] canonicalization
   - [ ] tetrahedra (buggy!)
   - [ ] mirror
 - Is `shape::recognition::sample` correct? shouldn't it distort more than just
@@ -90,6 +93,14 @@ Think about this again, and hard! Is this really wanted?
   but look at the percentage of failures at each value of the quaternion fit
   msd and model it as a cumulative distribution function. That way you could
   choose what probability of failure you're willing to accept.
+- `canonicalize_coordinates` isn't there yet, need to rethink pivot point
+  selection in the chosen plane since random selection works for planes that are
+  completely equivalent by rotation around +z, but not many shapes have that
+  property - need to find a 'leftmost' property for asymmetric cases
+- Split into three crates
+  - Most is shape-related, so rename to e.g. `chem-shape`
+  - Then `stereo` or `chem-stereo`
+  - Then something molecule related (dg should move here)
 
 
 # Cargo flamegraph

@@ -88,12 +88,13 @@ pub fn quaternion_decomposition(mat: Matrix4) -> Fit {
     }
 }
 
+/// Test whether a matrix has had its centroid removed
+pub fn centroidless(mat: &Matrix3N) -> bool {
+    mat.column_mean().norm_squared() < 1e-8
+}
+
 /// Find a quaternion that best transforms the stator into the rotor
 pub fn fit(stator: &Matrix3N, rotor: &Matrix3N) -> Fit {
-    // Ensure centroids are removed from matrices
-    assert!(stator.column_mean().norm_squared() < 1e-8);
-    assert!(rotor.column_mean().norm_squared() < 1e-8);
-
     let mut a = Matrix4::zeros();
     // Generate decomposable matrix per coordinate pair and add them
     for (rotor_col, stator_col) in rotor.column_iter().zip(stator.column_iter()) {
@@ -110,10 +111,6 @@ pub fn fit(stator: &Matrix3N, rotor: &Matrix3N) -> Fit {
 ///
 /// Requires that both matrices have their offset centroid removed.
 pub fn fit_with_map(stator: &Matrix3N, rotor: &Matrix3N, vertex_map: &HashMap<usize, usize>) -> Fit {
-    // Ensure centroids are removed from matrices
-    assert!(stator.column_mean().norm_squared() < 1e-8);
-    assert!(rotor.column_mean().norm_squared() < 1e-8);
-    
     let mut a = Matrix4::zeros();
     for (stator_i, rotor_i) in vertex_map {
         let stator_col = stator.column(*stator_i);
@@ -181,8 +178,8 @@ impl Rotor {
 #[cfg(test)]
 mod tests {
     use crate::quaternions::*;
-    use crate::shapes::similarity::{unit_sphere_normalize, apply_permutation};
-    use crate::permutation::Permutation;
+    use crate::shapes::similarity::unit_sphere_normalize;
+    use crate::permutation::{Permutation, Permutatable};
 
     fn random_cloud(n: usize) -> Matrix3N {
         unit_sphere_normalize(Matrix3N::new_random(n))
@@ -240,10 +237,10 @@ mod tests {
         let v = 6;
         let case = Case::new(v);
         let permutation = Permutation::new_random(v);
-        let permuted_rotor = Rotor::from(apply_permutation(&case.rotor.0, &permutation));
+        let permuted_rotor = Rotor::from(case.rotor.0.permute(&permutation).expect("Matching size"));
         let partial_permutation = {
             let mut p = HashMap::new();
-            for (i, j) in permutation.iter_pairs().take(3) {
+            for (i, j) in permutation.iter().take(3) {
                 p.insert(i, *j);
             }
             p

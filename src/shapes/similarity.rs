@@ -9,7 +9,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::strong::matrix::Positions;
-use crate::strong::bijection::{Bijection, bijections};
+use crate::strong::bijection::{Bijection, bijections, Bijectable};
 use crate::permutation::{Permutation, permutations};
 use crate::shapes::*;
 
@@ -43,15 +43,6 @@ where
     assert_eq!(x.ncols(), p.set_size());
     let inverse = p.inverse();
     na::OMatrix::<f64, na::Const<3>, C>::from_fn(|i, j| x[(i, inverse[j])])
-}
-
-/// Apply a column permutation to a dynamic-width matrix
-///
-/// Post-condition is x.column(i) == result.column(p(i))
-pub fn apply_permutation(x: &Matrix3N, p: &Permutation) -> Matrix3N {
-    assert_eq!(x.ncols(), p.set_size());
-    let inverse = p.inverse();
-    Matrix3N::from_fn(x.ncols(), |i, j| x[(i, inverse[j])])
 }
 
 /// Find the optimal scaling between shape and cloud
@@ -254,7 +245,7 @@ fn polyhedron_reference_base_inner(
 ) -> (Bijection<Column, Vertex>, crate::quaternions::Fit)
 {
     generator.map(|p| {
-            let fit = shape_coordinates.quaternion_fit_with_rotor(&cloud.apply_bijection(&p));
+            let fit = shape_coordinates.quaternion_fit_rotor(&cloud.biject(&p).unwrap());
             (p, fit)
         })
         .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("No NaNs in MSDs"))
@@ -284,7 +275,7 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Sha
 
     let best_bijection = best_bijection.inverse();
 
-    let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
+    let permuted_shape = shape_coordinates.biject(&best_bijection).unwrap();
     let rotated_shape = best_fit.rotate_stator(&permuted_shape.matrix);
 
     let csm = scaling::optimize_csm(&cloud.matrix, &rotated_shape);
@@ -398,7 +389,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
             |best, vertices| -> PartialMsd {
                 let mut partial_map = PartialPermutation::with_capacity(n);
                 vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c), *v); });
-                let partial_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
+                let partial_fit = cloud.quaternion_fit_map(&shape_coordinates, &partial_map);
 
                 // If the msd caused only by the partial map is already worse, skip
                 if partial_fit.msd > best.msd {
@@ -431,7 +422,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                 };
 
                 // Fuse pre-match and best subpermutation
-                for (i, j) in sub_permutation.iter_pairs() {
+                for (i, j) in sub_permutation.iter() {
                     partial_map.insert(left_free[i], right_free[*j]);
                 }
 
@@ -448,7 +439,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                 }
 
                 // Make a clean quaternion fit with the full mapping
-                let full_fit = cloud.quaternion_fit_with_map(&shape_coordinates, &partial_map);
+                let full_fit = cloud.quaternion_fit_map(&shape_coordinates, &partial_map);
                 if full_fit.msd < best.msd {
                     PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: partial_fit.msd}
                 } else {
@@ -498,8 +489,8 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
         }
     }
 
-    let permuted_shape = shape_coordinates.apply_bijection(&best_bijection);
-    let fit = cloud.quaternion_fit_with_rotor(&permuted_shape);
+    let permuted_shape = shape_coordinates.biject(&best_bijection).unwrap();
+    let fit = cloud.quaternion_fit_rotor(&permuted_shape);
     let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
     let csm = scaling::optimize_csm(&cloud.matrix, &rotated_shape);
@@ -534,13 +525,13 @@ mod tests {
         let permutation = Permutation::new_random(n);
 
         let stator = random_cloud(n);
-        let permuted = apply_permutation(&stator, &permutation);
+        let permuted = stator.permute(&permutation).expect("Matching size");
 
         for i in 0..n {
             assert_eq!(stator.column(i), permuted.column(permutation[i]));
         }
 
-        let reconstituted = apply_permutation(&permuted, &permutation.inverse());
+        let reconstituted = permuted.permute(&permutation.inverse()).expect("Matching size");
         approx::assert_relative_eq!(stator, reconstituted);
     }
 
@@ -600,7 +591,7 @@ mod tests {
                 Bijection::new(p)
             };
 
-            let cloud = Self::random_shape_rotation(shape).apply_bijection(&bijection);
+            let cloud = Self::random_shape_rotation(shape).biject(&bijection).expect("Matching size");
             Case { shape_name: shape.name, bijection, cloud }
         }
 
@@ -611,7 +602,7 @@ mod tests {
                 Bijection::new(p)
             };
 
-            let cloud = Self::random_shape_rotation(shape).apply_bijection(&bijection);
+            let cloud = Self::random_shape_rotation(shape).biject(&bijection).expect("Matching size");
             Case { shape_name: shape.name, bijection, cloud }
         }
 

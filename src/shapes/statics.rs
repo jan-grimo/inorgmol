@@ -660,6 +660,7 @@ lazy_static! {
 mod tests {
     use crate::shapes::*;
     use crate::shapes::similarity::unit_sphere_normalize;
+    use crate::strong::bijection::Bijectable;
     use crate::strong::matrix::Positions;
 
     fn make_rotation(slice: &[usize]) -> Rotation {
@@ -672,8 +673,8 @@ mod tests {
             let strong_coords = Positions::new(unit_sphere_normalize(shape.coordinates.clone()));
             // Apply each rotation and quaternion fit without a mapping
             for rotation in shape.rotation_basis.iter() {
-                let rotated_coords = strong_coords.apply_bijection(rotation);
-                let fit = strong_coords.quaternion_fit_with_rotor(&rotated_coords);
+                let rotated_coords = strong_coords.biject(rotation).expect("Matching size");
+                let fit = strong_coords.quaternion_fit_rotor(&rotated_coords);
                 assert!(fit.msd < 1e-6);
             }
         }
@@ -826,8 +827,12 @@ mod tests {
         for shape in SHAPES.iter() {
             if let Some(annotated_basis) = annotated_rotation_basis(shape.name) {
                 let expanded_annotation = Shape::expand_rotation_basis(annotated_basis.as_slice());
-                let expanded_basis = shape.generate_rotations();
+                let found_basis = Shape::find_rotation_basis(&shape.coordinates);
+                let expanded_basis = Shape::expand_rotation_basis(found_basis.as_slice());
                 assert_eq!(expanded_annotation, expanded_basis);
+            } else {
+                // No panic on looking for it
+                let _ = Shape::find_rotation_basis(&shape.coordinates);
             }
         }
     }

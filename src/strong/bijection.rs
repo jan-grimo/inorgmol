@@ -102,16 +102,16 @@ impl<T: Index, U: Index> Bijection<T, U> {
     }
 }
 
-impl<Key: Index, Value: Index> std::fmt::Display for Bijection<Key, Value> {
+impl<T: Index, U: Index> std::fmt::Display for Bijection<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.permutation)
     }
 }
 
-impl<Key: Index, Value: Index> TryFrom<Vec<Value>> for Bijection<Key, Value> {
+impl<T: Index, U: Index> TryFrom<Vec<U>> for Bijection<T, U> {
     type Error = PermutationError;
 
-    fn try_from(strong_vec: Vec<Value>) -> Result<Bijection<Key, Value>, Self::Error> {
+    fn try_from(strong_vec: Vec<U>) -> Result<Bijection<T, U>, Self::Error> {
         let weak_vec: Vec<usize> = strong_vec.into_iter()
             .map(|v| v.get().to_usize().unwrap())
             .collect();
@@ -122,18 +122,18 @@ impl<Key: Index, Value: Index> TryFrom<Vec<Value>> for Bijection<Key, Value> {
 /// Iterator adaptor for iterating through all bijections of a set size
 ///
 /// See [`bijections`]
-pub struct BijectionIterator<T: Index, U: Index> {
+pub struct BijectionsIterator<T: Index, U: Index> {
     bijection: Bijection<T, U>,
     increment: bool
 }
 
-impl<T: Index, U: Index> BijectionIterator<T, U> {
-    fn new(bijection: Bijection<T, U>) -> BijectionIterator<T, U> {
-        BijectionIterator {bijection, increment: false}
+impl<T: Index, U: Index> BijectionsIterator<T, U> {
+    fn new(bijection: Bijection<T, U>) -> BijectionsIterator<T, U> {
+        BijectionsIterator {bijection, increment: false}
     }
 }
 
-impl<T: Index, U: Index> Iterator for BijectionIterator<T, U> {
+impl<T: Index, U: Index> Iterator for BijectionsIterator<T, U> {
     type Item = Bijection<T, U>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -153,14 +153,39 @@ impl<T: Index, U: Index> Iterator for BijectionIterator<T, U> {
 }
 
 /// Yields bijections in increasing lexicographic order
-pub fn bijections<T: Index, U: Index>(n: usize) -> BijectionIterator<T, U> {
-    BijectionIterator::<T, U>::new(Bijection::identity(n))
+pub fn bijections<T: Index, U: Index>(n: usize) -> BijectionsIterator<T, U> {
+    BijectionsIterator::<T, U>::new(Bijection::identity(n))
+}
+
+/// Trait indicating a type can be bijected
+pub trait Bijectable<U: Index> {
+    /// Key/Input type for the bijection
+    type T: Index;
+    /// Result of the bijection
+    type Output;
+
+    /// Perform the bijection
+    fn biject(&self, bijection: &Bijection<Self::T, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError>;
+}
+
+impl<T: Index, U: Index> Bijectable<U> for Vec<T> {
+    type T = T;
+    type Output = Vec<U>;
+
+    fn biject(&self, bijection: &Bijection<T, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError> {
+        let vec = Vec::from_iter(self.iter().filter_map(|item| bijection.get(item)));
+        if vec.len() == self.len() {
+            Ok(vec)
+        } else {
+            Err(PermutationError::LengthMismatch)
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::permutation::Permutation;
-    use crate::strong::bijection::Bijection;
+    use crate::strong::bijection::{Bijection, Bijectable};
     use crate::strong::IndexBase;
 
     #[derive(IndexBase, Debug, Copy, Clone, PartialEq)]
@@ -174,19 +199,34 @@ mod tests {
 
     #[test]
     fn basics() {
-        let f1 = Bijection::<Foo, Bar>::new(Permutation::try_from_index(4, 3).expect("Valid index"));
+        let f1 = Bijection::<Foo, Bar>::try_from_index(4, 3).expect("Valid index");
         let f1_at_two = Bar::from(f1.permutation[2]);
         assert_eq!(f1.get(&Foo(2)), Some(f1_at_two));
         assert_eq!(f1.inverse_of(&f1_at_two), Some(Foo::from(2)));
 
-        let f2 = Bijection::<Bar, Baz>::new(Permutation::try_from_index(4, 3).expect("Valid index"));
+        let f2 = Bijection::<Bar, Baz>::try_from_index(4, 3).expect("Valid index");
         let f3 = f1.compose(&f2).unwrap();
         assert_eq!(f3.permutation, f1.permutation.compose(&f2.permutation).unwrap());
 
-        // let f4 = f1.compose(&f3); expected compile error (mismatched types)
+        // expect compile error
+        // let f4 = f1.compose(&f3);
 
         let p1 = Bijection::<Bar, Bar>::new(Permutation::identity(4));
         let f4 = f1.compose(&p1).unwrap();
         assert_eq!(f1.permutation, f4.permutation);
+    }
+
+    #[test]
+    fn biject() {
+        let foos = vec![Foo(4), Foo(2)];
+        let bijection = Bijection::<Foo, Bar>::try_from_index(5, 5).expect("Valid index");
+        let bars = foos.biject(&bijection);
+        assert!(bars.is_ok());
+        let refoo = bars.unwrap().biject(&bijection.inverse());
+        assert!(refoo == Ok(foos));
+
+        // expect compile error
+        // let failing = Bijection::<Bar, Baz>::try_from_index(1, 1).expect("Valid index");
+        // let bazzes = foos.biject(&failing);
     }
 }
