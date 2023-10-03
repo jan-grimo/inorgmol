@@ -1,5 +1,6 @@
 use crate::shapes::{Shape, Name, Rotation, Matrix3N};
 use crate::permutation::Permutation;
+use crate::strong::matrix::Positions;
 
 // TODO 
 // - Improve coordinates and tighten MAX_COLUMN_DEVIATION
@@ -23,31 +24,31 @@ lazy_static! {
     /// Linear two-vertex coordination polyhedron
     pub static ref LINE: Shape = Shape {
         name: Name::Line,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              1.0, 0.0, 0.0,
             -1.0, 0.0, 0.0
-        ]),
+        ])),
         rotation_basis: vec![make_rotation(&[1, 0])],
     };
 
     /// Bent two-vertex coordination polyhedron at 107°
     pub static ref BENT: Shape = Shape {
         name: Name::Bent,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
                            1.0,               0.0, 0.0,
             -0.292371704722737, 0.956304755963036, 0.0
-        ]),
+        ])),
         rotation_basis: vec![make_rotation(&[1, 0])],
     };
 
     /// Equilateral triangle three-vertex coordination polyhedron
     pub static ref EQUILATERAL_TRIANGLE: Shape = Shape {
         name: Name::EquilateralTriangle,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              1.0,           0.0, 0.0,
             -0.5,  SQRT_3 / 2.0, 0.0,
             -0.5, -SQRT_3 / 2.0, 0.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[1, 2, 0]),
             make_rotation(&[0, 2, 1])
@@ -60,34 +61,34 @@ lazy_static! {
     /// face-centered trigonal pyramid.
     pub static ref VACANT_TETRAHEDRON: Shape = Shape {
         name: Name::VacantTetrahedron,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
             0.0, -0.366501, 0.930418,
             0.805765, -0.366501, -0.465209,
             -0.805765, -0.366501, -0.465209
-        ]),
+        ])),
         rotation_basis: vec![make_rotation(&[2, 0, 1])]
     };
 
     /// T-shape coordination polyhedron
     pub static ref TSHAPE: Shape = Shape {
         name: Name::T,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
             -1.0, -0.0, -0.0,
              0.0,  1.0,  0.0,
              1.0,  0.0,  0.0,
-        ]),
+        ])),
         rotation_basis: vec![make_rotation(&[2, 1, 0])],
     };
 
     /// Tetrahedron coordination polyhedron
     pub static ref TETRAHEDRON: Shape = Shape {
         name: Name::Tetrahedron,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
                  -SQRT_2 / 3.0,  SQRT_2 / SQRT_3, -1.0 / 3.0,
                            0.0,              0.0,        1.0,
             2.0 * SQRT_2 / 3.0,              0.0, -1.0 / 3.0,
                  -SQRT_2 / 3.0, -SQRT_2 / SQRT_3, -1.0 / 3.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[0, 3, 1, 2]),
             make_rotation(&[2, 1, 3, 0]),
@@ -99,12 +100,12 @@ lazy_static! {
     /// Square coordination polyhedron
     pub static ref SQUARE: Shape = Shape {
         name: Name::Square,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              1.0,  0.0,  0.0,
              0.0,  1.0,  0.0,
             -1.0,  0.0,  0.0,
              0.0, -1.0,  0.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[3, 0, 1, 2]),
             make_rotation(&[1, 0, 3, 2]),
@@ -115,12 +116,12 @@ lazy_static! {
     /// Equatorially monovacant trigonal bipyramid or edge-centered tetragonal disphenoid
     pub static ref SEESAW: Shape = Shape {
         name: Name::Seesaw,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              0.0,  1.0,           0.0,
              1.0,  0.0,           0.0,
             -0.5,  0.0, -SQRT_3 / 2.0,
              0.0, -1.0,           0.0
-        ]),
+        ])),
         rotation_basis: vec![make_rotation(&[3, 2, 1, 0])],
     };
 
@@ -128,38 +129,38 @@ lazy_static! {
     /// (or monovacant trigonal bipyramid)
     pub static ref TRIGONALPYRAMID: Shape = Shape {
         name: Name::TrigonalPyramid,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              1.0,           0.0, 0.0,
             -0.5,  SQRT_3 / 2.0, 0.0,
             -0.5, -SQRT_3 / 2.0, 0.0,
              0.0,           0.0, 1.0
-        ]),
+        ])),
         rotation_basis: vec![make_rotation(&[2, 0, 1, 3])],
     };
 
     /// J1 solid (central position is square-face centered)
     pub static ref SQUAREPYRAMID: Shape = Shape {
         name: Name::SquarePyramid,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              1.0,  0.0, 0.0,
              0.0,  1.0, 0.0,
             -1.0,  0.0, 0.0,
              0.0, -1.0, 0.0,
              0.0,  0.0, 1.0,
-        ]),
+        ])),
         rotation_basis: vec![make_rotation(&[3, 0, 1, 2, 4])],
     };
 
     /// J12 solid
     pub static ref TRIGONALBIPYRAMID: Shape = Shape {
         name: Name::TrigonalBipyramid,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              1.0,           0.0, 0.0,
             -0.5,  SQRT_3 / 2.0, 0.0,
             -0.5, -SQRT_3 / 2.0, 0.0,
              0.0,           0.0, 1.0,
              0.0,           0.0, -1.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[2, 0, 1, 3, 4]), // C3
             make_rotation(&[0, 2, 1, 4, 3]), // C2 on 0
@@ -169,13 +170,13 @@ lazy_static! {
     /// Pentagon coordination polyhedron
     pub static ref PENTAGON: Shape = Shape {
         name: Name::Pentagon,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
                     1.0,          0.0, 0.0,
             PENTAGON_X1,  PENTAGON_Y1, 0.0,
             PENTAGON_X2,  PENTAGON_Y2, 0.0,
             PENTAGON_X2, -PENTAGON_Y2, 0.0,
             PENTAGON_X1, -PENTAGON_Y1, 0.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[4, 0, 1, 2, 3]),
             make_rotation(&[0, 4, 3, 2, 1]),
@@ -185,14 +186,14 @@ lazy_static! {
     /// Octahedron coordination polyhedron
     pub static ref OCTAHEDRON: Shape = Shape {
         name: Name::Octahedron,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
             1.0,  0.0,  0.0,
             0.0,  1.0,  0.0,
            -1.0,  0.0,  0.0,
             0.0, -1.0,  0.0,
             0.0,  0.0,  1.0,
             0.0,  0.0, -1.0,
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[3, 0, 1, 2, 4, 5]),
             make_rotation(&[0, 5, 2, 4, 1, 3]),
@@ -203,14 +204,14 @@ lazy_static! {
     /// Trigonal prism six-vertex coordination polyhedron
     pub static ref TRIGONALPRISM: Shape = Shape {
         name: Name::TrigonalPrism,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              0.755929,  0.000000,  0.654654,
             -0.377964,  0.654654,  0.654654,
             -0.377964, -0.654654,  0.654654,
              0.755929,  0.000000, -0.654654,
             -0.377964,  0.654654, -0.654654,
             -0.377964, -0.654654, -0.654654
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[2, 0, 1, 5, 3, 4]), // C3 axial
             make_rotation(&[3, 5, 4, 0, 2, 1]), // C2 between 0, 3
@@ -220,14 +221,14 @@ lazy_static! {
     /// J2 solid pentagonal pyramid six-vertex coordination polyhedron
     pub static ref PENTAGONALPYRAMID: Shape = Shape {
         name: Name::PentagonalPyramid,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
                     1.0,          0.0, 0.0,
             PENTAGON_X1,  PENTAGON_Y1, 0.0,
             PENTAGON_X2,  PENTAGON_Y2, 0.0,
             PENTAGON_X2, -PENTAGON_Y2, 0.0,
             PENTAGON_X1, -PENTAGON_Y1, 0.0,
                     0.0,          0.0, 1.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[4, 0, 1, 2, 3, 5]),
         ],
@@ -236,14 +237,14 @@ lazy_static! {
     /// Hexagon coordination polyhedron
     pub static ref HEXAGON: Shape = Shape {
         name: Name::Hexagon,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              1.0,           0.0,  0.0,
              0.5,  SQRT_3 / 2.0,  0.0,
             -0.5,  SQRT_3 / 2.0,  0.0,
             -1.0,           0.0,  0.0,
             -0.5, -SQRT_3 / 2.0,  0.0,
              0.5, -SQRT_3 / 2.0,  0.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[5, 0, 1, 2, 3, 4]),
             make_rotation(&[0, 5, 4, 3, 2, 1]),
@@ -253,7 +254,7 @@ lazy_static! {
     /// J13 solid
     pub static ref PENTAGONALBIPYRAMID: Shape = Shape {
         name: Name::PentagonalBipyramid,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
                     1.0,          0.0,  0.0,
             PENTAGON_X1,  PENTAGON_Y1,  0.0,
             PENTAGON_X2,  PENTAGON_Y2,  0.0,
@@ -261,7 +262,7 @@ lazy_static! {
             PENTAGON_X1, -PENTAGON_Y1,  0.0,
                     0.0,          0.0,  1.0,
                     0.0,          0.0, -1.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[4, 0, 1, 2, 3, 5, 6]),
             make_rotation(&[1, 0, 4, 3, 2, 6, 5]),
@@ -283,7 +284,7 @@ lazy_static! {
     ////
     pub static ref CAPPEDOCTAHEDRON: Shape = Shape {
         name: Name::CappedOctahedron,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              0.000000,  0.000000,  1.000000,
              0.957729,  0.000000,  0.287673,
             -0.478864,  0.829418,  0.287673,
@@ -291,7 +292,7 @@ lazy_static! {
              0.389831,  0.675207, -0.626200,
             -0.779662,  0.000000, -0.626200,
              0.389831, -0.675207, -0.626200
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[0, 3, 1, 2, 6, 4, 5]), // C3 axial
         ],
@@ -303,7 +304,7 @@ lazy_static! {
     /// minimized to local minimum in Thomson potential
     pub static ref CAPPEDTRIGONALPRISM: Shape = Shape {
         name: Name::CappedTrigonalPrism,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
            -0.000000, -0.000000,  1.000000,
             0.984798, -0.069552,  0.159173,
            -0.069552,  0.984798,  0.159173,
@@ -311,7 +312,7 @@ lazy_static! {
             0.069552, -0.984798,  0.159173,
             0.413726,  0.413726, -0.810964,
            -0.413726, -0.413726, -0.810964
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[0, 3, 4, 1, 2, 6, 5]), // C2 axial
         ],
@@ -320,7 +321,7 @@ lazy_static! {
     /// Square antiprism eight-vertex coordination polyhedron
     pub static ref SQUAREANTIPRISM: Shape = Shape {
         name: Name::SquareAntiprism,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              0.607781,  0.607781,  0.511081,
             -0.607781,  0.607781,  0.511081,
             -0.607781, -0.607781,  0.511081,
@@ -329,7 +330,7 @@ lazy_static! {
              0.000000,  0.859533, -0.511081,
             -0.859533,  0.000000, -0.511081,
             -0.000000, -0.859533, -0.511081
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[3, 0, 1, 2, 7, 4, 5, 6]), // C4 axial
             make_rotation(&[5, 4, 7, 6, 1, 0, 3, 2]), // C2'-ish
@@ -339,7 +340,7 @@ lazy_static! {
     /// Cube eight-vertex coordination polyhedron
     pub static ref CUBE: Shape = Shape {
         name: Name::Cube,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
               SQRT_FRAC_1_3,  SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
               SQRT_FRAC_1_3, -SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
               SQRT_FRAC_1_3, -SQRT_FRAC_1_3, -SQRT_FRAC_1_3,
@@ -348,7 +349,7 @@ lazy_static! {
              -SQRT_FRAC_1_3, -SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
              -SQRT_FRAC_1_3, -SQRT_FRAC_1_3, -SQRT_FRAC_1_3,
              -SQRT_FRAC_1_3,  SQRT_FRAC_1_3, -SQRT_FRAC_1_3
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[3, 0, 1, 2, 7, 4, 5, 6]), // C4
             make_rotation(&[4, 5, 1, 0, 7, 6, 2, 3]), // C4'
@@ -358,7 +359,7 @@ lazy_static! {
     /// Snub disphenoid, spherized J84 solid in D2d
     pub static ref TRIGONALDODECAHEDRON: Shape = Shape {
         name: Name::TrigonalDodecahedron,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
               0.620913,  0.000000, -0.783880,
              -0.620913,  0.000000, -0.783880,
               0.000000,  0.620913,  0.783880,
@@ -367,7 +368,7 @@ lazy_static! {
              -0.950273,  0.000000,  0.311417,
               0.000000,  0.950273, -0.311417,
               0.000000, -0.950273, -0.311417
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[1, 0, 3, 2, 5, 4, 7, 6]), // C2z between 01
             make_rotation(&[2, 3, 0, 1, 6, 7, 4, 5]), // C2x + C4z
@@ -377,7 +378,7 @@ lazy_static! {
     /// Hexagonal bipyramid eight-vertex coordination polyhedron
     pub static ref HEXAGONALBIPYRAMID: Shape = Shape {
         name: Name::HexagonalBipyramid,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              1.0,           0.0,  0.0,
              0.5,  SQRT_3 / 2.0,  0.0,
             -0.5,  SQRT_3 / 2.0,  0.0,
@@ -386,7 +387,7 @@ lazy_static! {
              0.5, -SQRT_3 / 2.0,  0.0,
              0.0,           0.0,  1.0,
              0.0,           0.0, -1.0
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[5, 0, 1, 2, 3, 4, 6, 7]), // axial C6
             make_rotation(&[0, 5, 4, 3, 2, 1, 7, 6]), // C2 around 0-3
@@ -399,7 +400,7 @@ lazy_static! {
     /// nine particles.
     pub static ref TRICAPPEDTRIGONALPRISM: Shape = Shape {
         name: Name::TricappedTrigonalPrism,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              0.914109572223, -0.182781178690, -0.361931942064,
              0.293329304506,  0.734642489361, -0.611766566546,
             -0.480176899428, -0.046026929940,  0.875963279468,
@@ -409,7 +410,7 @@ lazy_static! {
             -0.162180419233, -0.247163999394, -0.955304908927,
              0.063327560246, -0.997971078243, -0.006583851785,
              0.610701141906, -0.322016246902,  0.723429092590
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[7, 8, 3, 4, 2, 1, 0, 6, 5]), // C3 ccw between 2-4-3
             make_rotation(&[2, 5, 0, 6, 7, 1, 3, 4, 8]), // C2 at 8
@@ -419,7 +420,7 @@ lazy_static! {
     /// Spherized J10 solid in C4v, to local minimum of Thomson potential
     pub static ref CAPPEDSQUAREANTIPRISM: Shape = Shape {
         name: Name::CappedSquareAntiprism,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              -0.000000,  0.932111,  0.362172,
              -0.000000, -0.932111,  0.362172,
               0.932111, -0.000000,  0.362172,
@@ -429,7 +430,7 @@ lazy_static! {
              -0.559626,  0.559626, -0.611258,
              -0.559626, -0.559626, -0.611258,
               0.000000,  0.000000,  1.000000
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[2, 3, 1, 0, 5, 7, 4, 6, 8]),
         ],
@@ -438,7 +439,7 @@ lazy_static! {
     /// Heptagonal bipyramid nine-vertex coordination polyhedron
     pub static ref HEPTAGONALBIPYRAMID: Shape = Shape {
         name: Name::HeptagonalBipyramid,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
               1.000000,  0.000000,  0.000000,
               0.623490,  0.781831,  0.000000,
              -0.222521,  0.974928,  0.000000,
@@ -448,7 +449,7 @@ lazy_static! {
               0.623490, -0.781831,  0.000000,
               0.000000,  0.000000,  1.000000,
               0.000000,  0.000000, -1.000000
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[6, 0, 1, 2, 3, 4, 5, 7, 8]), // axial C7
             make_rotation(&[0, 6, 5, 4, 3, 2, 1, 8, 7]), // C2 around 1 and between 4 and 5
@@ -460,7 +461,7 @@ lazy_static! {
     /// Coordinates are solution to Thomson problem with 10 particles
     pub static ref BICAPPEDSQUAREANTIPRISM: Shape = Shape {
         name: Name::BicappedSquareAntiprism,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              0.978696890330,  0.074682616274,  0.191245663177,
              0.537258145625,  0.448413180814, -0.714338368164,
             -0.227939324473, -0.303819959434, -0.925060590777,
@@ -471,7 +472,7 @@ lazy_static! {
              0.552788606831, -0.770301636525, -0.317899583084,
              0.290107593166, -0.385278374104,  0.876012647646,
             -0.978696887344, -0.074682599351, -0.191245685067
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[0, 7, 6, 1, 5, 2, 4, 8, 3, 9]), // C4z
             make_rotation(&[9, 5, 3, 2, 7, 1, 8, 4, 6, 0]), // C2x + C8z
@@ -481,7 +482,7 @@ lazy_static! {
     /// Coordinates are solution to Thomson problem with 11 particles
     pub static ref EDGECONTRACTEDICOSAHEDRON: Shape = Shape {
         name: Name::EdgeContractedIcosahedron,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              0.153486836562, -0.831354332797,  0.534127105044,
              0.092812115769,  0.691598091278, -0.716294626049,
              0.686120068086,  0.724987503180,  0.060269166267,
@@ -493,7 +494,7 @@ lazy_static! {
              0.731466092268, -0.415052523977, -0.541007170195,
             -0.439821168531, -0.864743799130, -0.242436592901,
             -0.773718984882, -0.203685975092,  0.599892453681
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[1, 0, 9, 5, 7, 3, 10, 4, 8, 2, 6]), // C2
         ],
@@ -502,7 +503,7 @@ lazy_static! {
     /// Icosahedron twelve-vertex coordination polyhedron
     pub static ref ICOSAHEDRON: Shape = Shape {
         name: Name::Icosahedron,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              ICO_1,    0.0,  ICO_2,
              ICO_1,    0.0, -ICO_2,
             -ICO_1,    0.0,  ICO_2,
@@ -515,7 +516,7 @@ lazy_static! {
                0.0,  ICO_2, -ICO_1,
                0.0, -ICO_2,  ICO_1,
                0.0, -ICO_2, -ICO_1
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[0, 11, 8, 3, 5, 10, 9, 6, 4, 1, 2, 7]), // C5 around 0-3
             make_rotation(&[8, 5, 6, 11, 4, 0, 3, 7, 9, 1, 2, 10]), // C5 around 4-7
@@ -526,7 +527,7 @@ lazy_static! {
     /// Cuboctahedron twelve-vertex coordination polyhedron
     pub static ref CUBOCTAHEDRON: Shape = Shape {
         name: Name::Cuboctahedron,
-        coordinates: Matrix3N::from_column_slice(&[
+        coordinates: Positions::new(Matrix3N::from_column_slice(&[
              FRAC_1_SQRT_2,            0.0,  FRAC_1_SQRT_2,
              FRAC_1_SQRT_2,            0.0, -FRAC_1_SQRT_2,
             -FRAC_1_SQRT_2,            0.0,  FRAC_1_SQRT_2,
@@ -539,7 +540,7 @@ lazy_static! {
                        0.0,  FRAC_1_SQRT_2, -FRAC_1_SQRT_2,
                        0.0, -FRAC_1_SQRT_2,  FRAC_1_SQRT_2,
                        0.0, -FRAC_1_SQRT_2, -FRAC_1_SQRT_2
-        ]),
+        ])),
         rotation_basis: vec![
             make_rotation(&[10, 11, 8, 9, 5, 7, 4, 6, 0, 1, 2, 3]), // C4 ccw 0-8-2-10
             make_rotation(&[2, 0, 3, 1, 8, 10, 9, 11, 6, 4, 7, 5]), // C4 ccw 4-9-6-8
@@ -670,7 +671,7 @@ mod tests {
     #[test]
     fn rotations_are_rotations() {
         for shape in SHAPES.iter() {
-            let strong_coords = Positions::new(unit_sphere_normalize(shape.coordinates.clone()));
+            let strong_coords = Positions::new(unit_sphere_normalize(shape.coordinates.matrix.clone()));
             // Apply each rotation and quaternion fit without a mapping
             for rotation in shape.rotation_basis.iter() {
                 let rotated_coords = strong_coords.biject(rotation).expect("Matching size");
@@ -682,7 +683,7 @@ mod tests {
 
     fn print_total_unit_sphere_deviations() {
         let mut shape_deviations: Vec<(Name, f64)> = SHAPES.iter()
-            .map(|s| (s.name, s.coordinates.column_iter()
+            .map(|s| (s.name, s.coordinates.matrix.column_iter()
                       .map(|v| (v.norm() - 1.0).abs())
                       .sum())
             ).collect();
@@ -703,7 +704,7 @@ mod tests {
         // TODO tighten the threshold here by improving shape coordinates
         for shape in SHAPES.iter() {
             let mut pass = true;
-            for (i, col) in shape.coordinates.column_iter().enumerate() {
+            for (i, col) in shape.coordinates.matrix.column_iter().enumerate() {
                 let deviation = (col.norm() - 1.0).abs();
                 if deviation > MAX_COLUMN_DEVIATION {
                     pass = false;
@@ -827,12 +828,12 @@ mod tests {
         for shape in SHAPES.iter() {
             if let Some(annotated_basis) = annotated_rotation_basis(shape.name) {
                 let expanded_annotation = Shape::expand_rotation_basis(annotated_basis.as_slice());
-                let found_basis = Shape::find_rotation_basis(&shape.coordinates);
+                let found_basis = Shape::find_rotation_basis(&shape.coordinates.matrix);
                 let expanded_basis = Shape::expand_rotation_basis(found_basis.as_slice());
                 assert_eq!(expanded_annotation, expanded_basis);
             } else {
                 // No panic on looking for it
-                let _ = Shape::find_rotation_basis(&shape.coordinates);
+                let _ = Shape::find_rotation_basis(&shape.coordinates.matrix);
             }
         }
     }
@@ -1018,11 +1019,11 @@ mod tests {
         maybe_vec.map(|vec| vec.into_iter().map(|arr| arr.map(|o| o.map(Vertex::from)).map(Particle::from)).collect())
     }
 
-    fn tetrahedron_volume(tetrahedron: &[Particle; 4], points: &Matrix3N) -> f64 {
+    fn tetrahedron_volume(tetrahedron: &[Particle; 4], points: &Positions<Vertex>) -> f64 {
         let zero = Matrix3N::zeros(1);
         let r = |p: Particle| {
             match p {
-                Particle::Vertex(v) => points.column(v.get()),
+                Particle::Vertex(v) => points.point(v),
                 Particle::Origin => zero.column(0)
             }
         };

@@ -1,7 +1,7 @@
 /// Modeling for embedding a single shape
 pub mod solitary_shape {
 
-use crate::strong::IndexBase;
+use crate::strong::{IndexBase, Index};
 use itertools::Itertools;
 use crate::dg::DistanceBounds;
 use crate::dg::refinement::Chiral;
@@ -21,7 +21,7 @@ pub fn shape_into_bounds(shape: &Shape) -> DistanceBounds {
 
     const TOLERANCE_PERCENT: f64 = 1.0;
 
-    let mut particles: Vec<Particle> = (0..shape.num_vertices()).map_into::<Vertex>().map(Particle::Vertex).collect();
+    let mut particles: Vec<Particle> = Vertex::range(shape.num_vertices()).map(Particle::Vertex).collect();
     particles.push(Particle::Origin);
 
     // Distances between all particles

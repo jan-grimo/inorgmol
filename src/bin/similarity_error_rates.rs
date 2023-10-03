@@ -1,4 +1,4 @@
-use molassembler::strong::IndexBase;
+use molassembler::strong::{Index, IndexBase};
 use molassembler::strong::matrix::Positions;
 use molassembler::shapes::similarity::{skip_vertices, polyhedron_reference, unit_sphere_normalize, SimilarityError};
 use molassembler::quaternions::Matrix3N;
@@ -50,7 +50,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
     let cloud = Positions::<Column>::new(unit_sphere_normalize(x));
 
     // Add centroid to shape coordinates and normalize
-    let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
+    let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
     let shape_coordinates = Positions::<Vertex>::new(shape_coordinates);
 
@@ -64,8 +64,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
     let left_free: Vec<Column> = (PREMATCH..n).map(Column::from).collect();
 
     let skips = USE_SKIPS.then(|| skip_vertices(shape));
-    let narrow = (0..n)
-        .map_into::<Vertex>()
+    let narrow = Vertex::range(n)
         .permutations(PREMATCH)
         .filter(|vertices| {
             match USE_SKIPS {
@@ -86,8 +85,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
                 }
 
                 // Assemble cost matrix of matching each pair of unmatched vertices
-                let right_free: Vec<Vertex> = (0..n)
-                    .map_into::<Vertex>()
+                let right_free: Vec<Vertex> = Vertex::range(n)
                     .filter(|v| !vertices.contains(v))
                     .collect();
 
@@ -200,7 +198,7 @@ impl Case {
     }
 
     pub fn new(shape: &Shape, distortion_norm: f64) -> Case {
-        let coords = shape.coordinates.clone().insert_column(shape.num_vertices(), 0.0);
+        let coords = shape.coordinates.matrix.clone().insert_column(shape.num_vertices(), 0.0);
         let distorted = Self::distort(Self::rotate(coords), distortion_norm);
         // The bijection with which the distorted version is generated is not
         // necessarily useful for comparison since it's possible the distorted

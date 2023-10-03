@@ -9,6 +9,7 @@ use thiserror::Error;
 use ordered_float::NotNan;
 
 use crate::strong::{IndexBase, Index};
+use crate::strong::matrix::Positions;
 use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
 use crate::permutation::{Permutation, permutations, Permutatable};
 use crate::shapes::similarity::unit_sphere_normalize;
@@ -179,7 +180,7 @@ pub struct Shape {
     /// Name of the coordination polyhedron
     pub name: Name,
     /// Unit sphere coordinates without a centroid
-    pub coordinates: Matrix3N,
+    pub coordinates: Positions<Vertex>,
     /// Spatial rotational basis expressed by vertex permutations
     pub rotation_basis: Vec<Rotation>,
 }
@@ -210,12 +211,14 @@ pub enum InvalidVerticesError {
 }
 
 impl Shape {
+    /// Test whether a coordinates matrix is unit spherical
     fn is_unit_spherical(coordinates: &Matrix3N) -> bool {
         const MAX_COLUMN_DEVIATION: f64 = 1e-6;
         coordinates.column_iter()
             .all(|col| (col.norm() - 1.0).abs() <= MAX_COLUMN_DEVIATION)
     }
 
+    /// Test whether a matrix has nearly identical coordinates
     fn has_duplicate_vertices(coordinates: &Matrix3N) -> bool {
         let n = coordinates.ncols();
         (0..n).tuple_combinations().any(|(i, j)| {
@@ -223,6 +226,7 @@ impl Shape {
         })
     }
 
+    /// Round a matrix to two decimal points
     pub(crate) fn round_mat(mat: &Matrix3N) -> Matrix3N {
         mat.map(|v| (v * 100.0).round() / 100.0)
     }
@@ -320,18 +324,18 @@ impl Shape {
         // Find coordinates-derived properties
         let rotation_basis = Self::find_rotation_basis(&coordinates);
     
-        Ok(Shape {name, coordinates, rotation_basis})
+        Ok(Shape {name, coordinates: Positions::new(coordinates), rotation_basis})
     }
 
     /// Number of vertices of the shape (not including the implicit origin)
     pub fn num_vertices(&self) -> usize {
-        self.coordinates.ncols()
+        self.coordinates.matrix.ncols()
     }
 
     /// Yields the position of a particle
     pub fn particle_position(&self, particle: Particle) -> Vector3 {
         match particle {
-            Particle::Vertex(v) => self.coordinates.column(v.get()).into(),
+            Particle::Vertex(v) => self.coordinates.point(v).into(),
             Particle::Origin => Vector3::zeros()
         }
     }
@@ -559,7 +563,7 @@ impl Shape {
 
         let axis = planes.first().expect("At least one per group").plane.normal;
         let n = coordinates.ncols();
-        let mut remaining_vertices: Vec<Vertex> = (0..n).map_into::<Vertex>()
+        let mut remaining_vertices: Vec<Vertex> = Vertex::range(n)
             .filter(|v| !planes.iter().any(|p| p.vertices.contains(v)))
             .collect();
 
@@ -796,7 +800,7 @@ impl Shape {
     pub fn find_mirror(&self) -> Option<Mirror> {
         // TODO This is a bit weird, actually a full inversion, maybe
         // better to just invert a row, e.g. y coordinates?
-        let inverted = -1.0 * self.coordinates.clone();
+        let inverted = -1.0 * self.coordinates.matrix.clone();
         let inverted = inverted.insert_column(self.num_vertices(), 0.0);
 
         // if the quaternion fit onto the original coordinates isn't zero-cost,
@@ -837,13 +841,13 @@ impl Shape {
         let zero = Vector3::zeros();
         let particle_position = |p: &Particle| {
             match p {
-                Particle::Vertex(v) => self.coordinates.column(v.get()),
+                Particle::Vertex(v) => self.coordinates.point(*v),
                 Particle::Origin => zero.column(0)
             }
         };
 
         let n = self.num_vertices();
-        let mut particles: Vec<Particle> = (0..n).map_into::<Vertex>().map(Particle::Vertex).collect();
+        let mut particles: Vec<Particle> = Vertex::range(n).map(Particle::Vertex).collect();
         particles.push(Particle::Origin);
 
         // Find non-zero volume particle quads
@@ -1214,9 +1218,9 @@ mod tests {
     #[test]
     fn canonical_vertex_orders() {
         for shape in SHAPES.iter() {
-            println!("{} coords: {}", shape.name, Shape::round_mat(&shape.coordinates));
+            println!("{} coords: {}", shape.name, Shape::round_mat(&shape.coordinates.matrix));
             assert!(
-                Shape::can_canonicalize(&shape.coordinates),
+                Shape::can_canonicalize(&shape.coordinates.matrix),
                 "Shape {} cannot be canonicalized",
                 shape.name
             );

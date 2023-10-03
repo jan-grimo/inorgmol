@@ -439,7 +439,7 @@ mod tests {
         assert_eq!(xy.signed_distance(&-Vector3::z()), -1.0);
         assert_eq!(xy.signed_distance(&(0.5 * Vector3::z())), 0.5);
 
-        let xy = Plane::fit_matrix(SQUARE.coordinates.clone());
+        let xy = Plane::fit_matrix(SQUARE.coordinates.matrix.clone());
         assert_eq!(xy.signed_distance(&Vector3::z()).abs(), 1.0);
     }
 
@@ -495,7 +495,7 @@ mod tests {
             }));
 
         // Completely enclosing larger tetrahedron
-        let tetr: na::Matrix3x4<f64> = TETRAHEDRON.coordinates.fixed_view::<3, 4>(0, 0).into();
+        let tetr: na::Matrix3x4<f64> = TETRAHEDRON.coordinates.matrix.fixed_view::<3, 4>(0, 0).into();
         let tetr_larger = tetr.scale(1.1);
         assert!(tetrahedra_overlap(&tetr_larger, &tetr));
         assert!(tetrahedra_overlap(&tetr, &tetr_larger));
@@ -503,7 +503,7 @@ mod tests {
 
     #[test]
     fn point_tetrahedron() {
-        let tetr: na::Matrix3x4<f64> = TETRAHEDRON.coordinates.fixed_view::<3, 4>(0, 0).into();
+        let tetr: na::Matrix3x4<f64> = TETRAHEDRON.coordinates.matrix.fixed_view::<3, 4>(0, 0).into();
 
         assert_eq!(
             point_tetrahedron_relation(&tetr, &Vector3::zeros()), 
@@ -540,7 +540,7 @@ mod tests {
     #[test]
     fn random_point_in_tetrahedron_joint() {
         // Symmetric tetrahedron
-        let tetr: na::Matrix3x4<f64> = TETRAHEDRON.coordinates.fixed_view::<3, 4>(0, 0).into();
+        let tetr: na::Matrix3x4<f64> = TETRAHEDRON.coordinates.matrix.fixed_view::<3, 4>(0, 0).into();
         assert!((0..20).all(|_| {
             point_tetrahedron_relation(&tetr, &random_point_in_tetrahedron(&tetr)).unwrap()
                 != PointTetrahedronRelation::Outside
@@ -581,7 +581,7 @@ mod tests {
         assert!(relative_error <= 0.2); // 20% error is fine
 
         // Completely enclosed regular tetrahedron
-        let a: na::Matrix3x4<f64> = TETRAHEDRON.coordinates.fixed_view::<3, 4>(0, 0).into();
+        let a: na::Matrix3x4<f64> = TETRAHEDRON.coordinates.matrix.fixed_view::<3, 4>(0, 0).into();
         let b = a.scale(1.1);
         let overlap = approximate_tetrahedron_overlap_volume(&a, &b);
         let expected = signed_tetrahedron_volume(a.column(0), a.column(1), a.column(2), a.column(3)).abs();

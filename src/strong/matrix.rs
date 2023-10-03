@@ -64,6 +64,7 @@ impl<'a, I: Index, U: Index> Bijectable<U> for AsPositions<'a, I> {
 }
 
 /// Owned positions matrix indexed by a new type
+#[derive(Clone)]
 pub struct Positions<I: Index> {
     /// The underlying matrix
     pub matrix: Matrix3N,

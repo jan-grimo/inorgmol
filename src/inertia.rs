@@ -304,7 +304,7 @@ mod tests {
 
         for (name, expected_top) in pairs {
             let shape = shape_from_name(name);
-            let (top, _) = standardize_top(shape.coordinates.clone());
+            let (top, _) = standardize_top(shape.coordinates.matrix.clone());
             assert_eq!(top, expected_top);
         }
     }
@@ -317,7 +317,7 @@ mod tests {
                 continue;
             }
 
-            let (a_top, a) = standardize_top(shape.coordinates.clone());
+            let (a_top, a) = standardize_top(shape.coordinates.matrix.clone());
 
             for _ in 0..10 {
                 let rot = na::UnitQuaternion::from_axis_angle(
@@ -325,7 +325,7 @@ mod tests {
                     std::f64::consts::TAU * rand::random::<f64>()
                 ).to_rotation_matrix();
 
-                let (b_top, b) = standardize_top(rot * shape.coordinates.clone());
+                let (b_top, b) = standardize_top(rot * shape.coordinates.matrix.clone());
                 assert_eq!(a_top, b_top);
 
                 // For all rotations of vertex indices, find the quaternion fit 
@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn seesaw() {
         let seesaw = shape_from_name(Name::Seesaw);
-        let coords = seesaw.coordinates.clone();
+        let coords = seesaw.coordinates.matrix.clone();
         let (_, a) = standardize_top(coords);
         let z_rot = na::UnitQuaternion::from_axis_angle(
             &na::Vector3::z_axis(),

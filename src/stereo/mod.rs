@@ -265,7 +265,7 @@ mod tests {
     }
 
     fn link_angle(link: &Link, shape: &Shape) -> f64 {
-        angle(&shape.coordinates.column(link.0.into()), &shape.coordinates.column(link.1.into()))
+        angle(&shape.coordinates.point(link.0), &shape.coordinates.point(link.1))
     }
 
     #[test]

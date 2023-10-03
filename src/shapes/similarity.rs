@@ -265,7 +265,7 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Sha
     let cloud: Positions<Column> = Positions::new(unit_sphere_normalize(x));
 
     // Add centroid to shape coordinates and normalize
-    let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
+    let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
     let shape_coordinates: Positions<Vertex> = Positions::new(unit_sphere_normalize(shape_coordinates));
 
     let (best_bijection, best_fit) = match USE_SKIPS {
@@ -361,7 +361,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
     // Add centroid to shape coordinates and normalize
-    let shape_coordinates = shape.coordinates.clone().insert_column(n - 1, 0.0);
+    let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
     let shape_coordinates = Positions::<Vertex>::new(shape_coordinates);
 
@@ -375,8 +375,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     let left_free: Vec<Column> = (PREMATCH..n).map(Column::from).collect();
 
     let skips = USE_SKIPS.then(|| skip_vertices(shape));
-    let narrow = (0..n)
-        .map_into::<Vertex>()
+    let narrow = Vertex::range(n)
         .permutations(PREMATCH)
         .filter(|vertices| {
             match USE_SKIPS {
@@ -397,8 +396,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                 }
 
                 // Assemble cost matrix of matching each pair of unmatched vertices
-                let right_free: Vec<Vertex> = (0..n)
-                    .map_into::<Vertex>()
+                let right_free: Vec<_> = Vertex::range(n)
                     .filter(|v| !vertices.contains(v))
                     .collect();
                 debug_assert_eq!(left_free.len(), right_free.len());
@@ -430,11 +428,11 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                     assert_eq!(partial_map.len(), n);
                     assert!(itertools::equal(
                         partial_map.keys().copied().sorted(), 
-                        (0..n).map_into::<Column>()
+                        Column::range(n)
                     ));
                     assert!(itertools::equal(
                         partial_map.values().copied().sorted(), 
-                        (0..n).map_into::<Vertex>()
+                        Vertex::range(n)
                     ));
                 }
 
@@ -579,7 +577,7 @@ mod tests {
 
     impl Case {
         fn random_shape_rotation(shape: &Shape) -> Positions<Vertex> {
-            let shape_coords = shape.coordinates.clone().insert_column(shape.num_vertices(), 0.0);
+            let shape_coords = shape.coordinates.matrix.clone().insert_column(shape.num_vertices(), 0.0);
             let rotation = random_rotation().to_rotation_matrix();
             Positions::new(unit_sphere_normalize(rotation * shape_coords))
         }
