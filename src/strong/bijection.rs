@@ -165,14 +165,14 @@ pub trait Bijectable<U: Index> {
     type Output;
 
     /// Perform the bijection
-    fn biject(&self, bijection: &Bijection<Self::T, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError>;
+    fn biject(&self, bijection: &Bijection<Self::T, U>) -> Result<Self::Output, PermutationError>;
 }
 
 impl<T: Index, U: Index> Bijectable<U> for Vec<T> {
     type T = T;
     type Output = Vec<U>;
 
-    fn biject(&self, bijection: &Bijection<T, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError> {
+    fn biject(&self, bijection: &Bijection<T, U>) -> Result<Self::Output, PermutationError> {
         let vec = Vec::from_iter(self.iter().filter_map(|item| bijection.get(item)));
         if vec.len() == self.len() {
             Ok(vec)

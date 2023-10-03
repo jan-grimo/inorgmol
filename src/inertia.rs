@@ -75,7 +75,7 @@ pub enum Top {
 
 type Vec3StoredBy<S> = na::Matrix<f64, U3, U1, S>;
 
-fn angle<S1, S2>(a: &Vec3StoredBy<S1>, b: &Vec3StoredBy<S2>) -> f64 
+pub(crate) fn angle<S1, S2>(a: &Vec3StoredBy<S1>, b: &Vec3StoredBy<S2>) -> f64 
     where S1: na::Storage<f64, U3, U1>, 
         S2: na::Storage<f64, U3, U1>
 {

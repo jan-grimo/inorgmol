@@ -85,6 +85,29 @@ pub fn slice_prev<T: PartialOrd>(slice: &mut [T]) -> bool {
     }
 }
 
+/// Determine a slice's index of permutation in its lexicographic order
+pub fn slice_permutation_index<T: PartialOrd>(slice: &[T]) -> usize {
+    let n = slice.len();
+
+    if n == 0 {
+        return 0;
+    }
+
+    let mut index = 0;
+    let mut position = 2;
+    let mut factor = 1;
+
+    for p in (0..(n - 1)).rev() {
+        let is_smaller = |q| { (slice[q] < slice[p]) as usize};
+        let larger_successors: usize = ((p + 1)..n).map(is_smaller).sum();
+        index += larger_successors * factor;
+        factor *= position;
+        position += 1;
+    }
+
+    index
+}
+
 fn random_discrete(n: usize) -> usize {
     let float = rand::random::<f32>();
     (float * n as f32) as usize
@@ -223,25 +246,7 @@ impl Permutation {
     /// }
     /// ```
     pub fn index(&self) -> usize {
-        let n = self.sigma.len();
-
-        if n == 0 {
-            return 0;
-        }
-
-        let mut index = 0;
-        let mut position = 2;
-        let mut factor = 1;
-
-        for p in (0..(n - 1)).rev() {
-            let is_smaller = |q| { (self.sigma[q] < self.sigma[p]) as usize};
-            let larger_successors: usize = ((p + 1)..n).map(is_smaller).sum();
-            index += larger_successors * factor;
-            factor *= position;
-            position += 1;
-        }
-
-        index
+        slice_permutation_index(&self.sigma)
     }
 
     /// Number of elements being permuted
@@ -659,7 +664,7 @@ pub struct PermutationIterator {
 
 impl PermutationIterator {
     fn new(permutation: Permutation) -> PermutationIterator {
-        PermutationIterator {permutation, increment:false}
+        PermutationIterator {permutation, increment: false}
     }
 }
 

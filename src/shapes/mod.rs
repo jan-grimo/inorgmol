@@ -173,6 +173,7 @@ pub struct Column(usize);
 /// Type alias for tetrahedra defined over shape vertices and the origin
 pub type Tetrahedron = [Particle; 4];
 
+// TODO change coordinates into a strong matrix
 /// A coordination polyhedron
 pub struct Shape {
     /// Name of the coordination polyhedron

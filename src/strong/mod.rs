@@ -31,8 +31,10 @@ impl<T> Index for T where T: IndexBase
 
 /// Matrices indexed by new types
 pub mod matrix;
-/// Mappings between new type indices
+/// Bijective mappings between new type indices
 pub mod bijection;
+/// Surjective mapping between new type indices
+pub mod surjection;
 
 #[cfg(test)]
 mod tests {
