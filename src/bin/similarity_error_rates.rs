@@ -1,11 +1,11 @@
-use molassembler::strong::{Index, IndexBase};
-use molassembler::strong::matrix::Positions;
-use molassembler::shapes::similarity::{skip_vertices, polyhedron_reference, unit_sphere_normalize, SimilarityError};
-use molassembler::quaternions::Matrix3N;
-use molassembler::permutation::{Permutation, Permutatable};
-use molassembler::strong::bijection::{Bijection, Bijectable};
-use molassembler::quaternions::random_rotation;
-use molassembler::shapes::*;
+use inorgmol::strong::{Index, IndexBase};
+use inorgmol::strong::matrix::Positions;
+use inorgmol::shapes::similarity::{skip_vertices, polyhedron_reference, unit_sphere_normalize, SimilarityError};
+use inorgmol::quaternions::Matrix3N;
+use inorgmol::permutation::{Permutation, Permutatable};
+use inorgmol::strong::bijection::{Bijection, Bijectable};
+use inorgmol::quaternions::random_rotation;
+use inorgmol::shapes::*;
 
 use statrs::statistics::Statistics as OtherStatistics;
 use std::collections::{HashMap, HashSet};
@@ -209,7 +209,7 @@ impl Case {
         Case {shape_name: shape.name, cloud, expected_bijection: bijection}
     }
 
-    pub fn pass(&self, f: &dyn Fn(Matrix3N, &Shape) -> Result<SimilarityAnalysis, SimilarityError>, rotations: &HashSet<molassembler::shapes::Rotation>) -> (bool, f64) {
+    pub fn pass(&self, f: &dyn Fn(Matrix3N, &Shape) -> Result<SimilarityAnalysis, SimilarityError>, rotations: &HashSet<inorgmol::shapes::Rotation>) -> (bool, f64) {
         let shape = shape_from_name(self.shape_name);
         let f_similarity = f(self.cloud.clone(), shape).expect("similarity fn doesn't panic");
 

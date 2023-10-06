@@ -1,5 +1,5 @@
 [package]
-name = "molassembler"
+name = "inorgmol"
 version = "0.1.0"
 authors = ["Jan-Grimo Sobez <jan-grimo.sobez@phys.chem.ethz.ch>"]
 edition = "2021"

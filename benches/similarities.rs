@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput, BenchmarkId};
-use molassembler::*;
+use inorgmol::*;
 use strong::matrix::Positions;
 use strong::bijection::Bijection;
 

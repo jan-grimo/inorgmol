@@ -144,7 +144,7 @@ impl Permutation {
     /// zero within the lexicographical order of permutations.
     ///
     /// ```
-    /// # use molassembler::permutation::Permutation;
+    /// # use inorgmol::permutation::Permutation;
     /// assert_eq!(Permutation::identity(3).sigma, vec![0, 1, 2])
     /// ```
     pub fn identity(n: usize) -> Permutation {
@@ -166,7 +166,7 @@ impl Permutation {
     /// size, i.e. $ i >= n! $, `None` is returned.
     ///
     /// ```
-    /// # use molassembler::permutation::Permutation;
+    /// # use inorgmol::permutation::Permutation;
     /// assert_eq!(Permutation::try_from_index(2, 0), Some(Permutation {sigma: vec![0, 1]}));
     /// assert_eq!(Permutation::try_from_index(2, 1), Some(Permutation {sigma: vec![1, 0]}));
     /// assert_eq!(Permutation::try_from_index(2, 2), None);
@@ -221,7 +221,7 @@ impl Permutation {
 
     /// Find a permutation ordering a slice's elements
     /// ```
-    /// # use molassembler::permutation::Permutation;
+    /// # use inorgmol::permutation::Permutation;
     /// let container = vec![-3, 2, 0];
     /// let p = Permutation::ordering(container.as_slice());
     /// assert_eq!(p, Permutation::try_from_index(3, 1).unwrap());
@@ -234,7 +234,7 @@ impl Permutation {
     /// Determine the index of a permutation in its lexicographic order
     ///
     /// ```
-    /// # use molassembler::permutation::Permutation;
+    /// # use inorgmol::permutation::Permutation;
     /// assert_eq!(Permutation {sigma: vec![0, 1, 2]}.index(), 0);
     /// assert_eq!(Permutation {sigma: vec![0, 2, 1]}.index(), 1);
     ///
@@ -258,7 +258,7 @@ impl Permutation {
     /// group spanned by the Permutation
     ///
     /// ```
-    /// # use molassembler::permutation::Permutation;
+    /// # use inorgmol::permutation::Permutation;
     /// assert_eq!(Permutation::group_order(3), 6);
     /// ```
     pub fn group_order(n: usize) -> usize {
@@ -268,7 +268,7 @@ impl Permutation {
     /// Transform into the next permutation within the partial order of its set
     ///
     /// ```
-    /// # use molassembler::permutation::Permutation;
+    /// # use inorgmol::permutation::Permutation;
     /// let mut permutation = Permutation::try_from_index(6, 0).expect("Valid index");
     /// for i in 1..15 {
     ///     assert_eq!(permutation.next_permutation(), true);
@@ -282,7 +282,7 @@ impl Permutation {
     /// Transform into the previous permutation within its set's partial order
     ///
     /// ```
-    /// # use molassembler::permutation::Permutation;
+    /// # use inorgmol::permutation::Permutation;
     /// let mut permutation = Permutation::try_from_index(6, 15).expect("Valid index");
     /// for i in 14..1 {
     ///     assert_eq!(permutation.prev_permutation(), true);
@@ -296,7 +296,7 @@ impl Permutation {
     /// Generate the inverse permutation to the current permutation
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::result::Result;
     /// # fn main() -> Result<(), PermutationError> {
     /// let permutation = Permutation::try_from_index(3, 1).expect("Valid index");
@@ -322,7 +322,7 @@ impl Permutation {
     /// Apply the permutation by moving elements to a new vector
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::convert::TryFrom;
     /// # fn main() -> Result<(), PermutationError> {
     /// let p = Permutation::try_from([1, 2, 0])?;
@@ -353,7 +353,7 @@ impl Permutation {
     /// Apply the permutation by generating a new vector with element copies
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::convert::TryFrom;
     /// # fn main() -> Result<(), PermutationError> {
     /// let p = Permutation::try_from([1, 2, 0])?;
@@ -387,7 +387,7 @@ impl Permutation {
     /// Note: Consumes the permutation, as it is used to track swaps during application.
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::convert::TryFrom;
     /// # fn main() -> Result<(), PermutationError> {
     /// let p = Permutation::try_from([1, 2, 0])?;
@@ -423,7 +423,7 @@ impl Permutation {
     /// permutation composition is not commutative.
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::convert::TryFrom;
     /// # fn main() -> Result<(), PermutationError> {
     /// // Usual case of non-commutative composition
@@ -449,7 +449,7 @@ impl Permutation {
     /// permutations is not:
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::convert::TryFrom;
     /// # fn main() -> Result<(), PermutationError> {
     /// let p = Permutation::try_from([1, 2, 0])?;
@@ -522,7 +522,7 @@ impl Permutation {
     /// Increase set size of permutation by pushing onto one-line representation
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::convert::TryFrom;
     /// # fn main() -> Result<(), PermutationError> {
     /// let mut p = Permutation::try_from([1, 2, 0])?;
@@ -540,7 +540,7 @@ impl Permutation {
     /// If the last element maps to itself, pops and returns it
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::convert::TryFrom;
     /// # fn main() -> Result<(), PermutationError> {
     /// let mut p = Permutation::try_from([1, 2, 0, 3])?;
@@ -564,7 +564,7 @@ impl Permutation {
     /// expression.
     ///
     /// ```
-    /// # use molassembler::permutation::{Permutation, PermutationError};
+    /// # use inorgmol::permutation::{Permutation, PermutationError};
     /// # use std::convert::TryFrom;
     /// # fn main() -> Result<(), PermutationError> {
     /// let mut p = Permutation::identity(4);
@@ -601,7 +601,7 @@ impl Index<usize> for Permutation {
 /// Generate a Permutation from an integer vector
 ///
 /// ```
-/// # use molassembler::permutation::Permutation;
+/// # use inorgmol::permutation::Permutation;
 /// # use std::convert::TryFrom;
 /// let p = Permutation::try_from(vec![0, 1, 2]);
 /// assert_eq!(p, Ok(Permutation::try_from_index(3, 0).expect("Valid index")));
@@ -630,7 +630,7 @@ impl<I: PrimInt> TryFrom<Vec<I>> for Permutation {
 /// Generate a Permutation from an integer array
 ///
 /// ```
-/// # use molassembler::permutation::Permutation;
+/// # use inorgmol::permutation::Permutation;
 /// # use std::convert::TryFrom;
 /// let p = Permutation::try_from([0, 2, 1]);
 /// assert_eq!(p, Ok(Permutation::try_from_index(3, 1).expect("Valid index")));
@@ -689,7 +689,7 @@ impl Iterator for PermutationIterator {
 /// Yields permutations in increasing lexicographic order
 ///
 /// ```
-/// # use molassembler::permutation::{Permutation, permutations};
+/// # use inorgmol::permutation::{Permutation, permutations};
 /// let mut iter = permutations(2);
 /// assert_eq!(iter.next().map(|p| p.index()), Some(0));
 /// assert_eq!(iter.next().map(|p| p.index()), Some(1));

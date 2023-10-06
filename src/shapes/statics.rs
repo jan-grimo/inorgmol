@@ -550,9 +550,9 @@ lazy_static! {
 
     /// Coordinates are solution to Thomson problem with 13 particles,
     /// from https://www.mathpages.com/home/kmath005/kmath005.htm
-    // pub static ref THIRTEEN: Shape = ShapeC::try_new(
-    //     Name::Thirteen,
-    //     Matrix3N::from_column_slice(&[
+    // pub static ref THIRTEEN: Shape = Shape {
+    //     name: Name::Thirteen,
+    //     coordinates: Positions::new(Matrix3N::from_column_slice(&[
     //          0.05292425965854, -0.83790881423107, -0.54323829188807,
     //          0.47276350840958,  0.34260952805535,  0.81185797797518,
     //         -0.07135658514504,  0.93119822473295,  0.35746063281239,
@@ -566,12 +566,12 @@ lazy_static! {
     //         -0.34356905502620, -0.00742104646959, -0.93909809524762,
     //          0.65967130965493, -0.12653736664967, -0.74082525473928,
     //         -0.68634538101074,  0.15812819553012,  0.70987709622413
-    //     ]),
-    // ).unwrap();
+    //     ])),
+    // };
     //
-    // pub static ref BICAPPEDHEXAGONALANTIPRISM: Shape = Shape::try_new(
-    //     Name::BicappedHexagonalAntiprism,
-    //     Matrix3N::from_column_slice(&[
+    // pub static ref BICAPPEDHEXAGONALANTIPRISM: Shape = Shape {
+    //     name: Name::BicappedHexagonalAntiprism,
+    //     coordinates: Positions::new(Matrix3N::from_column_slice(&[
     //         -0.42027653889173, -0.73294377291920, -0.53494023647147,
     //         -0.50070830812184,  0.86341968659613,  0.06162495416629,
     //          0.19126621672024, -0.47768209343689,  0.85745965033422,
@@ -586,12 +586,12 @@ lazy_static! {
     //         -0.58108081276487,  0.24579811887291, -0.77584043062672,
     //          0.54177824120079,  0.83429746194425,  0.10209839545631,
     //          0.18870386643677,  0.68692206249789, -0.70180405445214
-    //     ]),
-    // ).unwrap();
+    //     ])),
+    // };
     //
-    // pub static ref FIFTEEN: Shape = Shape::try_new(
-    //     Name::Fifteen,
-    //     Matrix3N::from_column_slice(&[
+    // pub static ref FIFTEEN: Shape = Shape {
+    //     name: Name::Fifteen,
+    //     coordinates: Positions::new(Matrix3N::from_column_slice(&[
     //          0.30884515058659,  0.90510471121471,  0.29223301438421,
     //         -0.61383434989807,  0.72422572535659,  0.31417270667092,
     //          0.63477771492650, -0.04898298339339,  0.77114066159850,
@@ -607,12 +607,12 @@ lazy_static! {
     //          0.74459248211787, -0.65987690652190,  0.10071992758454,
     //          0.95833999151096,  0.28538597927538,  0.01180269053264,
     //         -0.01149424657101, -0.75877209911729,  0.65125477648682
-    //     ]),
-    // ).unwrap();
+    //     ])),
+    // };
     //
-    // pub static ref TRIANGULARFACESIXTEEN: Shape = Shape::try_new(
-    //     Name::TriangularFaceSixteen,
-    //     Matrix3N::from_column_slice(&[
+    // pub static ref TRIANGULARFACESIXTEEN: Shape = Shape {
+    //     name: Name::TriangularFaceSixteen,
+    //     coordinates: Positions::new(Matrix3N::from_column_slice(&[
     //          0.61026321033395,  0.33480593525292, -0.71797200490849,
     //         -0.30745797233437, -0.86445060249846, -0.39773703761164,
     //          0.13519452447863,  0.96060560805202, -0.24281537498687,
@@ -629,12 +629,12 @@ lazy_static! {
     //          0.36535987282490, -0.85058647444670,  0.37817299324212,
     //          0.71876264722102,  0.64700705216914,  0.25448404940828,
     //         -0.90703946919163, -0.16914965022007, -0.38557463241114
-    //     ]),
-    // ).unwrap();
+    //     ])),
+    // };
     //
-    // pub static ref OPPOSINGSQUARESSIXTEEN: Shape = Shape::try_new(
-    //     Name::OpposingSquaresSixteen,
-    //     Matrix3N::from_column_slice(&[
+    // pub static ref OPPOSINGSQUARESSIXTEEN: Shape = Shape {
+    //     name: Name::OpposingSquaresSixteen,
+    //     coordinates: Positions::new(Matrix3N::from_column_slice(&[
     //         -0.11564934688362, -0.45611058279735, -0.88237654367376,
     //         -0.21185951021077,  0.97352308270011, -0.08583912501494,
     //          0.63823805374955, -0.76812271983004,  0.05137775809515,
@@ -651,8 +651,8 @@ lazy_static! {
     //         -0.18556077245003, -0.96721645976412, -0.17337681416241,
     //          0.98668448540003,  0.06921075410141,  0.14718558960577,
     //         -0.31072919707585,  0.25071022088539,  0.91683790891749
-    //     ]),
-    // ).unwrap();
+    //     ])),
+    // };
 
     pub static ref SHAPES: Vec<&'static Shape> = vec![&LINE, &BENT, &EQUILATERAL_TRIANGLE, &VACANT_TETRAHEDRON, &TSHAPE, &TETRAHEDRON, &SQUARE, &SEESAW, &TRIGONALPYRAMID, &SQUAREPYRAMID, &TRIGONALBIPYRAMID, &PENTAGON, &OCTAHEDRON, &TRIGONALPRISM, &PENTAGONALPYRAMID, &HEXAGON, &PENTAGONALBIPYRAMID, &CAPPEDOCTAHEDRON, &CAPPEDTRIGONALPRISM, &SQUAREANTIPRISM, &CUBE, &TRIGONALDODECAHEDRON, &HEXAGONALBIPYRAMID, &TRICAPPEDTRIGONALPRISM, &CAPPEDSQUAREANTIPRISM, &HEPTAGONALBIPYRAMID, &BICAPPEDSQUAREANTIPRISM, &EDGECONTRACTEDICOSAHEDRON, &ICOSAHEDRON, &CUBOCTAHEDRON];
 }

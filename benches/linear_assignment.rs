@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput, BenchmarkId};
-use molassembler::*;
+use inorgmol::*;
 
 fn linear_assignment(c: &mut Criterion) {
     let mut bench_group = c.benchmark_group("linear assignment");

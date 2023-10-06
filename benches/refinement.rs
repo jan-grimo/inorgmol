@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput, BenchmarkId};
-use molassembler::dg::refinement::RefinementErrorFunction;
-use molassembler::*;
+use inorgmol::dg::refinement::RefinementErrorFunction;
+use inorgmol::*;
 extern crate nalgebra as na;
 
 // This benchmark setup essentially only benchmarks the distance gradient

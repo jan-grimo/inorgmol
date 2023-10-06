@@ -19,7 +19,7 @@ pub struct AsPositions<'a, I: Index> {
 
 impl<'a, I: Index> AsPositions<'a, I> {
     /// Wrap a matrix
-    pub fn new(matrix: &'a Matrix3N) -> AsPositions<'a, I> {
+    pub fn wrap(matrix: &'a Matrix3N) -> AsPositions<'a, I> {
         AsPositions {matrix, index_type: PhantomData}
     }
 
@@ -73,7 +73,7 @@ pub struct Positions<I: Index> {
 
 impl<I: Index> Positions<I> {
     fn raise(&self) -> AsPositions<I> {
-        AsPositions::new(&self.matrix)
+        AsPositions::wrap(&self.matrix)
     }
 
     /// Wrap a matrix

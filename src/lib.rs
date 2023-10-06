@@ -32,3 +32,6 @@ pub mod inertia;
 
 /// Stereopermutation
 pub mod stereo;
+
+/// Molecule representation
+pub mod molecule;

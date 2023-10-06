@@ -1,6 +1,6 @@
-use molassembler::shapes::SQUAREANTIPRISM;
-use molassembler::dg::*;
-use molassembler::dg::refinement::{Chiral, Serial, Bounds};
+use inorgmol::shapes::SQUAREANTIPRISM;
+use inorgmol::dg::*;
+use inorgmol::dg::refinement::{Chiral, Serial, Bounds};
 use statrs::statistics::Statistics;
 
 const REPETITIONS: usize = 100;

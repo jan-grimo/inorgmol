@@ -1,5 +1,5 @@
-use molassembler::shapes::recognition::{random_cloud_distribution, CSM_RESCALE};
-use molassembler::shapes::{Name, SHAPES};
+use inorgmol::shapes::recognition::{random_cloud_distribution, CSM_RESCALE};
+use inorgmol::shapes::{Name, SHAPES};
 
 use csv::Writer;
 use std::error::Error;
@@ -19,7 +19,7 @@ const MODE: Mode = Mode::ShapeDistributionParameters;
 fn write_convergence_metrics(name: Name) -> Result<(), Box<dyn Error>> {
     let mut samples = vec![f64::default(); SAMPLES];
     for v in samples.iter_mut() {
-        *v = molassembler::shapes::recognition::sample(name) / CSM_RESCALE;
+        *v = inorgmol::shapes::recognition::sample(name) / CSM_RESCALE;
     }
 
     let mut writer = Writer::from_path("samples.csv")?;

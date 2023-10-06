@@ -166,7 +166,7 @@ impl std::fmt::Display for Particle {
     }
 }
 
-// TODO move to where needed
+// TODO move to where needed, maybe into strong::matrix?
 /// Unordered index space
 #[derive(IndexBase, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Column(usize);
@@ -174,7 +174,6 @@ pub struct Column(usize);
 /// Type alias for tetrahedra defined over shape vertices and the origin
 pub type Tetrahedron = [Particle; 4];
 
-// TODO change coordinates into a strong matrix
 /// A coordination polyhedron
 pub struct Shape {
     /// Name of the coordination polyhedron
@@ -387,8 +386,8 @@ impl Shape {
     /// Generate a full set of rotations from a shape's rotational basis
     ///
     /// ```
-    /// # use molassembler::shapes::*;
-    /// # use molassembler::strong::bijection::bijections;
+    /// # use inorgmol::shapes::*;
+    /// # use inorgmol::strong::bijection::bijections;
     /// # use std::collections::HashSet;
     /// # use std::iter::FromIterator;
     /// let line_rotations = LINE.generate_rotations();

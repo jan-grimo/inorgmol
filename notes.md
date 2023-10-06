@@ -12,6 +12,12 @@
 # Improvement ideas
 - Parametrizeable shapes (e.g. for symmetric distortions in octahedron or
   bipyramids)
+- Add interface to semiempirics: yaehmop / Sparrow (MNDO/PM6)
+  - Use for cheap evaluations of single-center best shape by cutting the
+    molecule into a fragment (to a cutoff distance, with possibly more if
+    there's a metal)
+  - Use for evaluation of rotational minima over builtin
+    - Makes serialization challenging, though!
 
 look through the GitLab issues again!
 
@@ -77,7 +83,6 @@ Think about this again, and hard! Is this really wanted?
 - Generalize refinement over floating-point types
   - Missing: `refine<F: Float>`: Maybe needs a PR with argmin or some
     trait specializations
-- Documentation (deny undocumented and work through all)
 - Check shape methods
   - [x] rotation finding
   - [x] superposable vertex sets
@@ -97,15 +102,4 @@ Think about this again, and hard! Is this really wanted?
   selection in the chosen plane since random selection works for planes that are
   completely equivalent by rotation around +z, but not many shapes have that
   property - need to find a 'leftmost' property for asymmetric cases
-- Split into three crates
-  - Most is shape-related, so rename to e.g. `chem-shape`
-  - Then `stereo` or `chem-stereo`
-  - Then something molecule related (dg should move here)
-
-
-# Cargo flamegraph
-
-```
-2019  echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
-2020  CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph --unit-test molassembler -- gpu_gradient
-```
+- Split into crates: shape, stereo, molecule?
