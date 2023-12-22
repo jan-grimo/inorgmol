@@ -7,17 +7,46 @@
     multidentate ligands
 - Never fuzzed `Molecule` properly, i.e. generated a set of things you could
   do with it that don't fail and then property tested manipulations of it
+- Singletons! No global settings this time
+- There are some editing operations that could produce multiple steric
+  arrangements, e.g. adding a new ligand to square planar. Previously, an option
+  was to receive one of these randomly in single-molecule mutation, but it would
+  be cool to have `Mol -> Vec<Mol>` functions instead that do this explicitly
+- Ranking! Must be better in terms of
+  - Correctness
+  - Debuggability (no more `if constexpr` writing files in debug mode, this
+    should be a template visitor)
+  - Freedom to rank both starting from a vertex, and from an edge
 
 
-# Improvement ideas
+# Ideas
 - Parametrizeable shapes (e.g. for symmetric distortions in octahedron or
   bipyramids)
+- Shape classification maybe should have included the possibility that a
+  coordination does not resemble any of the available shapes, i.e. that a center
+  is classed as unstructured
+  - Upside might be that this could really help with "distorted" ideal shapes in
+    small cycles etc.
+  - Downside to this is that spatial modeling probably trips over this hard and
+    unstructuredness has a non-local messiness knock-on effect
 - Add interface to semiempirics: yaehmop / Sparrow (MNDO/PM6)
   - Use for cheap evaluations of single-center best shape by cutting the
     molecule into a fragment (to a cutoff distance, with possibly more if
     there's a metal)
   - Use for evaluation of rotational minima over builtin
+    - Must have very rigid, reproducible steric model of fragment for evaluation
+      - Ideally a geometry optimization at every tested angle (with dihedral
+        fixing only)
+      - Instead of sampling fixed intervals all around the angle, try smarter
+        methods to find minima as soon as some reasonably accurate curves are
+        available to test against
     - Makes serialization challenging, though!
+- Structural interpretation: Try assembling a molecule without going for bond
+  orders at all, but only figuring out the best shape that matches a local
+  neighborhood and distances
+- ML shape predictor (i.e. classify vertex of subgraph into shape)
+- Bond stereopermutator could be generalized to allene case (i.e. placed on
+  non-directly connected atoms)
 
 look through the GitLab issues again!
 
@@ -83,6 +112,8 @@ Think about this again, and hard! Is this really wanted?
 - Generalize refinement over floating-point types
   - Missing: `refine<F: Float>`: Maybe needs a PR with argmin or some
     trait specializations
+- Similarity matching could be generalized to M <= N so that we can find shape
+  transitions directly (see molassembler's vertex matching subgraph MR)
 - Check shape methods
   - [x] rotation finding
   - [x] superposable vertex sets
@@ -93,11 +124,12 @@ Think about this again, and hard! Is this really wanted?
   scaling vertices, but in random directions?
 - Is it okay to unit rescale vectors just so that `scaling::minimize` has a
   simple domain to minimize over?
-- Have another close look at the failure thresholds in the similarity matching
-  tricks binary. Maybe it's better not just to take the smallest one you found
-  but look at the percentage of failures at each value of the quaternion fit
-  msd and model it as a cumulative distribution function. That way you could
-  choose what probability of failure you're willing to accept.
+- Have another close look at the arbitrary failure thresholds in the similarity
+  matching tricks binary. Maybe it's better not just to take the smallest one
+  you found but look at the percentage of failures at each value of the
+  quaternion fit msd and model it as a cumulative distribution function. That
+  way you could choose what probability of failure you're willing to accept,
+  making for a more meaningful choice of threshold.
 - `canonicalize_coordinates` isn't there yet, need to rethink pivot point
   selection in the chosen plane since random selection works for planes that are
   completely equivalent by rotation around +z, but not many shapes have that

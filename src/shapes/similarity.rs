@@ -32,19 +32,6 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     x
 }
 
-/// Apply a column permutation to a fixed-width matrix
-pub fn apply_permutation_static<C: nalgebra::base::Dim, S>(x: &na::Matrix<f64, na::Const<3>, C, S>, p: &Permutation) 
-    -> na::Matrix<f64, na::Const<3>, C, <na::DefaultAllocator as na::allocator::Allocator<f64, na::Const<3>, C>>::Buffer>
-where 
-    S: na::RawStorage<f64, na::Const<3>, C>,
-    C: na::DimName,
-    na::DefaultAllocator: na::allocator::Allocator<f64, na::Const<3>, C>
-{
-    assert_eq!(x.ncols(), p.set_size());
-    let inverse = p.inverse();
-    na::OMatrix::<f64, na::Const<3>, C>::from_fn(|i, j| x[(i, inverse[j])])
-}
-
 /// Find the optimal scaling between shape and cloud
 pub mod scaling {
     use crate::shapes::Matrix3N;

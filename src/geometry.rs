@@ -424,10 +424,10 @@ pub fn approximate_tetrahedron_overlap_volume(a: &na::Matrix3x4<f64>, b: &na::Ma
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use crate::shapes::similarity::apply_permutation_static;
     use crate::shapes::{TETRAHEDRON, SQUARE};
     use crate::geometry::*;
     use crate::permutation::permutations;
+    use crate::permutation::Permutatable;
 
     #[test]
     fn plane() {
@@ -463,8 +463,8 @@ mod tests {
         assert!(permutations(4)
             .cartesian_product(permutations(4))
             .all(|(p, q)| {
-                let m = apply_permutation_static(&a, &p);
-                let n = apply_permutation_static(&b, &q);
+                let m = a.permute(&p).unwrap();
+                let n = b.permute(&q).unwrap();
                 tetrahedra_overlap(&m, &n) && tetrahedra_overlap(&n, &m)
             }));
 
@@ -480,8 +480,8 @@ mod tests {
         assert!(permutations(4)
             .cartesian_product(permutations(4))
             .all(|(p, q)| {
-                let m = apply_permutation_static(&a, &p);
-                let n = apply_permutation_static(&c, &q);
+                let m = a.permute(&p).unwrap();
+                let n = c.permute(&q).unwrap();
                 !tetrahedra_overlap(&m, &n) && !tetrahedra_overlap(&n, &m)
             }));
 
@@ -489,8 +489,8 @@ mod tests {
         assert!(permutations(4)
             .cartesian_product(permutations(4))
             .all(|(p, q)| {
-                let m = apply_permutation_static(&b, &p);
-                let n = apply_permutation_static(&c, &q);
+                let m = b.permute(&p).unwrap();
+                let n = c.permute(&q).unwrap();
                 tetrahedra_overlap(&m, &n) && tetrahedra_overlap(&n, &m)
             }));
 

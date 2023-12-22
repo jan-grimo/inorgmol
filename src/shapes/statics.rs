@@ -20,6 +20,9 @@ fn make_rotation(slice: &[usize]) -> Rotation {
     Rotation::new(Permutation::new_unchecked(slice.to_vec()))
 }
 
+// Migrate to std::sync::OnceLock with a fn returning 'static or once_cell::sync::Lazy (less
+// boilerplate), see https://morestina.net/blog/2055/rust-global-variables-two-years-on
+
 lazy_static! {
     /// Linear two-vertex coordination polyhedron
     pub static ref LINE: Shape = Shape {
