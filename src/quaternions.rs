@@ -8,8 +8,8 @@ pub type Matrix3 = na::Matrix3<f64>;
 pub type Quaternion = na::UnitQuaternion<f64>;
 type Matrix4 = na::Matrix4<f64>;
 
+use ordered_float::NotNan;
 use std::collections::HashMap;
-
 use derive_more::From;
 
 /// Generate a random rotation quaternion
@@ -44,7 +44,7 @@ pub struct Fit {
     /// Quaternion transforming the stator into the rotor
     pub quaternion: Quaternion,
     /// Mean square deviation
-    pub msd: f64
+    pub msd: NotNan<f64>
 }
 
 impl Fit {
@@ -84,7 +84,7 @@ pub fn quaternion_decomposition(mat: Matrix4) -> Fit {
 
     Fit {
         quaternion: na::UnitQuaternion::from_quaternion(pre_quat),
-        msd: *msd
+        msd: NotNan::new(*msd).expect("Fit decomposition MSD is a number")
     }
 }
 
@@ -247,6 +247,6 @@ mod tests {
         };
         let partial_fit = case.stator.fit_with_map(&permuted_rotor, &partial_permutation);
 
-        approx::assert_relative_eq!(partial_fit.msd, 0.0, epsilon = 1e-6);
+        approx::assert_relative_eq!(partial_fit.msd.into_inner(), 0.0, epsilon = 1e-6);
     }
 }

@@ -541,7 +541,7 @@ impl Shape {
         let normalized_points = unit_sphere_normalize(coordinates.clone());
         let permuted = unit_sphere_normalize(normalized_points.permute(permutation).expect("Matching size"));
         let fit = crate::quaternions::fit(&normalized_points, &permuted);
-        fit.msd < 1e-6
+        fit.msd < NotNan::new(1e-6).unwrap()
     }
 
     /// Finds proper rotations containing at least one coplanar set of at least three

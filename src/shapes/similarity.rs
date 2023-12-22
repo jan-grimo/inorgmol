@@ -235,7 +235,7 @@ fn polyhedron_reference_base_inner(
             let fit = shape_coordinates.quaternion_fit_rotor(&cloud.biject(&p).unwrap());
             (p, fit)
         })
-        .min_by(|(_, fit_a), (_, fit_b)| fit_a.msd.partial_cmp(&fit_b.msd).expect("No NaNs in MSDs"))
+        .min_by_key(|(_, fit)| fit.msd)
         .expect("There is always at least one permutation available to try")
 }
 
@@ -355,7 +355,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     type PartialPermutation = HashMap<Column, Vertex>;
 
     struct PartialMsd {
-        msd: f64,
+        msd: NotNan<f64>,
         mapping: PartialPermutation,
         partial_msd: f64
     }
@@ -371,7 +371,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
             }
         })
         .fold(
-            PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new(), partial_msd: f64::MAX},
+            PartialMsd {msd: NotNan::new(f64::MAX).unwrap(), mapping: PartialPermutation::new(), partial_msd: f64::MAX},
             |best, vertices| -> PartialMsd {
                 let mut partial_map = PartialPermutation::with_capacity(n);
                 vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c), *v); });
@@ -397,7 +397,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                         .enumerate()
                         .map(|(i, j)| (cloud.matrix.column(i) - prematch_rotated_shape.point(*j)).norm_squared())
                         .sum();
-                    approx::assert_relative_eq!(partial_fit.msd, partial_msd, epsilon=1e-6);
+                    approx::assert_relative_eq!(*partial_fit.msd, partial_msd, epsilon=1e-6);
                 }
 
                 let cost_fn = |i, j| (cloud.point(left_free[i]) - prematch_rotated_shape.point(right_free[j])).norm_squared();
@@ -426,7 +426,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                 // Make a clean quaternion fit with the full mapping
                 let full_fit = cloud.quaternion_fit_map(&shape_coordinates, &partial_map);
                 if full_fit.msd < best.msd {
-                    PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: partial_fit.msd}
+                    PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: *partial_fit.msd}
                 } else {
                     best
                 }
@@ -443,7 +443,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
             4 => 0.425,
             _ => 0.5
         };
-        (narrow.msd - narrow.partial_msd) > refit_delta_threshold
+        *(narrow.msd - narrow.partial_msd) > refit_delta_threshold
     };
     if is_bad_approximation {
         // Forward to an implementation with more prematched vertices

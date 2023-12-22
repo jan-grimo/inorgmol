@@ -8,6 +8,7 @@ use inorgmol::quaternions::random_rotation;
 use inorgmol::shapes::*;
 
 use statrs::statistics::Statistics as OtherStatistics;
+use ordered_float::NotNan;
 use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 
@@ -57,7 +58,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
     type PartialPermutation = HashMap<Column, Vertex>;
 
     struct PartialMsd {
-        msd: f64,
+        msd: NotNan<f64>,
         mapping: PartialPermutation,
         partial_msd: f64,
     }
@@ -73,7 +74,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
             }
         })
         .fold(
-            PartialMsd {msd: f64::MAX, mapping: PartialPermutation::new(), partial_msd: f64::MAX},
+            PartialMsd {msd: NotNan::new(f64::MAX).unwrap(), mapping: PartialPermutation::new(), partial_msd: f64::MAX},
             |best, vertices| -> PartialMsd {
                 let mut partial_map = PartialPermutation::with_capacity(n);
                 vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c), *v); });
@@ -107,7 +108,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
                 // Make a clean quaternion fit with the full mapping
                 let full_fit = cloud.quaternion_fit_map(&shape_coordinates, &partial_map);
                 if full_fit.msd < best.msd {
-                    PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: partial_fit.msd}
+                    PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: *partial_fit.msd}
                 } else {
                     best
                 }
@@ -122,7 +123,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
             4 => 0.425,
             _ => 0.5
         };
-        msd_dev > refit_delta_threshold
+        *msd_dev > refit_delta_threshold
     };
     if is_bad_approximation {
         return match PREMATCH {
@@ -158,7 +159,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
     let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
     let csm = similarity::scaling::optimize_csm(&cloud.matrix, &rotated_shape);
-    Ok(SimilarityAnalysis {bijection: best_bijection, csm, msd_dev})
+    Ok(SimilarityAnalysis {bijection: best_bijection, csm, msd_dev: *msd_dev})
 }
 
 struct Case {
