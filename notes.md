@@ -109,15 +109,18 @@ Think about this again, and hard! Is this really wanted?
 
 # To do
 
-- Generalize refinement over floating-point types
-  - Missing: `refine<F: Float>`: Maybe needs a PR with argmin or some
-    trait specializations
+- Closer refinement errf variation speed and correctness checking (e.g. compare
+  `f32` and `f64` variants, too)
 - Similarity matching could be generalized to M <= N so that we can find shape
   transitions directly (see molassembler's vertex matching subgraph MR)
 - Check shape methods
   - [x] rotation finding
   - [x] superposable vertex sets
   - [ ] canonicalization
+    - `canonicalize_coordinates` isn't there yet, need to rethink pivot point
+      selection in the chosen plane since random selection works for planes that are
+      completely equivalent by rotation around +z, but not many shapes have that
+      property - need to find a 'leftmost' property for asymmetric cases
   - [ ] tetrahedra (buggy!)
   - [ ] mirror
 - Is `shape::recognition::sample` correct? shouldn't it distort more than just
@@ -130,8 +133,4 @@ Think about this again, and hard! Is this really wanted?
   quaternion fit msd and model it as a cumulative distribution function. That
   way you could choose what probability of failure you're willing to accept,
   making for a more meaningful choice of threshold.
-- `canonicalize_coordinates` isn't there yet, need to rethink pivot point
-  selection in the chosen plane since random selection works for planes that are
-  completely equivalent by rotation around +z, but not many shapes have that
-  property - need to find a 'leftmost' property for asymmetric cases
 - Split into crates: shape, stereo, molecule?

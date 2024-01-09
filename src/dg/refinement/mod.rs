@@ -5,10 +5,24 @@ use thiserror::Error;
 extern crate nalgebra as na;
 
 /// Float for use in Distance Geometry
-pub trait Float: num_traits::Float + num_traits::NumAssign + num_traits::NumAssignRef + num_traits::NumRef + na::RealField + std::iter::Sum {}
+pub trait Float: num_traits::Float 
+    + num_traits::NumAssign 
+    + num_traits::NumAssignRef 
+    + num_traits::NumRef 
+    + na::RealField 
+    + argmin::core::ArgminFloat 
+    + std::iter::Sum 
+    + argmin_math::ArgminZero 
+{}
 
-impl<F> Float for F where 
-    F: num_traits::Float + num_traits::NumAssign + num_traits::NumAssignRef + num_traits::NumRef + na::RealField + std::iter::Sum
+impl<F> Float for F where F: num_traits::Float
+    + num_traits::NumAssign 
+    + num_traits::NumAssignRef 
+    + num_traits::NumRef 
+    + na::RealField 
+    + argmin::core::ArgminFloat 
+    + std::iter::Sum 
+    + argmin_math::ArgminZero 
 {}
 
 // Ensure f32 and f64 implement Float
@@ -63,17 +77,17 @@ impl<F: Float> DistanceBound<F> {
         let square_distance = diff.norm_squared();
 
         let upper_term = square_distance / upper_squared - F::one();
-        if upper_term > F::zero() {
+        if upper_term > <F as num_traits::Zero>::zero() {
             return num_traits::Float::powi(upper_term, 2);
         } 
 
         let quotient = square_distance + lower_squared;
         let lower_term = F::from(2.0).unwrap() * lower_squared / quotient - F::one();
-        if lower_term > F::zero() {
+        if lower_term > <F as num_traits::Zero>::zero() {
             return num_traits::Float::powi(lower_term, 2);
         }
 
-        F::zero()
+        <F as num_traits::Zero>::zero()
     }
 
     /// Calculate gradient contribution, if any
@@ -86,14 +100,14 @@ impl<F: Float> DistanceBound<F> {
         let square_distance = diff.norm_squared();
 
         let upper_term = square_distance / upper_squared - F::one();
-        if upper_term > F::zero() {
+        if upper_term > <F as num_traits::Zero>::zero() {
             let grad = diff.scale(F::from(4.0).unwrap() * upper_term / upper_squared);
             return Some(DistanceBoundGradient(grad));
         } 
 
         let quotient = square_distance + lower_squared;
         let lower_term = F::from(2.0).unwrap() * lower_squared / quotient - F::one();
-        if lower_term > F::zero() {
+        if lower_term > <F as num_traits::Zero>::zero() {
             let grad = diff.scale(F::from(-8.0).unwrap() * lower_squared * lower_term / num_traits::Float::powi(quotient, 2));
             return Some(DistanceBoundGradient(grad));
         }
@@ -147,7 +161,7 @@ impl<F: Float> Chiral<F> {
         let gamma_minus_delta = gamma - delta;
 
         let adjusted_volume = alpha_minus_delta.dot(&beta_minus_delta.cross(&gamma_minus_delta));
-        adjusted_volume >= F::zero()
+        adjusted_volume >= <F as num_traits::Zero>::zero()
     }
 
     /// Calculate error contribution
@@ -168,7 +182,7 @@ impl<F: Float> Chiral<F> {
         } else if adjusted_volume > upper {
             term = self.weight * (adjusted_volume - upper);
         } else {
-            return F::zero();
+            return <F as num_traits::Zero>::zero();
         }
 
         term * term
@@ -196,7 +210,7 @@ impl<F: Float> Chiral<F> {
         }
 
         let factor = F::from(2.0).unwrap() * term;
-        debug_assert!(factor != F::zero());
+        debug_assert!(factor != <F as num_traits::Zero>::zero());
 
         let alpha_minus_gamma = alpha - gamma;
         let beta_minus_gamma = beta - gamma;
@@ -385,7 +399,7 @@ impl<F: Float> Serial<F> {
     /// Calculate fourth dimension error value
     pub fn fourth_dimension_error(positions: &na::DVector<F>, stage: &Stage) -> F {
         match stage {
-            Stage::FixChirals => F::zero(),
+            Stage::FixChirals => <F as num_traits::Zero>::zero(),
             Stage::CompressFourthDimension => {
                 let n = positions.len() / DIMENSIONS;
                 (0..n).map(|i| num_traits::Float::powi(positions[DIMENSIONS * i + 3], 2))
@@ -490,7 +504,7 @@ impl<F: Float> Parallel<F> {
     /// Calculate fourth dimension error value
     pub fn fourth_dimension_error(positions: &na::DVector<F>, stage: &Stage) -> F {
         match stage {
-            Stage::FixChirals => F::zero(),
+            Stage::FixChirals => <F as num_traits::Zero>::zero(),
             Stage::CompressFourthDimension => {
                 let n = positions.len() / DIMENSIONS;
                 (0..n).into_par_iter()
@@ -552,41 +566,18 @@ pub trait RefinementErrorFunction<F> {
     fn set_stage(&mut self, stage: Stage);
 }
 
-/// Calculate error function value for argmin
-impl argmin::core::CostFunction for &dyn RefinementErrorFunction<f32> {
-    type Param = na::DVector<f32>;
-    type Output = f32;
+impl<F: Float> argmin::core::CostFunction for &dyn RefinementErrorFunction<F> {
+    type Param = na::DVector<F>;
+    type Output = F;
 
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, argmin::core::Error> {
         Ok(self.error(param))
     }
 }
-
-impl argmin::core::CostFunction for &dyn RefinementErrorFunction<f64> {
-    type Param = na::DVector<f64>;
-    type Output = f64;
-
-    fn cost(&self, param: &Self::Param) -> Result<Self::Output, argmin::core::Error> {
-        Ok(self.error(param))
-    }
-}
-
-// NOTE: Code duplication above seems to be necessary, following fails to compile together with
-// generalized refine fn
-//
-// impl<F: UsableFloat> argmin::core::CostFunction for &dyn RefinementErrorFunction<F> {
-//     type Param = na::DVector<F>;
-//     type Output = F;
-// 
-//     fn cost(&self, param: &Self::Param) -> Result<Self::Output, argmin::core::Error> {
-//         Ok(self.error(param))
-//     }
-// }
-
 
 /// Calculate error function gradient for argmin
-impl<F: Float> argmin::core::Gradient for &dyn RefinementErrorFunction<F> {
-    type Param = na::DVector<F>;
+impl<'a, F: Float> argmin::core::Gradient for &'a dyn RefinementErrorFunction<F> {
+    type Param = <&'a dyn crate::dg::refinement::RefinementErrorFunction<F> as argmin::core::CostFunction>::Param;
     type Gradient = na::DVector<F>;
 
     fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, argmin::core::Error> {
@@ -624,8 +615,11 @@ fn check_termination_status<P, G, J, H, F>(state: &IterState<P, G, J, H, F>) -> 
 }
 
 /// Refine a set of coordinates with some error function implementation
-pub fn refine(mut problem: impl RefinementErrorFunction<f64>, positions: na::Matrix4xX<f64>) -> Result<Refinement<f64>, RefinementError> {
+pub fn refine<F: Float>(mut problem: impl RefinementErrorFunction<F>, positions: na::Matrix4xX<F>) -> Result<Refinement<F>, RefinementError> 
+    where for<'a> &'a dyn crate::dg::refinement::RefinementErrorFunction<F>: argmin::core::CostFunction<Output=F, Param=na::DVector<F>>
+{
     const LBFGS_MEMORY: usize = 32;
+    let tolerance_grad: F = F::from_f32(1e-6).expect("Representable constant");
 
     let n = positions.len();
     let linear_positions = positions.reshape_generic(na::Dyn(n), na::Const::<1>);
@@ -633,9 +627,11 @@ pub fn refine(mut problem: impl RefinementErrorFunction<f64>, positions: na::Mat
 
     let linesearch = MoreThuenteLineSearch::new();
 
-    // Minimize distance and chiral constraints
-    let solver = LBFGS::new(linesearch.clone(), LBFGS_MEMORY).with_tolerance_grad(1e-6).unwrap();
-    let mut result = Executor::new(&problem as &dyn RefinementErrorFunction<f64>, solver)
+    problem.set_stage(Stage::FixChirals);
+    let solver = LBFGS::new(linesearch.clone(), LBFGS_MEMORY)
+        .with_tolerance_grad(tolerance_grad)
+        .expect("LBFGS constructible");
+    let mut result = Executor::new(&problem as &dyn RefinementErrorFunction<F>, solver)
         .configure(|state| state.param(linear_positions))
         .run()
         .unwrap();
@@ -645,8 +641,10 @@ pub fn refine(mut problem: impl RefinementErrorFunction<f64>, positions: na::Mat
     let relaxation_steps = result.state.iter;
 
     problem.set_stage(Stage::CompressFourthDimension);
-    let solver = LBFGS::new(linesearch, LBFGS_MEMORY).with_tolerance_grad(1e-6).unwrap();
-    let mut result = Executor::new(&problem as &dyn RefinementErrorFunction<f64>, solver)
+    let solver = LBFGS::new(linesearch, LBFGS_MEMORY)
+        .with_tolerance_grad(tolerance_grad)
+        .expect("LBFGS constructible");
+    let mut result = Executor::new(&problem as &dyn RefinementErrorFunction<F>, solver)
         .configure(|state| state.param(uncompressed_positions))
         .run()
         .unwrap();

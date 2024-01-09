@@ -679,7 +679,7 @@ mod tests {
             for rotation in shape.rotation_basis.iter() {
                 let rotated_coords = strong_coords.biject(rotation).expect("Matching size");
                 let fit = strong_coords.quaternion_fit_rotor(&rotated_coords);
-                assert!(fit.msd < 1e-6);
+                assert!(fit.msd.into_inner() < 1e-6);
             }
         }
     }

@@ -183,7 +183,7 @@ impl<F: Float> Gpu<F> {
         let mut gradient = na::DVector::<F>::zeros(positions.nrows());
         for (contribution, bound) in contributions.column_iter().zip(self.bounds.distances.iter()) {
             // TODO try perf with and without this
-            if contribution.iter().all(|v| *v == F::zero()) {
+            if contribution.iter().all(|v| *v == <F as num_traits::Zero>::zero()) {
                 continue;
             }
 
