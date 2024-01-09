@@ -5,22 +5,20 @@ use thiserror::Error;
 extern crate nalgebra as na;
 
 /// Float for use in Distance Geometry
-pub trait Float: num_traits::Float 
+pub trait Float: argmin::core::ArgminFloat
     + num_traits::NumAssign 
     + num_traits::NumAssignRef 
     + num_traits::NumRef 
     + na::RealField 
-    + argmin::core::ArgminFloat 
     + std::iter::Sum 
     + argmin_math::ArgminZero 
 {}
 
-impl<F> Float for F where F: num_traits::Float
+impl<F> Float for F where F: argmin::core::ArgminFloat
     + num_traits::NumAssign 
     + num_traits::NumAssignRef 
     + num_traits::NumRef 
     + na::RealField 
-    + argmin::core::ArgminFloat 
     + std::iter::Sum 
     + argmin_math::ArgminZero 
 {}
@@ -44,10 +42,13 @@ const _: () = {
 //     different sections of each gradient vector (chiral on 3d, fourth dim
 //     only on 4th), so could run in parallel in a shader
 
-type VectorView3<'a, T> = na::Matrix<T, na::Const<3>, na::Const<1>, na::ViewStorage<'a, T, na::Const<3>, na::Const<1>, na::Const<1>, na::Dyn>>;
-type VectorView4<'a, T> = na::Matrix<T, na::Const<4>, na::Const<1>, na::ViewStorage<'a, T, na::Const<4>, na::Const<1>, na::Const<1>, na::Dyn>>;
-type VectorViewMut3<'a, T> = na::Matrix<T, na::Const<3>, na::Const<1>, na::ViewStorageMut<'a, T, na::Const<3>, na::Const<1>, na::Const<1>, na::Dyn>>;
-type VectorViewMut4<'a, T> = na::Matrix<T, na::Const<4>, na::Const<1>, na::ViewStorageMut<'a, T, na::Const<4>, na::Const<1>, na::Const<1>, na::Dyn>>;
+type View<'a, T, R, C> = na::Matrix<T, R, C, na::ViewStorage<'a, T, R, C, na::Const<1>, na::Dyn>>;
+type VectorView3<'a, T> = View<'a, T, na::Const<3>, na::Const<1>>;
+type VectorView4<'a, T> = View<'a, T, na::Const<4>, na::Const<1>>;
+
+type ViewMut<'a, T, R, C> = na::Matrix<T, R, C, na::ViewStorageMut<'a, T, R, C, na::Const<1>, na::Dyn>>;
+type VectorViewMut3<'a, T> = ViewMut<'a, T, na::Const<3>, na::Const<1>>;
+type VectorViewMut4<'a, T> = ViewMut<'a, T, na::Const<4>, na::Const<1>>;
 
 use argmin::core::{Executor, TerminationStatus, TerminationReason, IterState};
 use argmin::solver::quasinewton::LBFGS;
@@ -576,8 +577,8 @@ impl<F: Float> argmin::core::CostFunction for &dyn RefinementErrorFunction<F> {
 }
 
 /// Calculate error function gradient for argmin
-impl<'a, F: Float> argmin::core::Gradient for &'a dyn RefinementErrorFunction<F> {
-    type Param = <&'a dyn crate::dg::refinement::RefinementErrorFunction<F> as argmin::core::CostFunction>::Param;
+impl<F: Float> argmin::core::Gradient for &dyn RefinementErrorFunction<F> {
+    type Param = <Self as argmin::core::CostFunction>::Param;
     type Gradient = na::DVector<F>;
 
     fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, argmin::core::Error> {
@@ -616,7 +617,7 @@ fn check_termination_status<P, G, J, H, F>(state: &IterState<P, G, J, H, F>) -> 
 
 /// Refine a set of coordinates with some error function implementation
 pub fn refine<F: Float>(mut problem: impl RefinementErrorFunction<F>, positions: na::Matrix4xX<F>) -> Result<Refinement<F>, RefinementError> 
-    where for<'a> &'a dyn crate::dg::refinement::RefinementErrorFunction<F>: argmin::core::CostFunction<Output=F, Param=na::DVector<F>>
+    where for<'a> &'a dyn RefinementErrorFunction<F>: argmin::core::CostFunction<Output=F, Param=na::DVector<F>>
 {
     const LBFGS_MEMORY: usize = 32;
     let tolerance_grad: F = F::from_f32(1e-6).expect("Representable constant");
