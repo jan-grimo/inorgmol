@@ -249,11 +249,11 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Sha
         return Err(SimilarityError::ParticleNumberMismatch);
     }
 
-    let cloud: Positions<Column> = Positions::new(unit_sphere_normalize(x));
+    let cloud: Positions<Column> = Positions::wrap(unit_sphere_normalize(x));
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
-    let shape_coordinates: Positions<Vertex> = Positions::new(unit_sphere_normalize(shape_coordinates));
+    let shape_coordinates: Positions<Vertex> = Positions::wrap(unit_sphere_normalize(shape_coordinates));
 
     let (best_bijection, best_fit) = match USE_SKIPS {
         true => polyhedron_reference_base_inner(RotUniqueBijectionGenerator::new(shape), &cloud, &shape_coordinates),
@@ -344,13 +344,13 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
         return polyhedron_reference_base::<USE_SKIPS>(x, shape);
     }
 
-    let cloud = Positions::<Column>::new(unit_sphere_normalize(x));
+    let cloud = Positions::<Column>::wrap(unit_sphere_normalize(x));
     // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = unit_sphere_normalize(shape_coordinates);
-    let shape_coordinates = Positions::<Vertex>::new(shape_coordinates);
+    let shape_coordinates = Positions::<Vertex>::wrap(shape_coordinates);
 
     type PartialPermutation = HashMap<Column, Vertex>;
 
@@ -390,7 +390,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
 
                 let v = left_free.len();
                 let prematch_rotated_shape = partial_fit.rotate_rotor(&shape_coordinates.matrix.clone());
-                let prematch_rotated_shape = Positions::<Vertex>::new(prematch_rotated_shape);
+                let prematch_rotated_shape = Positions::<Vertex>::wrap(prematch_rotated_shape);
 
                 if cfg!(debug_assertions) {
                     let partial_msd: f64 = vertices.iter()
@@ -566,7 +566,7 @@ mod tests {
         fn random_shape_rotation(shape: &Shape) -> Positions<Vertex> {
             let shape_coords = shape.coordinates.matrix.clone().insert_column(shape.num_vertices(), 0.0);
             let rotation = random_rotation().to_rotation_matrix();
-            Positions::new(unit_sphere_normalize(rotation * shape_coords))
+            Positions::wrap(unit_sphere_normalize(rotation * shape_coords))
         }
 
         fn random(shape: &Shape) -> Case {

@@ -323,7 +323,7 @@ impl Shape {
         // Find coordinates-derived properties
         let rotation_basis = Self::find_rotation_basis(&coordinates);
     
-        Ok(Shape {name, coordinates: Positions::new(coordinates), rotation_basis})
+        Ok(Shape {name, coordinates: Positions::wrap(coordinates), rotation_basis})
     }
 
     /// Number of vertices of the shape (not including the implicit origin)

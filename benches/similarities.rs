@@ -39,7 +39,7 @@ fn similarities(c: &mut Criterion) {
 
         let shape_coordinates = shape.coordinates.clone().insert_column(size, 0.0);
         let rotation = quaternions::random_rotation().to_rotation_matrix();
-        let shape_rotated: Positions<shapes::Vertex> = Positions::new(shapes::similarity::unit_sphere_normalize(rotation * shape_coordinates));
+        let shape_rotated: Positions<shapes::Vertex> = Positions::wrap(shapes::similarity::unit_sphere_normalize(rotation * shape_coordinates));
         let bijection: Bijection<shapes::Vertex, shapes::Column> = {
             let mut p = permutation::Permutation::new_random(shape.num_vertices());
             p.push();

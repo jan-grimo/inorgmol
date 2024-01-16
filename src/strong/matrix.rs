@@ -59,7 +59,7 @@ impl<'a, I: Index, U: Index> Bijectable<U> for AsPositions<'a, I> {
         }
 
         let matrix = self.matrix.permute(&bijection.permutation)?;
-        Ok(Positions::new(matrix))
+        Ok(Positions::wrap(matrix))
     }
 }
 
@@ -77,7 +77,7 @@ impl<I: Index> Positions<I> {
     }
 
     /// Wrap a matrix
-    pub fn new(matrix: Matrix3N) -> Positions<I> {
+    pub fn wrap(matrix: Matrix3N) -> Positions<I> {
         Positions {matrix, index_type: PhantomData}
     }
 

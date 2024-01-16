@@ -20,6 +20,7 @@
 
 
 # Ideas
+
 - Parametrizeable shapes (e.g. for symmetric distortions in octahedron or
   bipyramids)
 - Shape classification maybe should have included the possibility that a
@@ -105,6 +106,23 @@ Think about this again, and hard! Is this really wanted?
   ```
 
 - Then visit all instances of `StaticName` and fix the complications
+
+
+# Molecule data type
+
+1. Graph (w/out stereo) x Stereo HashMaps x Regularization
+   + Algorithms acting only on Graph can take &Graph
+   + Initial type of reading data is Graph, library consumers can stop
+     there if they want and avoid all the stereo interpretation
+2. Graph (w/ stereo) x Regularization
+   + Only a single type for everything to act on and all the relevant
+     data is always present
+   - Probably (?) less space efficient as there are a bunch of Nones
+     on terminal atoms, of which there are usually many in a molecular
+     graph
+   - To figure out the state of if stereo data has been added, either
+     have to add a bool to the data representation or look for a
+     non-terminal atom for if data is present
 
 
 # To do

@@ -27,7 +27,7 @@ lazy_static! {
     /// Linear two-vertex coordination polyhedron
     pub static ref LINE: Shape = Shape {
         name: Name::Line,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              1.0, 0.0, 0.0,
             -1.0, 0.0, 0.0
         ])),
@@ -37,7 +37,7 @@ lazy_static! {
     /// Bent two-vertex coordination polyhedron at 107°
     pub static ref BENT: Shape = Shape {
         name: Name::Bent,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
                            1.0,               0.0, 0.0,
             -0.292371704722737, 0.956304755963036, 0.0
         ])),
@@ -47,7 +47,7 @@ lazy_static! {
     /// Equilateral triangle three-vertex coordination polyhedron
     pub static ref EQUILATERAL_TRIANGLE: Shape = Shape {
         name: Name::EquilateralTriangle,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              1.0,           0.0, 0.0,
             -0.5,  SQRT_3 / 2.0, 0.0,
             -0.5, -SQRT_3 / 2.0, 0.0
@@ -64,7 +64,7 @@ lazy_static! {
     /// face-centered trigonal pyramid.
     pub static ref VACANT_TETRAHEDRON: Shape = Shape {
         name: Name::VacantTetrahedron,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
             0.0, -0.366501, 0.930418,
             0.805765, -0.366501, -0.465209,
             -0.805765, -0.366501, -0.465209
@@ -75,7 +75,7 @@ lazy_static! {
     /// T-shape coordination polyhedron
     pub static ref TSHAPE: Shape = Shape {
         name: Name::T,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
             -1.0, -0.0, -0.0,
              0.0,  1.0,  0.0,
              1.0,  0.0,  0.0,
@@ -86,7 +86,7 @@ lazy_static! {
     /// Tetrahedron coordination polyhedron
     pub static ref TETRAHEDRON: Shape = Shape {
         name: Name::Tetrahedron,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
                  -SQRT_2 / 3.0,  SQRT_2 / SQRT_3, -1.0 / 3.0,
                            0.0,              0.0,        1.0,
             2.0 * SQRT_2 / 3.0,              0.0, -1.0 / 3.0,
@@ -103,7 +103,7 @@ lazy_static! {
     /// Square coordination polyhedron
     pub static ref SQUARE: Shape = Shape {
         name: Name::Square,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              1.0,  0.0,  0.0,
              0.0,  1.0,  0.0,
             -1.0,  0.0,  0.0,
@@ -119,7 +119,7 @@ lazy_static! {
     /// Equatorially monovacant trigonal bipyramid or edge-centered tetragonal disphenoid
     pub static ref SEESAW: Shape = Shape {
         name: Name::Seesaw,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              0.0,  1.0,           0.0,
              1.0,  0.0,           0.0,
             -0.5,  0.0, -SQRT_3 / 2.0,
@@ -132,7 +132,7 @@ lazy_static! {
     /// (or monovacant trigonal bipyramid)
     pub static ref TRIGONALPYRAMID: Shape = Shape {
         name: Name::TrigonalPyramid,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              1.0,           0.0, 0.0,
             -0.5,  SQRT_3 / 2.0, 0.0,
             -0.5, -SQRT_3 / 2.0, 0.0,
@@ -144,7 +144,7 @@ lazy_static! {
     /// J1 solid (central position is square-face centered)
     pub static ref SQUAREPYRAMID: Shape = Shape {
         name: Name::SquarePyramid,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              1.0,  0.0, 0.0,
              0.0,  1.0, 0.0,
             -1.0,  0.0, 0.0,
@@ -157,7 +157,7 @@ lazy_static! {
     /// J12 solid
     pub static ref TRIGONALBIPYRAMID: Shape = Shape {
         name: Name::TrigonalBipyramid,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              1.0,           0.0, 0.0,
             -0.5,  SQRT_3 / 2.0, 0.0,
             -0.5, -SQRT_3 / 2.0, 0.0,
@@ -173,7 +173,7 @@ lazy_static! {
     /// Pentagon coordination polyhedron
     pub static ref PENTAGON: Shape = Shape {
         name: Name::Pentagon,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
                     1.0,          0.0, 0.0,
             PENTAGON_X1,  PENTAGON_Y1, 0.0,
             PENTAGON_X2,  PENTAGON_Y2, 0.0,
@@ -189,7 +189,7 @@ lazy_static! {
     /// Octahedron coordination polyhedron
     pub static ref OCTAHEDRON: Shape = Shape {
         name: Name::Octahedron,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
             1.0,  0.0,  0.0,
             0.0,  1.0,  0.0,
            -1.0,  0.0,  0.0,
@@ -207,7 +207,7 @@ lazy_static! {
     /// Trigonal prism six-vertex coordination polyhedron
     pub static ref TRIGONALPRISM: Shape = Shape {
         name: Name::TrigonalPrism,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              0.755929,  0.000000,  0.654654,
             -0.377964,  0.654654,  0.654654,
             -0.377964, -0.654654,  0.654654,
@@ -224,7 +224,7 @@ lazy_static! {
     /// J2 solid pentagonal pyramid six-vertex coordination polyhedron
     pub static ref PENTAGONALPYRAMID: Shape = Shape {
         name: Name::PentagonalPyramid,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
                     1.0,          0.0, 0.0,
             PENTAGON_X1,  PENTAGON_Y1, 0.0,
             PENTAGON_X2,  PENTAGON_Y2, 0.0,
@@ -240,7 +240,7 @@ lazy_static! {
     /// Hexagon coordination polyhedron
     pub static ref HEXAGON: Shape = Shape {
         name: Name::Hexagon,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              1.0,           0.0,  0.0,
              0.5,  SQRT_3 / 2.0,  0.0,
             -0.5,  SQRT_3 / 2.0,  0.0,
@@ -257,7 +257,7 @@ lazy_static! {
     /// J13 solid
     pub static ref PENTAGONALBIPYRAMID: Shape = Shape {
         name: Name::PentagonalBipyramid,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
                     1.0,          0.0,  0.0,
             PENTAGON_X1,  PENTAGON_Y1,  0.0,
             PENTAGON_X2,  PENTAGON_Y2,  0.0,
@@ -287,7 +287,7 @@ lazy_static! {
     ////
     pub static ref CAPPEDOCTAHEDRON: Shape = Shape {
         name: Name::CappedOctahedron,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              0.000000,  0.000000,  1.000000,
              0.957729,  0.000000,  0.287673,
             -0.478864,  0.829418,  0.287673,
@@ -307,7 +307,7 @@ lazy_static! {
     /// minimized to local minimum in Thomson potential
     pub static ref CAPPEDTRIGONALPRISM: Shape = Shape {
         name: Name::CappedTrigonalPrism,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
            -0.000000, -0.000000,  1.000000,
             0.984798, -0.069552,  0.159173,
            -0.069552,  0.984798,  0.159173,
@@ -324,7 +324,7 @@ lazy_static! {
     /// Square antiprism eight-vertex coordination polyhedron
     pub static ref SQUAREANTIPRISM: Shape = Shape {
         name: Name::SquareAntiprism,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              0.607781,  0.607781,  0.511081,
             -0.607781,  0.607781,  0.511081,
             -0.607781, -0.607781,  0.511081,
@@ -343,7 +343,7 @@ lazy_static! {
     /// Cube eight-vertex coordination polyhedron
     pub static ref CUBE: Shape = Shape {
         name: Name::Cube,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
               SQRT_FRAC_1_3,  SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
               SQRT_FRAC_1_3, -SQRT_FRAC_1_3,  SQRT_FRAC_1_3,
               SQRT_FRAC_1_3, -SQRT_FRAC_1_3, -SQRT_FRAC_1_3,
@@ -362,7 +362,7 @@ lazy_static! {
     /// Snub disphenoid, spherized J84 solid in D2d
     pub static ref TRIGONALDODECAHEDRON: Shape = Shape {
         name: Name::TrigonalDodecahedron,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
               0.620913,  0.000000, -0.783880,
              -0.620913,  0.000000, -0.783880,
               0.000000,  0.620913,  0.783880,
@@ -381,7 +381,7 @@ lazy_static! {
     /// Hexagonal bipyramid eight-vertex coordination polyhedron
     pub static ref HEXAGONALBIPYRAMID: Shape = Shape {
         name: Name::HexagonalBipyramid,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              1.0,           0.0,  0.0,
              0.5,  SQRT_3 / 2.0,  0.0,
             -0.5,  SQRT_3 / 2.0,  0.0,
@@ -403,7 +403,7 @@ lazy_static! {
     /// nine particles.
     pub static ref TRICAPPEDTRIGONALPRISM: Shape = Shape {
         name: Name::TricappedTrigonalPrism,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              0.914109572223, -0.182781178690, -0.361931942064,
              0.293329304506,  0.734642489361, -0.611766566546,
             -0.480176899428, -0.046026929940,  0.875963279468,
@@ -423,7 +423,7 @@ lazy_static! {
     /// Spherized J10 solid in C4v, to local minimum of Thomson potential
     pub static ref CAPPEDSQUAREANTIPRISM: Shape = Shape {
         name: Name::CappedSquareAntiprism,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              -0.000000,  0.932111,  0.362172,
              -0.000000, -0.932111,  0.362172,
               0.932111, -0.000000,  0.362172,
@@ -442,7 +442,7 @@ lazy_static! {
     /// Heptagonal bipyramid nine-vertex coordination polyhedron
     pub static ref HEPTAGONALBIPYRAMID: Shape = Shape {
         name: Name::HeptagonalBipyramid,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
               1.000000,  0.000000,  0.000000,
               0.623490,  0.781831,  0.000000,
              -0.222521,  0.974928,  0.000000,
@@ -464,7 +464,7 @@ lazy_static! {
     /// Coordinates are solution to Thomson problem with 10 particles
     pub static ref BICAPPEDSQUAREANTIPRISM: Shape = Shape {
         name: Name::BicappedSquareAntiprism,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              0.978696890330,  0.074682616274,  0.191245663177,
              0.537258145625,  0.448413180814, -0.714338368164,
             -0.227939324473, -0.303819959434, -0.925060590777,
@@ -485,7 +485,7 @@ lazy_static! {
     /// Coordinates are solution to Thomson problem with 11 particles
     pub static ref EDGECONTRACTEDICOSAHEDRON: Shape = Shape {
         name: Name::EdgeContractedIcosahedron,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              0.153486836562, -0.831354332797,  0.534127105044,
              0.092812115769,  0.691598091278, -0.716294626049,
              0.686120068086,  0.724987503180,  0.060269166267,
@@ -506,7 +506,7 @@ lazy_static! {
     /// Icosahedron twelve-vertex coordination polyhedron
     pub static ref ICOSAHEDRON: Shape = Shape {
         name: Name::Icosahedron,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              ICO_1,    0.0,  ICO_2,
              ICO_1,    0.0, -ICO_2,
             -ICO_1,    0.0,  ICO_2,
@@ -530,7 +530,7 @@ lazy_static! {
     /// Cuboctahedron twelve-vertex coordination polyhedron
     pub static ref CUBOCTAHEDRON: Shape = Shape {
         name: Name::Cuboctahedron,
-        coordinates: Positions::new(Matrix3N::from_column_slice(&[
+        coordinates: Positions::wrap(Matrix3N::from_column_slice(&[
              FRAC_1_SQRT_2,            0.0,  FRAC_1_SQRT_2,
              FRAC_1_SQRT_2,            0.0, -FRAC_1_SQRT_2,
             -FRAC_1_SQRT_2,            0.0,  FRAC_1_SQRT_2,
@@ -674,7 +674,7 @@ mod tests {
     #[test]
     fn rotations_are_rotations() {
         for shape in SHAPES.iter() {
-            let strong_coords = Positions::new(unit_sphere_normalize(shape.coordinates.matrix.clone()));
+            let strong_coords = Positions::wrap(unit_sphere_normalize(shape.coordinates.matrix.clone()));
             // Apply each rotation and quaternion fit without a mapping
             for rotation in shape.rotation_basis.iter() {
                 let rotated_coords = strong_coords.biject(rotation).expect("Matching size");

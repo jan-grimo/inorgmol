@@ -38,6 +38,8 @@ futures = { version = "0.3", optional = true }
 futures-intrusive = { version = "0.5", optional = true }
 bytemuck = { version = "1.13", optional = true }
 pollster = { version = "0.3", optional = true }
+nuclide = { path = "../Iridium/Nuclide" }
+bitmask = "0.5"
 
 [dev-dependencies]
 criterion = "0.4"
