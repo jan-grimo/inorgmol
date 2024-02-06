@@ -1,6 +1,6 @@
 use inorgmol::strong::{Index, IndexBase};
 use inorgmol::strong::matrix::Positions;
-use inorgmol::shapes::similarity::{skip_vertices, polyhedron_reference, unit_sphere_normalize, SimilarityError};
+use inorgmol::shapes::similarity::{skip_vertices, polyhedron_reference, normalize_cloud, SimilarityError};
 use inorgmol::quaternions::Matrix3N;
 use inorgmol::permutation::{Permutation, Permutatable};
 use inorgmol::strong::bijection::{Bijection, Bijectable};
@@ -48,11 +48,11 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
             .map(|s| SimilarityAnalysis {bijection: s.bijection, csm: s.csm, msd_dev: 0.0});
     }
 
-    let cloud = Positions::<Column>::new(unit_sphere_normalize(x));
+    let cloud = Positions::<Column>::new(normalize_cloud(x));
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
-    let shape_coordinates = unit_sphere_normalize(shape_coordinates);
+    let shape_coordinates = normalize_cloud(shape_coordinates);
     let shape_coordinates = Positions::<Vertex>::new(shape_coordinates);
 
     type PartialPermutation = HashMap<Column, Vertex>;
@@ -205,7 +205,7 @@ impl Case {
         // necessarily useful for comparison since it's possible the distorted
         // version could have a better bijection!
         let (distorted, bijection) = Self::permute(distorted);
-        let cloud = unit_sphere_normalize(distorted);
+        let cloud = normalize_cloud(distorted);
 
         Case {shape_name: shape.name, cloud, expected_bijection: bijection}
     }

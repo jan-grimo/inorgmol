@@ -54,16 +54,22 @@ pub struct Site(usize);
 #[derive(Clone)]
 /// Result of ranking algorithm
 pub struct Ranking {
-    pub nuclei: Surjection<Nucleus, Rank>,
+    // TODO this is definitely incomplete
+    /// Site ranking: Mapping from site index to ranking index
     pub site: Surjection<Site, Rank>
 }
 
 #[derive(Clone)]
-pub struct AtomStereo {
+/// Atom stereoinformation
+pub struct NucStereo {
+    /// Polyhedral shape of the local center
     shape: Name,
+    /// Ranking information at the central nucleus
     ranking: Ranking,
-    placement: Surjection<Vertex, Site>,
+    /// Shape vertex to site index mapping
+    configuration: Surjection<Vertex, Site>,
 }
+
 /// Atomic nucleus information
 #[derive(Clone)]
 pub enum NucleusType {
@@ -85,7 +91,8 @@ pub enum Bond {
 
 #[derive(Clone)]
 struct VertexData {
-    nucleus: NucleusType
+    nucleus: NucleusType,
+    stereo: Option<NucStereo>
 }
 
 #[derive(Clone)]
@@ -139,16 +146,8 @@ bitmask! {
     }
 }
 
-/// Stereoisomerism representation part of Molecule
-pub struct Stereo {
-    atoms: HashMap<Nucleus, AtomStereo>,
-    // bonds: HashMap<Edge, BondStereo>,
-    // etc.
-}
-
 pub struct Molecule {
     graph: Graph,
-    stereo: Stereo,
     regularized: EnvironMask
 }
 
@@ -221,7 +220,7 @@ fn convert_frame(frame: chemfiles::Frame) -> Result<(Graph, Positions<Nucleus>),
         }
 
         let nucleus: NucleusType = NucleusType::Element(Element::from_protons(atomic_number as u8));
-        let index = graph.add_node(VertexData {nucleus});
+        let index = graph.add_node(VertexData {nucleus, stereo: None});
         vertices.push(index);
     }
 
@@ -244,9 +243,13 @@ fn convert_frame(frame: chemfiles::Frame) -> Result<(Graph, Positions<Nucleus>),
     Ok((graph, positions))
 }
 
+/// Splitting of a Graph into connected component subgraphs
 pub struct Parts {
+    /// Connected component graphs
     graphs: Vec<Graph>,
+    /// Mapping from input vertex descriptors to component indices
     component_map: HashMap<Nucleus, Component>,
+    /// Provided positions if present and non-zero
     positions: Option<Positions<Nucleus>>
 }
 
@@ -266,7 +269,7 @@ impl Parts {
     }
 }
 
-// This is basically io::Interpret
+/// Read a chemical file format into `Parts`
 pub fn read(path: impl AsRef<Path>) -> Result<Parts, chemfiles::Error> {
     let mut trajectory = chemfiles::Trajectory::open(path, 'r')?;
     let frame = {

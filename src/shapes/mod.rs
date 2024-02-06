@@ -12,7 +12,7 @@ use crate::strong::{IndexBase, Index};
 use crate::strong::matrix::Positions;
 use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
 use crate::permutation::{Permutation, permutations, Permutatable};
-use crate::shapes::similarity::unit_sphere_normalize;
+use crate::shapes::similarity::normalize_matrix;
 
 /// Name of a coordination polyhedron
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
@@ -538,8 +538,8 @@ impl Shape {
     /// Test whether a permutation is a rotation by quaternion fit
     fn permutation_is_rotation(coordinates: &Matrix3N, permutation: &Permutation) -> bool {
         // TODO can fit without removing centroid
-        let normalized_points = unit_sphere_normalize(coordinates.clone());
-        let permuted = unit_sphere_normalize(normalized_points.permute(permutation).expect("Matching size"));
+        let normalized_points = normalize_matrix(coordinates.clone());
+        let permuted = normalize_matrix(normalized_points.permute(permutation).expect("Matching size"));
         let fit = crate::quaternions::fit(&normalized_points, &permuted);
         fit.msd < NotNan::new(1e-6).unwrap()
     }
@@ -1146,6 +1146,14 @@ impl Shape {
             .expect("Generated valid permutation");
 
         reoriented.permute(&ordering).expect("Matching size")
+    }
+
+    /// Yields unit sphere normalized positions with the centroid zero at the final column
+    pub fn positions_with_centroid(&self) -> Positions<Vertex> {
+        let coords = &self.coordinates.matrix;
+        let n = coords.ncols();
+        let shape_coordinates = coords.clone().insert_column(n - 1, 0.0);
+        Positions::wrap(shape_coordinates)
     }
 }
 

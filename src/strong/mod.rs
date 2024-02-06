@@ -20,8 +20,11 @@ pub trait Index:
     + Into<<Self as IndexBase>::Type>
     + PartialEq
 {
-    /// Return a range with self as the upper bound
+    /// Return a range with an upper bound only
     fn range(bound: <Self as IndexBase>::Type) -> Range<Self>;
+
+    /// Return a bounded range with a start and end
+    fn range_from(start: <Self as IndexBase>::Type, end: <Self as IndexBase>::Type) -> Range<Self>;
 }
 
 // Blanket impl Index for IndexBase types
@@ -35,9 +38,14 @@ impl<T> Index for T where T: IndexBase
         let start = <<T as IndexBase>::Type as num_traits::identities::Zero>::zero();
         Range {start, end: bound}
     }
+
+    fn range_from(start: <Self as IndexBase>::Type, end: <Self as IndexBase>::Type) -> Range<Self> {
+        Range {start, end}
+    }
 }
 
 /// Range generating Index Items
+#[derive(Clone, Copy)]
 pub struct Range<I: Index> {
     start: <I as IndexBase>::Type,
     end: <I as IndexBase>::Type

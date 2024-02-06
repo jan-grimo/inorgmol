@@ -66,7 +66,7 @@ impl<T: Index, U: Index + PartialOrd> Surjection<T, U> {
     /// Access the function value for an input, if within domain
     pub fn get(&self, key: &T) -> Option<U> {
         let index = key.get().to_usize()?;
-        return self.sigma.get(index).copied();
+        self.sigma.get(index).copied()
     }
 
     /// Yield the index of permutation of the surjection

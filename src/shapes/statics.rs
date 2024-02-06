@@ -663,7 +663,7 @@ lazy_static! {
 #[cfg(test)]
 mod tests {
     use crate::shapes::*;
-    use crate::shapes::similarity::unit_sphere_normalize;
+    use crate::shapes::similarity::normalize_matrix;
     use crate::strong::bijection::Bijectable;
     use crate::strong::matrix::Positions;
 
@@ -674,7 +674,7 @@ mod tests {
     #[test]
     fn rotations_are_rotations() {
         for shape in SHAPES.iter() {
-            let strong_coords = Positions::wrap(unit_sphere_normalize(shape.coordinates.matrix.clone()));
+            let strong_coords = Positions::wrap(normalize_matrix(shape.coordinates.matrix.clone()));
             // Apply each rotation and quaternion fit without a mapping
             for rotation in shape.rotation_basis.iter() {
                 let rotated_coords = strong_coords.biject(rotation).expect("Matching size");

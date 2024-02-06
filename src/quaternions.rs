@@ -178,11 +178,11 @@ impl Rotor {
 #[cfg(test)]
 mod tests {
     use crate::quaternions::*;
-    use crate::shapes::similarity::unit_sphere_normalize;
+    use crate::shapes::similarity::normalize_matrix;
     use crate::permutation::{Permutation, Permutatable};
 
     fn random_cloud(n: usize) -> Matrix3N {
-        unit_sphere_normalize(Matrix3N::new_random(n))
+        normalize_matrix(Matrix3N::new_random(n))
     }
 
     struct Case {

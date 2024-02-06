@@ -61,7 +61,7 @@ impl GpuHandles {
     async fn distance_gradient_contributions<F: Float>(&self, positions: &na::DVector<F>, gpu_linear_squared_bounds: &na::Matrix2xX<f32>) -> na::DVector<F> {
         let n = positions.len() / 4;
         // TODO this is an unnecessary copy if F is f32
-        let f32_positions = na::DVector::<f32>::from_iterator(positions.len(), positions.iter().map(|f| f.to_f32().unwrap()));
+        let f32_positions = positions.map(|f| f.to_f32().unwrap());
 
         let linear_length = (n.pow(2) - n) / 2;
         let linear_slice_size = linear_length * 4 * std::mem::size_of::<f32>();

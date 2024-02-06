@@ -15,8 +15,7 @@ use crate::shapes::*;
 
 use std::convert::TryFrom;
 
-/// Remove the offset centroid and rescale all distances so that the longest is a unit vector
-pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
+pub fn normalize_matrix(mut x: Matrix3N) -> Matrix3N {
     // Remove centroid
     let centroid = x.column_mean();
     for mut v in x.column_iter_mut() {
@@ -24,12 +23,25 @@ pub fn unit_sphere_normalize(mut x: Matrix3N) -> Matrix3N {
     }
 
     // Rescale all distances so that the longest is a unit vector
+    // This is useful for scaling minimization because we can guess at 
+    // optimal parameters
     let max_norm: f64 = x.column_iter().map(|v| v.norm()).fold(0.0, |a, b| a.max(b));
     for mut v in x.column_iter_mut() {
         v /= max_norm;
     }
 
     x
+}
+
+/// Remove the offset centroid and rescale all distances so that the longest is a unit vector
+pub fn normalize_cloud(x: Matrix3N) -> Positions<Column> {
+    Positions::wrap(normalize_matrix(x))
+}
+
+pub fn normalize_shape(shape: &Shape) -> Positions<Vertex> {
+    let n = shape.coordinates.matrix.ncols();
+    let coords = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
+    Positions::wrap(normalize_matrix(coords))
 }
 
 /// Find the optimal scaling between shape and cloud
@@ -249,25 +261,68 @@ pub fn polyhedron_reference_base<const USE_SKIPS: bool>(x: Matrix3N, shape: &Sha
         return Err(SimilarityError::ParticleNumberMismatch);
     }
 
-    let cloud: Positions<Column> = Positions::wrap(unit_sphere_normalize(x));
-
-    // Add centroid to shape coordinates and normalize
-    let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
-    let shape_coordinates: Positions<Vertex> = Positions::wrap(unit_sphere_normalize(shape_coordinates));
+    let cloud = normalize_cloud(x);
+    let polyhedron = normalize_shape(shape);
 
     let (best_bijection, best_fit) = match USE_SKIPS {
-        true => polyhedron_reference_base_inner(RotUniqueBijectionGenerator::new(shape), &cloud, &shape_coordinates),
-        false => polyhedron_reference_base_inner(bijections(n), &cloud, &shape_coordinates),
+        true => polyhedron_reference_base_inner(RotUniqueBijectionGenerator::new(shape), &cloud, &polyhedron),
+        false => polyhedron_reference_base_inner(bijections(n), &cloud, &polyhedron),
     };
 
     let best_bijection = best_bijection.inverse();
 
-    let permuted_shape = shape_coordinates.biject(&best_bijection).unwrap();
+    let permuted_shape = polyhedron.biject(&best_bijection).unwrap();
     let rotated_shape = best_fit.rotate_stator(&permuted_shape.matrix);
 
     let csm = scaling::optimize_csm(&cloud.matrix, &rotated_shape);
     Ok(Similarity {bijection: best_bijection, csm})
 }
+
+// pub fn similarity_at(x: Matrix3N, shape: &Shape, centroid: Column) -> Result<Similarity, SimilarityError> {
+//     let polyhedron = normalize_shape(shape);
+//     let n = polyhedron.matrix.ncols();
+// 
+//     let m = x.ncols();
+//     // TODO
+//     // - Expand bijection to arbitrary domains, perhaps to a trait over containers
+//     // - Consider heuristics to avoid combinatorial space (i.e. groups of nearly equal distance
+//     //   from the centroid)
+// 
+//     let masks_without_centroid = Column::range(centroid.get())
+//         .chain(Column::range_from(centroid.get() + 1, m))
+//         .combinations(shape.num_vertices());
+// 
+//     // For all subsets of size polyhedron in x
+//     for mut partial_mask in masks_without_centroid {
+//         let cloud = {
+//             let iter = partial_mask.iter()
+//                 .chain(std::iter::once(&centroid))
+//                 .map(|c| x.column(c.get()).iter().copied())
+//                 .flatten();
+//             let cloud = Matrix3N::from_iterator(n, iter);
+//             normalize_cloud(cloud)
+//         };
+// 
+//         // TODO This is not quite right because the centroid should not be part of the bijections, it should be fixed
+//         let (best_bijection, best_fit) = bijections(n)
+//             .map(|p| {
+//                 let fit = polyhedron.quaternion_fit_rotor(&cloud.biject(&p).unwrap());
+//                 (p, fit)
+//             })
+//             .min_by_key(|(_, fit)| fit.msd)
+//             .expect("There is always at least one permutation available to try");
+// 
+//     }
+// 
+// 
+//     let best_bijection = best_bijection.inverse();
+// 
+//     let permuted_shape = polyhedron.biject(&best_bijection).unwrap();
+//     let rotated_shape = best_fit.rotate_stator(&permuted_shape.matrix);
+// 
+//     let csm = scaling::optimize_csm(&cloud.matrix, &rotated_shape);
+//     Ok(Similarity {bijection: best_bijection, csm})
+// }
 
 /// Slow reference implementation of continuous shape measure calculation
 ///
@@ -344,13 +399,9 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
         return polyhedron_reference_base::<USE_SKIPS>(x, shape);
     }
 
-    let cloud = Positions::<Column>::wrap(unit_sphere_normalize(x));
     // TODO check if the centroid is last, e.g. by ensuring it is the shortest vector after normalization
-
-    // Add centroid to shape coordinates and normalize
-    let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
-    let shape_coordinates = unit_sphere_normalize(shape_coordinates);
-    let shape_coordinates = Positions::<Vertex>::wrap(shape_coordinates);
+    let cloud = normalize_cloud(x);
+    let polyhedron = normalize_shape(shape);
 
     type PartialPermutation = HashMap<Column, Vertex>;
 
@@ -375,7 +426,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
             |best, vertices| -> PartialMsd {
                 let mut partial_map = PartialPermutation::with_capacity(n);
                 vertices.iter().enumerate().for_each(|(c, v)| { partial_map.insert(Column::from(c), *v); });
-                let partial_fit = cloud.quaternion_fit_map(&shape_coordinates, &partial_map);
+                let partial_fit = cloud.quaternion_fit_map(&polyhedron, &partial_map);
 
                 // If the msd caused only by the partial map is already worse, skip
                 if partial_fit.msd > best.msd {
@@ -389,7 +440,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                 debug_assert_eq!(left_free.len(), right_free.len());
 
                 let v = left_free.len();
-                let prematch_rotated_shape = partial_fit.rotate_rotor(&shape_coordinates.matrix.clone());
+                let prematch_rotated_shape = partial_fit.rotate_rotor(&polyhedron.matrix.clone());
                 let prematch_rotated_shape = Positions::<Vertex>::wrap(prematch_rotated_shape);
 
                 if cfg!(debug_assertions) {
@@ -424,7 +475,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
                 }
 
                 // Make a clean quaternion fit with the full mapping
-                let full_fit = cloud.quaternion_fit_map(&shape_coordinates, &partial_map);
+                let full_fit = cloud.quaternion_fit_map(&polyhedron, &partial_map);
                 if full_fit.msd < best.msd {
                     PartialMsd {msd: full_fit.msd, mapping: partial_map, partial_msd: *partial_fit.msd}
                 } else {
@@ -474,7 +525,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
         }
     }
 
-    let permuted_shape = shape_coordinates.biject(&best_bijection).unwrap();
+    let permuted_shape = polyhedron.biject(&best_bijection).unwrap();
     let fit = cloud.quaternion_fit_rotor(&permuted_shape);
     let rotated_shape = fit.rotate_rotor(&permuted_shape.matrix);
 
@@ -501,7 +552,7 @@ mod tests {
     use crate::strong::bijection::bijections;
 
     fn random_cloud(n: usize) -> Matrix3N {
-        unit_sphere_normalize(Matrix3N::new_random(n))
+        normalize_matrix(Matrix3N::new_random(n))
     }
 
     #[test]
@@ -566,7 +617,7 @@ mod tests {
         fn random_shape_rotation(shape: &Shape) -> Positions<Vertex> {
             let shape_coords = shape.coordinates.matrix.clone().insert_column(shape.num_vertices(), 0.0);
             let rotation = random_rotation().to_rotation_matrix();
-            Positions::wrap(unit_sphere_normalize(rotation * shape_coords))
+            Positions::wrap(normalize_matrix(rotation * shape_coords))
         }
 
         fn random(shape: &Shape) -> Case {

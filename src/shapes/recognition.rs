@@ -1,4 +1,4 @@
-use crate::shapes::similarity::{unit_sphere_normalize, polyhedron};
+use crate::shapes::similarity::{normalize_matrix, polyhedron};
 use crate::shapes::{Shape, shape_from_name, Name, Matrix3N, SHAPES};
 
 use itertools::Itertools;
@@ -31,7 +31,7 @@ pub fn sample(s: Name) -> f64 {
     }
 
     // add centroid and normalize
-    cloud = unit_sphere_normalize(cloud.insert_column(n, 0.0));
+    cloud = normalize_matrix(cloud.insert_column(n, 0.0));
 
     polyhedron(cloud, shape).expect("No algorithm failures").csm
 }

@@ -658,13 +658,12 @@ impl IntoIterator for Permutation {
 /// See [`permutations`]
 #[derive(Clone)]
 pub struct PermutationIterator {
-    permutation: Permutation,
-    increment: bool
+    next: Option<Permutation>
 }
 
 impl PermutationIterator {
     fn new(permutation: Permutation) -> PermutationIterator {
-        PermutationIterator {permutation, increment: false}
+        PermutationIterator {next: Some(permutation)}
     }
 }
 
@@ -672,17 +671,18 @@ impl Iterator for PermutationIterator {
     type Item = Permutation;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.increment && !self.permutation.next_permutation() {
-            return None;
-        }
-
-        self.increment = true;
-        Some(self.permutation.clone())
+        let value = self.next.clone();
+        self.next = self.next.take().and_then(|mut v| v.next_permutation().then_some(v));
+        value
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = Permutation::group_order(self.permutation.set_size()) - self.permutation.index();
-        (remaining, Some(remaining))
+        if let Some(permutation) = self.next.as_ref() {
+            let remaining = Permutation::group_order(permutation.set_size()) - permutation.index();
+            (remaining, Some(remaining))
+        } else {
+            (0, Some(0))
+        }
     }
 }
 
@@ -834,7 +834,7 @@ mod tests {
     }
 
     #[test]
-    fn range_equal() {
+    fn permutation_iterator() {
         itertools::assert_equal(
             permutations(4),
             (0..4).permutations(4).map(|p| Permutation {sigma: p})
