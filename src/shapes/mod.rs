@@ -11,7 +11,7 @@ use ordered_float::NotNan;
 use crate::strong::{IndexBase, Index};
 use crate::strong::matrix::Positions;
 use crate::geometry::{Plane, axis_distance, axis_perpendicular_component};
-use crate::permutation::{Permutation, permutations, Permutatable};
+use crate::permutation::{Permutation, permutations, Iterable, Permutatable};
 use crate::shapes::similarity::normalize_matrix;
 
 /// Name of a coordination polyhedron
@@ -648,7 +648,7 @@ impl Shape {
         let proper = Permutation::try_from(proper_sigma).expect("Valid permutation");
 
         // TODO maybe unnecessary to test
-        if Self::permutation_is_rotation(coordinates, &proper) && proper.index() != 0 {
+        if Self::permutation_is_rotation(coordinates, &proper) && proper.permutation_index() != 0 {
             Some(proper)
         } else {
             None
@@ -688,7 +688,7 @@ impl Shape {
 
         let proper = Permutation::try_from(proper_sigma).expect("Valid permutation");
 
-        if proper.index() != 0 && Self::permutation_is_rotation(coordinates, &proper) {
+        if proper.permutation_index() != 0 && Self::permutation_is_rotation(coordinates, &proper) {
             Some(proper)
         } else {
             None

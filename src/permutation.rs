@@ -231,24 +231,6 @@ impl Permutation {
         Self::ordering_by(slice, |a, b| a.cmp(b))
     }
 
-    /// Determine the index of a permutation in its lexicographic order
-    ///
-    /// ```
-    /// # use inorgmol::permutation::Permutation;
-    /// assert_eq!(Permutation {sigma: vec![0, 1, 2]}.index(), 0);
-    /// assert_eq!(Permutation {sigma: vec![0, 2, 1]}.index(), 1);
-    ///
-    /// let num_permutations_size_five = Permutation::group_order(5);
-    /// for i in 0..num_permutations_size_five {
-    ///     if let Some(p) = Permutation::try_from_index(5, i) {
-    ///         assert_eq!(p.index(), i);
-    ///     }
-    /// }
-    /// ```
-    pub fn index(&self) -> usize {
-        slice_permutation_index(&self.sigma)
-    }
-
     /// Number of elements being permuted
     pub fn set_size(&self) -> usize {
         self.sigma.len()
@@ -263,34 +245,6 @@ impl Permutation {
     /// ```
     pub fn group_order(n: usize) -> usize {
         (1..=n).product()
-    }
-
-    /// Transform into the next permutation within the partial order of its set
-    ///
-    /// ```
-    /// # use inorgmol::permutation::Permutation;
-    /// let mut permutation = Permutation::try_from_index(6, 0).expect("Valid index");
-    /// for i in 1..15 {
-    ///     assert_eq!(permutation.next_permutation(), true);
-    ///     assert_eq!(permutation, Permutation::try_from_index(6, i).expect("Valid index"));
-    /// }
-    /// ```
-    pub fn next_permutation(&mut self) -> bool {
-        slice_next(self.sigma.as_mut_slice())
-    }
-
-    /// Transform into the previous permutation within its set's partial order
-    ///
-    /// ```
-    /// # use inorgmol::permutation::Permutation;
-    /// let mut permutation = Permutation::try_from_index(6, 15).expect("Valid index");
-    /// for i in 14..1 {
-    ///     assert_eq!(permutation.prev_permutation(), true);
-    ///     assert_eq!(permutation, Permutation::try_from_index(6, i).expect("Valid index"));
-    /// }
-    /// ```
-    pub fn prev_permutation(&mut self) -> bool {
-        slice_prev(self.sigma.as_mut_slice())
     }
 
     /// Generate the inverse permutation to the current permutation
@@ -653,50 +607,16 @@ impl IntoIterator for Permutation {
     }
 }
 
-/// Iterator adaptor for iterating through all permutations of a set size
-///
-/// See [`permutations`]
-#[derive(Clone)]
-pub struct PermutationIterator {
-    next: Option<Permutation>
-}
-
-impl PermutationIterator {
-    fn new(permutation: Permutation) -> PermutationIterator {
-        PermutationIterator {next: Some(permutation)}
+impl AsRef<[usize]> for Permutation {
+    fn as_ref(&self) -> &[usize] {
+        self.sigma.as_slice()
     }
 }
 
-impl Iterator for PermutationIterator {
-    type Item = Permutation;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let value = self.next.clone();
-        self.next = self.next.take().and_then(|mut v| v.next_permutation().then_some(v));
-        value
+impl AsMut<[usize]> for Permutation {
+    fn as_mut(&mut self) -> &mut [usize] {
+        self.sigma.as_mut_slice()
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        if let Some(permutation) = self.next.as_ref() {
-            let remaining = Permutation::group_order(permutation.set_size()) - permutation.index();
-            (remaining, Some(remaining))
-        } else {
-            (0, Some(0))
-        }
-    }
-}
-
-/// Yields permutations in increasing lexicographic order
-///
-/// ```
-/// # use inorgmol::permutation::{Permutation, permutations};
-/// let mut iter = permutations(2);
-/// assert_eq!(iter.next().map(|p| p.index()), Some(0));
-/// assert_eq!(iter.next().map(|p| p.index()), Some(1));
-/// assert_eq!(iter.next(), None);
-/// ```
-pub fn permutations(n: usize) -> PermutationIterator {
-    PermutationIterator::new(Permutation::identity(n))
 }
 
 /// Trait indicating a type can be permutated by a Permutation
@@ -736,6 +656,135 @@ where
     }
 }
 
+/// Sliceable containers with partially orderable elements can be iteratively permuted
+pub trait Iterable<T: PartialOrd>: AsRef<[T]> + AsMut<[T]> {
+    /// Transform into the next permutation within the partial order of its set
+    ///
+    /// ```
+    /// # use inorgmol::permutation::Permutation;
+    /// let mut permutation = Permutation::try_from_index(6, 0).expect("Valid index");
+    /// for i in 1..15 {
+    ///     assert_eq!(permutation.next_permutation(), true);
+    ///     assert_eq!(permutation, Permutation::try_from_index(6, i).expect("Valid index"));
+    /// }
+    /// ```
+    fn next_permutation(&mut self) -> bool {
+        slice_next(self.as_mut())
+    }
+
+    /// Transform into the previous permutation within the partial order of its set
+    ///
+    /// ```
+    /// # use inorgmol::permutation::Permutation;
+    /// let mut permutation = Permutation::try_from_index(6, 15).expect("Valid index");
+    /// for i in 14..1 {
+    ///     assert_eq!(permutation.prev_permutation(), true);
+    ///     assert_eq!(permutation, Permutation::try_from_index(6, i).expect("Valid index"));
+    /// }
+    /// ```
+    fn prev_permutation(&mut self) -> bool {
+        slice_prev(self.as_mut())
+    }
+
+    /// Determine the index of a permutation in its lexicographic order
+    ///
+    /// ```
+    /// # use inorgmol::permutation::Permutation;
+    /// assert_eq!(Permutation {sigma: vec![0, 1, 2]}.index(), 0);
+    /// assert_eq!(Permutation {sigma: vec![0, 2, 1]}.index(), 1);
+    ///
+    /// let num_permutations_size_five = Permutation::group_order(5);
+    /// for i in 0..num_permutations_size_five {
+    ///     if let Some(p) = Permutation::try_from_index(5, i) {
+    ///         assert_eq!(p.index(), i);
+    ///     }
+    /// }
+    /// ```
+    fn permutation_index(&self) -> usize {
+        slice_permutation_index(self.as_ref())
+    }
+}
+
+impl<T, U> Iterable<T> for U where T: PartialOrd, U: AsRef<[T]> + AsMut<[T]> {}
+
+/// Sliceable containers with orderable elements can be ordered
+pub trait Orderable<T: Ord>: AsRef<[T]> {
+    /// Find a permutation ordering a slice's elements by a key function
+    fn perm_ordering_by_key<F, U>(&self, key: F) -> Permutation 
+        where F: Fn(&T) -> U, U: Ord
+    {
+        let slice = self.as_ref();
+        let mut p = Permutation::identity(slice.len());
+        p.sigma.sort_by_key(|&i| key(&slice[i]));
+        p.inverse()
+    }
+
+    /// Find a permutation ordering a slice's elements by a comparison function
+    fn perm_ordering_by<F>(&self, compare: F) -> Permutation 
+        where F: Fn(&T, &T) -> Ordering
+    {
+        let slice = self.as_ref();
+        let mut p = Permutation::identity(slice.len());
+        p.sigma.sort_by(|&i, &j| compare(&slice[i], &slice[j]));
+        p.inverse()
+    }
+
+    /// Find a permutation ordering a slice's elements
+    fn perm_ordering(&self) -> Permutation {
+        self.perm_ordering_by(|a, b| a.cmp(b))
+    }
+}
+
+impl<T, U> Orderable<T> for U where T: Ord, U: AsRef<[T]> + AsMut<[T]> {}
+
+#[derive(Clone)]
+/// Iterator for permutations of containers that are iterable
+pub struct ContainerPermutations<T: PartialOrd, C: Iterable<T> + Clone> {
+    next: Option<C>,
+    phantom: std::marker::PhantomData<T>
+}
+
+impl<T: PartialOrd, C: Iterable<T> + Clone> ContainerPermutations<T, C> {
+    fn new(container: C) -> ContainerPermutations<T, C> {
+        Self {next: Some(container), phantom: std::marker::PhantomData}
+    }
+}
+
+impl<T, C> Iterator for ContainerPermutations<T, C> 
+    where T: PartialOrd, C: Iterable<T> + Clone
+{
+    type Item = C;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let value = self.next.clone();
+        self.next = self.next.take().and_then(|mut v| v.next_permutation().then_some(v));
+        value
+    }
+}
+
+/// Trait for iterable containers for conversion into iterator
+pub trait IterablePermutations<T: PartialOrd>: Iterable<T> + Clone {
+    /// Wrap into a cloning iterator that cycles through its permutations
+    fn into_permutations_iter(self) -> ContainerPermutations<T, Self> {
+        ContainerPermutations::<T, Self>::new(self)
+    }
+}
+
+impl<T: PartialOrd, C: Iterable<T> + Clone> IterablePermutations<T> for C {}
+
+/// Yields permutations in increasing lexicographic order
+///
+/// ```
+/// # use inorgmol::permutation::{Permutation, permutations};
+/// let mut iter = permutations(2);
+/// assert_eq!(iter.next().map(|p| p.index()), Some(0));
+/// assert_eq!(iter.next().map(|p| p.index()), Some(1));
+/// assert_eq!(iter.next(), None);
+/// ```
+pub fn permutations(n: usize) -> ContainerPermutations<usize, Permutation> {
+    Permutation::identity(n).into_permutations_iter()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::permutation::*;
@@ -748,14 +797,14 @@ mod tests {
         assert!(!Permutation::identity(0).prev_permutation());
 
         assert_eq!(Permutation::identity(1).sigma.len(), 1);
-        assert_eq!(Permutation::try_from_index(1, 0).expect("Valid index").index(), 0);
+        assert_eq!(Permutation::try_from_index(1, 0).expect("Valid index").permutation_index(), 0);
         assert_eq!(Permutation::try_from_index(1, 1), None);
         assert!(!Permutation::identity(1).next_permutation());
         assert!(!Permutation::identity(1).prev_permutation());
 
         assert_eq!(Permutation::identity(2).sigma.len(), 2);
-        assert_eq!(Permutation::try_from_index(2, 0).expect("Valid index").index(), 0);
-        assert_eq!(Permutation::try_from_index(2, 1).expect("Valid index").index(), 1);
+        assert_eq!(Permutation::try_from_index(2, 0).expect("Valid index").permutation_index(), 0);
+        assert_eq!(Permutation::try_from_index(2, 1).expect("Valid index").permutation_index(), 1);
         assert_eq!(Permutation::try_from_index(2, 2), None);
     }
 

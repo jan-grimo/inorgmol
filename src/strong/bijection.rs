@@ -3,7 +3,7 @@ use num_traits::ToPrimitive;
 use num_traits::FromPrimitive;
 use delegate::delegate;
 
-use crate::permutation::{Permutation, PermutationError};
+use crate::permutation::{Permutation, PermutationError, IterablePermutations, ContainerPermutations};
 use crate::strong::Index;
 use std::convert::TryFrom;
 
@@ -80,12 +80,6 @@ impl<T: Index, U: Index> IndexBijection<T, U> {
 
     delegate! {
         to self.permutation {
-            /// Determine the index of a bijection in its lexicographic order
-            pub fn index(&self) -> usize;
-            /// Transform into the next permutation within the partial order of its set
-            pub fn next_permutation(&mut self) -> bool;
-            /// Transform into the previous permutation within its set's partial order
-            pub fn prev_permutation(&mut self) -> bool;
             /// Number of elements being bijected
             pub fn set_size(&self) -> usize;
         }
@@ -119,42 +113,21 @@ impl<T: Index, U: Index> TryFrom<Vec<U>> for IndexBijection<T, U> {
     }
 }
 
-/// Iterator adaptor for iterating through all bijections of a set size
-///
-/// See [`bijections`]
-pub struct BijectionsIterator<T: Index, U: Index> {
-    bijection: IndexBijection<T, U>,
-    increment: bool
-}
-
-impl<T: Index, U: Index> BijectionsIterator<T, U> {
-    fn new(bijection: IndexBijection<T, U>) -> BijectionsIterator<T, U> {
-        BijectionsIterator {bijection, increment: false}
+impl<T: Index, U: Index> AsRef<[usize]> for IndexBijection<T, U> {
+    fn as_ref(&self) -> &[usize] {
+        self.permutation.as_ref()
     }
 }
 
-impl<T: Index, U: Index> Iterator for BijectionsIterator<T, U> {
-    type Item = IndexBijection<T, U>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.increment && !self.bijection.permutation.next_permutation() {
-            return None;
-        }
-
-        self.increment = true;
-        Some(self.bijection.clone())
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let p = &self.bijection.permutation;
-        let remaining = Permutation::group_order(p.set_size()) - p.index();
-        (remaining, Some(remaining))
+impl<T: Index, U: Index> AsMut<[usize]> for IndexBijection<T, U> {
+    fn as_mut(&mut self) -> &mut [usize] {
+        self.permutation.as_mut()
     }
 }
 
 /// Yields bijections in increasing lexicographic order
-pub fn bijections<T: Index, U: Index>(n: usize) -> BijectionsIterator<T, U> {
-    BijectionsIterator::<T, U>::new(IndexBijection::identity(n))
+pub fn bijections<T: Index, U: Index>(n: usize) -> ContainerPermutations<usize, IndexBijection<T, U>> {
+    IndexBijection::identity(n).into_permutations_iter()
 }
 
 /// Trait indicating a type can be bijected

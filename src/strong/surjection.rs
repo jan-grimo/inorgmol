@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use thiserror::Error;
 use crate::strong::Index;
 use crate::strong::bijection::IndexBijection;
-use crate::permutation::{slice_next, slice_prev, slice_permutation_index, PermutationError};
+use crate::permutation::PermutationError;
 
 use std::convert::TryFrom;
 
@@ -68,51 +68,17 @@ impl<T: Index, U: Index + PartialOrd> IndexSurjection<T, U> {
         let index = key.get().to_usize()?;
         self.sigma.get(index).copied()
     }
+}
 
-    /// Yield the index of permutation of the surjection
-    pub fn index(&self) -> usize {
-        slice_permutation_index(&self.sigma)
-    }
-
-    /// Transform into the next permutation within the partial order of its multiset
-    pub fn next_permutation(&mut self) -> bool {
-        slice_next(self.sigma.as_mut_slice())
-    }
-
-    /// Transform into the previous permutation within the partial order of its multiset
-    pub fn prev_permutation(&mut self) -> bool {
-        slice_prev(self.sigma.as_mut_slice())
-    }
-
-    /// Iterate through all permutations of the surjection
-    pub fn iter_permutations(&self) -> SurjectionIterator<T, U> {
-        SurjectionIterator::new(self.clone())
+impl<T: Index, U: Index> AsRef<[U]> for IndexSurjection<T, U> {
+    fn as_ref(&self) -> &[U] {
+        self.sigma.as_slice()
     }
 }
 
-/// Iterator for permutations of a surjection
-#[derive(Clone)]
-pub struct SurjectionIterator<T: Index, U: Index + PartialOrd> {
-    surjection: IndexSurjection<T, U>,
-    increment: bool
-}
-
-impl<T: Index, U: Index + PartialOrd> SurjectionIterator<T, U> {
-    fn new(surjection: IndexSurjection<T, U>) -> SurjectionIterator<T, U> {
-        SurjectionIterator {surjection, increment: false}
-    }
-}
-
-impl<T: Index, U: Index + PartialOrd> Iterator for SurjectionIterator<T, U> {
-    type Item = IndexSurjection<T, U>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.increment && !self.surjection.next_permutation() {
-            return None;
-        }
-
-        self.increment = true;
-        Some(self.surjection.clone())
+impl<T: Index, U: Index> AsMut<[U]> for IndexSurjection<T, U> {
+    fn as_mut(&mut self) -> &mut [U] {
+        self.sigma.as_mut_slice()
     }
 }
 
