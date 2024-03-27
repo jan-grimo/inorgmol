@@ -9,7 +9,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::strong::matrix::Positions;
-use crate::strong::bijection::{Bijection, bijections, Bijectable};
+use crate::strong::bijection::{IndexBijection, bijections, Bijectable};
 use crate::permutation::{Permutation, permutations};
 use crate::shapes::*;
 
@@ -156,7 +156,7 @@ struct RotUniqueBijectionGenerator {
     /// Reversed order rotationally unique pairs of vertices
     starting_pairs: Vec<(Vertex, Vertex)>,
     /// Next bijection to return during iteration
-    maybe_next: Option<Bijection<Column, Vertex>>
+    maybe_next: Option<IndexBijection<Column, Vertex>>
 }
 
 impl RotUniqueBijectionGenerator {
@@ -176,7 +176,7 @@ impl RotUniqueBijectionGenerator {
 
         let mut generator = RotUniqueBijectionGenerator {
             starting_pairs: pairs,
-            maybe_next: Some(Bijection::identity(s))
+            maybe_next: Some(IndexBijection::identity(s))
         };
         generator.reset_from_next_pair();
         generator
@@ -197,14 +197,14 @@ impl RotUniqueBijectionGenerator {
                 }
             }
 
-            Bijection::try_from(initial).expect("Valid permutation")
+            IndexBijection::try_from(initial).expect("Valid permutation")
         });
     }
 }
 
 impl Iterator for RotUniqueBijectionGenerator {
     /// Bijection from an input coordinate matrix onto shape vertices
-    type Item = Bijection<Column, Vertex>;
+    type Item = IndexBijection<Column, Vertex>;
 
     /// Advance iterator
     fn next(&mut self) -> Option<Self::Item> {
@@ -231,17 +231,17 @@ pub enum SimilarityError {
 /// Result struct for a continuous similarity measure calculation
 pub struct Similarity {
     /// Best bijection between shape vertices and input matrix
-    pub bijection: Bijection<Vertex, Column>,
+    pub bijection: IndexBijection<Vertex, Column>,
     /// Continuous shape measure
     pub csm: f64,
 }
 
 #[inline(always)]
 fn polyhedron_reference_base_inner(
-    generator: impl Iterator<Item = Bijection<Column, Vertex>>,
+    generator: impl Iterator<Item = IndexBijection<Column, Vertex>>,
     cloud: &Positions<Column>,
     shape_coordinates: &Positions<Vertex>
-) -> (Bijection<Column, Vertex>, crate::quaternions::Fit)
+) -> (IndexBijection<Column, Vertex>, crate::quaternions::Fit)
 {
     generator.map(|p| {
             let fit = shape_coordinates.quaternion_fit_rotor(&cloud.biject(&p).unwrap());
@@ -389,7 +389,7 @@ pub fn polyhedron_base<const PREMATCH: usize, const USE_SKIPS: bool, const LAP_J
     const MIN_PREMATCH: usize = 2;
     assert!(MIN_PREMATCH <= PREMATCH); // TODO trigger compilation failure? static assert?
 
-    type Occupation = Bijection<Vertex, Column>;
+    type Occupation = IndexBijection<Vertex, Column>;
     let n = x.ncols();
     if n != shape.num_vertices() + 1 {
         return Err(SimilarityError::ParticleNumberMismatch);
@@ -609,7 +609,7 @@ mod tests {
 
     struct Case {
         shape_name: Name,
-        bijection: Bijection<Vertex, Column>,
+        bijection: IndexBijection<Vertex, Column>,
         cloud: Positions<Column>
     }
 
@@ -624,7 +624,7 @@ mod tests {
             let bijection = {
                 let mut p = Permutation::new_random(shape.num_vertices());
                 p.push();
-                Bijection::new(p)
+                IndexBijection::new(p)
             };
 
             let cloud = Self::random_shape_rotation(shape).biject(&bijection).expect("Matching size");
@@ -635,7 +635,7 @@ mod tests {
             let bijection = {
                 let mut p = Permutation::try_from_index(shape.num_vertices(), index).expect("Valid index");
                 p.push();
-                Bijection::new(p)
+                IndexBijection::new(p)
             };
 
             let cloud = Self::random_shape_rotation(shape).biject(&bijection).expect("Matching size");
@@ -659,7 +659,7 @@ mod tests {
         }
     }
 
-    fn pop_centroid<T>(mut p: Bijection<Vertex, T>) -> Bijection<Vertex, T> where T: Index {
+    fn pop_centroid<T>(mut p: IndexBijection<Vertex, T>) -> IndexBijection<Vertex, T> where T: Index {
         let maybe_centroid = p.permutation.pop_if_fixed_point();
         // Ensure centroid was at end of permutation
         assert_eq!(maybe_centroid, Some(p.set_size()));

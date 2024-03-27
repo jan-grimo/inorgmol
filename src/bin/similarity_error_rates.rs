@@ -3,7 +3,7 @@ use inorgmol::strong::matrix::Positions;
 use inorgmol::shapes::similarity::{skip_vertices, polyhedron_reference, normalize_cloud, SimilarityError};
 use inorgmol::quaternions::Matrix3N;
 use inorgmol::permutation::{Permutation, Permutatable};
-use inorgmol::strong::bijection::{Bijection, Bijectable};
+use inorgmol::strong::bijection::{IndexBijection, Bijectable};
 use inorgmol::quaternions::random_rotation;
 use inorgmol::shapes::*;
 
@@ -26,7 +26,7 @@ use itertools::Itertools;
 
 pub struct SimilarityAnalysis {
     /// Best bijection between shape vertices and input matrix
-    pub bijection: Bijection<Vertex, Column>,
+    pub bijection: IndexBijection<Vertex, Column>,
     /// Continuous shape measure
     pub csm: f64,
     /// Deviation between partial and full quaternion fit msds
@@ -37,7 +37,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
     const MIN_PREMATCH: usize = 2;
     assert!(MIN_PREMATCH <= PREMATCH); // TODO trigger compilation failure? static assert?
 
-    type Occupation = Bijection<Vertex, Column>;
+    type Occupation = IndexBijection<Vertex, Column>;
     let n = x.ncols();
     if n != shape.num_vertices() + 1 {
         return Err(SimilarityError::ParticleNumberMismatch);
@@ -48,12 +48,12 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
             .map(|s| SimilarityAnalysis {bijection: s.bijection, csm: s.csm, msd_dev: 0.0});
     }
 
-    let cloud = Positions::<Column>::new(normalize_cloud(x));
+    let cloud = normalize_cloud(x);
 
     // Add centroid to shape coordinates and normalize
     let shape_coordinates = shape.coordinates.matrix.clone().insert_column(n - 1, 0.0);
     let shape_coordinates = normalize_cloud(shape_coordinates);
-    let shape_coordinates = Positions::<Vertex>::new(shape_coordinates);
+    let shape_coordinates = Positions::<Vertex>::wrap(shape_coordinates.take_matrix());
 
     type PartialPermutation = HashMap<Column, Vertex>;
 
@@ -92,7 +92,7 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
 
                 let v = left_free.len();
                 let prematch_rotated_shape = partial_fit.rotate_rotor(&shape_coordinates.matrix.clone());
-                let prematch_rotated_shape = Positions::<Vertex>::new(prematch_rotated_shape);
+                let prematch_rotated_shape = Positions::<Vertex>::wrap(prematch_rotated_shape);
 
                 let cost_fn = |i, j| (cloud.point(left_free[i]) - prematch_rotated_shape.point(right_free[j])).norm_squared();
                 let sub_permutation = match LAP_JV {
@@ -164,8 +164,8 @@ pub fn polyhedron_analysis<const PREMATCH: usize, const USE_SKIPS: bool, const L
 
 struct Case {
     shape_name: Name,
-    cloud: Matrix3N,
-    expected_bijection: Bijection<Vertex, Column>
+    cloud: Positions<Column>,
+    expected_bijection: IndexBijection<Vertex, Column>
 }
 
 impl Case {
@@ -181,11 +181,11 @@ impl Case {
         random_rotation().to_rotation_matrix() * mat
     }
 
-    fn permute(mat: Matrix3N) -> (Matrix3N, Bijection<Vertex, Column>) {
-        let bijection: Bijection<Vertex, Column> = {
+    fn permute(mat: Matrix3N) -> (Matrix3N, IndexBijection<Vertex, Column>) {
+        let bijection: IndexBijection<Vertex, Column> = {
             let mut p = Permutation::new_random(mat.ncols() - 1);
             p.push();
-            Bijection::new(p)
+            IndexBijection::new(p)
         };
 
         let permuted = mat.permute(&bijection.permutation).expect("Matching size");
@@ -193,7 +193,7 @@ impl Case {
         (permuted, bijection)
     }
 
-    fn pop_centroid(mut bijection: Bijection<Vertex, Column>) -> Bijection<Vertex, Column> {
+    fn pop_centroid(mut bijection: IndexBijection<Vertex, Column>) -> IndexBijection<Vertex, Column> {
         let _ = bijection.permutation.pop_if_fixed_point().expect("No zero-length bijections");
         bijection
     }
@@ -212,7 +212,7 @@ impl Case {
 
     pub fn pass(&self, f: &dyn Fn(Matrix3N, &Shape) -> Result<SimilarityAnalysis, SimilarityError>, rotations: &HashSet<inorgmol::shapes::Rotation>) -> (bool, f64) {
         let shape = shape_from_name(self.shape_name);
-        let f_similarity = f(self.cloud.clone(), shape).expect("similarity fn doesn't panic");
+        let f_similarity = f(self.cloud.clone().take_matrix(), shape).expect("similarity fn doesn't panic");
 
         let expected_bijection = Self::pop_centroid(self.expected_bijection.clone());
         let found_bijection = Self::pop_centroid(f_similarity.bijection);
@@ -223,7 +223,7 @@ impl Case {
             // fitting bijection than the one it was made with, so check
             // with a reference method
 
-            let similarity = similarity::polyhedron_reference(self.cloud.clone(), shape).expect("Reference doesn't fail");
+            let similarity = similarity::polyhedron_reference(self.cloud.clone().take_matrix(), shape).expect("Reference doesn't fail");
             let ref_bijection = Self::pop_centroid(similarity.bijection);
             let is_rotation = Shape::is_rotation(&ref_bijection, &found_bijection, rotations);
 

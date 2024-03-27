@@ -48,6 +48,7 @@
 - ML shape predictor (i.e. classify vertex of subgraph into shape)
 - Bond stereopermutator could be generalized to allene case (i.e. placed on
   non-directly connected atoms)
+- Try arrayfire to get single codebase for CPU/GPU DG
 
 look through the GitLab issues again!
 

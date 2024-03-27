@@ -4,7 +4,7 @@ type Matrix3N = na::Matrix3xX<f64>;
 use num_traits::ToPrimitive;
 
 use crate::strong::Index;
-use crate::strong::bijection::{Bijection, Bijectable};
+use crate::strong::bijection::{IndexBijection, Bijectable};
 use crate::permutation::{PermutationError, Permutatable};
 use crate::quaternions;
 
@@ -53,7 +53,7 @@ impl<'a, I: Index, U: Index> Bijectable<U> for AsPositions<'a, I> {
     type T = I;
     type Output = Positions<U>;
 
-    fn biject(&self, bijection: &Bijection<I, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError> {
+    fn biject(&self, bijection: &IndexBijection<I, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError> {
         if bijection.set_size() != self.matrix.ncols() {
             return Err(PermutationError::LengthMismatch);
         }
@@ -106,7 +106,7 @@ impl<I: Index, U: Index> Bijectable<U> for Positions<I> {
     type T = I;
     type Output = Positions<U>;
 
-    fn biject(&self, bijection: &Bijection<I, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError> {
+    fn biject(&self, bijection: &IndexBijection<I, U>) -> Result<<Self as Bijectable<U>>::Output, PermutationError> {
         self.raise().biject(bijection)
     }
 }

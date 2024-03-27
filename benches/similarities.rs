@@ -1,7 +1,8 @@
+use inorgmol::strong::bijection::Bijectable;
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput, BenchmarkId};
 use inorgmol::*;
 use strong::matrix::Positions;
-use strong::bijection::Bijection;
+use strong::bijection::IndexBijection;
 
 use itertools::Itertools;
 
@@ -37,15 +38,15 @@ fn similarities(c: &mut Criterion) {
             continue;
         }
 
-        let shape_coordinates = shape.coordinates.clone().insert_column(size, 0.0);
+        let shape_coordinates = shape.coordinates.clone().take_matrix().insert_column(size, 0.0);
         let rotation = quaternions::random_rotation().to_rotation_matrix();
         let shape_rotated: Positions<shapes::Vertex> = Positions::wrap(shapes::similarity::normalize_matrix(rotation * shape_coordinates));
-        let bijection: Bijection<shapes::Vertex, shapes::Column> = {
+        let bijection: IndexBijection<shapes::Vertex, shapes::Column> = {
             let mut p = permutation::Permutation::new_random(shape.num_vertices());
             p.push();
-            strong::bijection::Bijection::new(p)
+            strong::bijection::IndexBijection::new(p)
         };
-        let cloud = shape_rotated.apply_bijection(&bijection);
+        let cloud = shape_rotated.biject(&bijection).expect("Matching size");
 
         bench_group.throughput(Throughput::Elements(size as u64));
 

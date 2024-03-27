@@ -121,7 +121,7 @@ impl std::fmt::Display for Name {
     }
 }
 
-use crate::strong::bijection::Bijection;
+use crate::strong::bijection::IndexBijection;
 
 /// Index wrapper for shape vertices
 #[derive(IndexBase, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -134,9 +134,9 @@ impl std::fmt::Display for Vertex {
 }
 
 /// A rotation of vertices is the equivalent of an SO(3) rotation in vertex space
-pub type Rotation = Bijection<Vertex, Vertex>;
+pub type Rotation = IndexBijection<Vertex, Vertex>;
 /// A mirror is a sigma symmetry element of a shape, in vertex space
-pub type Mirror = Bijection<Vertex, Vertex>;
+pub type Mirror = IndexBijection<Vertex, Vertex>;
 
 /// Shape particles are either vertices or the implicit origin
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -404,7 +404,7 @@ impl Shape {
     }
 
     /// Test whether one vertex bijection is a rotation of another
-    pub fn is_rotation<T: Index>(a: &Bijection<Vertex, T>, b: &Bijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
+    pub fn is_rotation<T: Index>(a: &IndexBijection<Vertex, T>, b: &IndexBijection<Vertex, T>, rotations: &HashSet<Rotation>) -> bool {
         rotations.iter().any(|r| r.compose(a).expect("Bad occupations") == *b)
     }
 
@@ -1215,7 +1215,7 @@ mod tests {
     #[test]
     fn is_rotation_works() {
         let tetr_rotations = TETRAHEDRON.generate_rotations();
-        let occupation: Bijection<Vertex, Column> = Bijection::new_random(TETRAHEDRON.num_vertices());
+        let occupation: IndexBijection<Vertex, Column> = IndexBijection::new_random(TETRAHEDRON.num_vertices());
         for rot in &tetr_rotations {
             let rotated_occupation = rot.compose(&occupation).expect("fine");
             assert!(Shape::is_rotation(&occupation, &rotated_occupation, &tetr_rotations));

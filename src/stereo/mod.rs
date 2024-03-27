@@ -4,8 +4,8 @@ use gcd::Gcd;
 use sorted_vec::SortedVec;
 
 use crate::shapes::{Vertex, Shape, Rotation};
-use crate::strong::surjection::{Surjection, Surjectable, SurjectionError};
-use crate::strong::bijection::{Bijection, Bijectable, bijections};
+use crate::strong::surjection::{IndexSurjection, Surjectable, SurjectionError};
+use crate::strong::bijection::{IndexBijection, Bijectable, bijections};
 use crate::strong::IndexBase;
 use crate::permutation::PermutationError;
 
@@ -40,7 +40,7 @@ impl<T: Display + Ord> std::fmt::Display for OrderedPair<T> {
 pub struct Rank(usize);
 
 /// An occupation is a placement of rank indices onto shape vertices
-pub type Occupation = Surjection<Vertex, Rank>;
+pub type Occupation = IndexSurjection<Vertex, Rank>;
 /// A link is a path through the graph between two vertices that does not include the centroid
 pub type Link = OrderedPair<Vertex>;
 
@@ -189,7 +189,7 @@ impl Bijectable<Vertex> for Coordination {
     type T = Vertex;
     type Output = Coordination;
 
-    fn biject(&self, bijection: &Bijection<Vertex, Vertex>) -> Result<Coordination, PermutationError> {
+    fn biject(&self, bijection: &IndexBijection<Vertex, Vertex>) -> Result<Coordination, PermutationError> {
         let occupation = bijection.surject(&self.occupation).map_err(|e| {
             assert_eq!(e, SurjectionError::LengthMismatch);
             PermutationError::LengthMismatch
@@ -219,8 +219,8 @@ mod tests {
     use sorted_vec::SortedVec;
     use crate::stereo::{Coordination, OrderedPair, Rank, Link};
     use crate::permutation::Permutation;
-    use crate::strong::bijection::{Bijection, Bijectable};
-    use crate::strong::surjection::Surjection;
+    use crate::strong::bijection::{IndexBijection, Bijectable};
+    use crate::strong::surjection::IndexSurjection;
     use crate::shapes::{Vertex, Rotation, Shape, shape_from_name, Name};
     use crate::inertia::angle;
 
@@ -230,14 +230,14 @@ mod tests {
         let vertex_pair = |a, b| {OrderedPair::new(Vertex::from(a), Vertex::from(b))};
 
         let shipscrew = Coordination::new_unsorted(
-            Surjection::identity(6),
+            IndexSurjection::identity(6),
             vec![vertex_pair(0, 1), vertex_pair(2, 4), vertex_pair(3, 5)]
         );
-        let c4z: Rotation = Bijection::new(Permutation::try_from([3, 0, 1, 2, 4, 5]).unwrap());
+        let c4z: Rotation = IndexBijection::new(Permutation::try_from([3, 0, 1, 2, 4, 5]).unwrap());
         let rotated = shipscrew.biject(&c4z).unwrap();
 
         let expected = Coordination::new_unsorted(
-            Bijection::new(Permutation::try_from([3, 0, 1, 2, 4, 5]).unwrap()).into(),
+            IndexBijection::new(Permutation::try_from([3, 0, 1, 2, 4, 5]).unwrap()).into(),
             vec![vertex_pair(0, 5), vertex_pair(1, 2), vertex_pair(3, 4)]
         );
 
@@ -255,9 +255,9 @@ mod tests {
         assert_eq!(Coordination::asymmetric(octahedron.num_vertices()).rotations(octahedron).len(), 24);
     }
 
-    fn occupation(slice: &[usize]) -> Surjection<Vertex, Rank> {
+    fn occupation(slice: &[usize]) -> IndexSurjection<Vertex, Rank> {
         let sigma: Vec<_> = slice.iter().copied().map_into::<Rank>().collect();
-        Surjection::try_from(sigma).expect("Valid occupation")
+        IndexSurjection::try_from(sigma).expect("Valid occupation")
     }
 
     fn link(a: usize, b: usize) -> Link {

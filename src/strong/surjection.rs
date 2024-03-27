@@ -3,14 +3,14 @@ use std::collections::HashSet;
 use std::marker::PhantomData;
 use thiserror::Error;
 use crate::strong::Index;
-use crate::strong::bijection::Bijection;
+use crate::strong::bijection::IndexBijection;
 use crate::permutation::{slice_next, slice_prev, slice_permutation_index, PermutationError};
 
 use std::convert::TryFrom;
 
 /// Struct representing a surjection between index spaces
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
-pub struct Surjection<T: Index, U: Index> {
+pub struct IndexSurjection<T: Index, U: Index> {
     /// One-line representation of the surjective function with minimal domain
     pub sigma: Vec<U>,
     key_type: PhantomData<T>
@@ -30,7 +30,7 @@ pub enum SurjectionError {
     LengthMismatch
 }
 
-impl<T: Index, U: Index + Ord + std::hash::Hash> TryFrom<Vec<U>> for Surjection<T, U> {
+impl<T: Index, U: Index + Ord + std::hash::Hash> TryFrom<Vec<U>> for IndexSurjection<T, U> {
     type Error = SurjectionError;
 
     fn try_from(sigma: Vec<U>) -> Result<Self, Self::Error> {
@@ -40,22 +40,22 @@ impl<T: Index, U: Index + Ord + std::hash::Hash> TryFrom<Vec<U>> for Surjection<
             return Err(SurjectionError::NonMinimalCodomain);
         }
 
-        Ok(Surjection {sigma, key_type: PhantomData})
+        Ok(IndexSurjection {sigma, key_type: PhantomData})
     }
 }
 
-impl<T: Index, U: Index + std::convert::From<usize>> From<Bijection<T, U>> for Surjection<T, U> 
+impl<T: Index, U: Index + std::convert::From<usize>> From<IndexBijection<T, U>> for IndexSurjection<T, U> 
 {
-    fn from(bijection: Bijection<T, U>)  -> Surjection<T, U> {
+    fn from(bijection: IndexBijection<T, U>)  -> IndexSurjection<T, U> {
         let sigma = Vec::from_iter(bijection.permutation.iter().map(|(_, &u)| U::from(u)));
-        Surjection {sigma, key_type: PhantomData}
+        IndexSurjection {sigma, key_type: PhantomData}
     }
 }
 
-impl<T: Index, U: Index + PartialOrd> Surjection<T, U> {
+impl<T: Index, U: Index + PartialOrd> IndexSurjection<T, U> {
     /// Identity surjection (also a bijection)
-    pub fn identity(size: usize) -> Surjection<T, U> where U: std::convert::From<usize> {
-        Surjection::from(Bijection::<T, U>::identity(size))
+    pub fn identity(size: usize) -> IndexSurjection<T, U> where U: std::convert::From<usize> {
+        IndexSurjection::from(IndexBijection::<T, U>::identity(size))
     }
 
     /// The input domain size of the surjection
@@ -93,18 +93,18 @@ impl<T: Index, U: Index + PartialOrd> Surjection<T, U> {
 /// Iterator for permutations of a surjection
 #[derive(Clone)]
 pub struct SurjectionIterator<T: Index, U: Index + PartialOrd> {
-    surjection: Surjection<T, U>,
+    surjection: IndexSurjection<T, U>,
     increment: bool
 }
 
 impl<T: Index, U: Index + PartialOrd> SurjectionIterator<T, U> {
-    fn new(surjection: Surjection<T, U>) -> SurjectionIterator<T, U> {
+    fn new(surjection: IndexSurjection<T, U>) -> SurjectionIterator<T, U> {
         SurjectionIterator {surjection, increment: false}
     }
 }
 
 impl<T: Index, U: Index + PartialOrd> Iterator for SurjectionIterator<T, U> {
-    type Item = Surjection<T, U>;
+    type Item = IndexSurjection<T, U>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.increment && !self.surjection.next_permutation() {
@@ -124,20 +124,20 @@ pub trait Surjectable<U: Index + PartialOrd> {
     type Output;
 
     /// Perform the surjection
-    fn surject(&self, surjection: &Surjection<Self::Key, U>) -> Result<Self::Output, SurjectionError>;
+    fn surject(&self, surjection: &IndexSurjection<Self::Key, U>) -> Result<Self::Output, SurjectionError>;
 }
 
-impl<T: Index, U: Index, V: Index + Ord + std::hash::Hash> Surjectable<V> for Bijection<T, U> 
+impl<T: Index, U: Index, V: Index + Ord + std::hash::Hash> Surjectable<V> for IndexBijection<T, U> 
 
 {
     type Key = U;
-    type Output = Surjection<T, V>;
+    type Output = IndexSurjection<T, V>;
 
-    fn surject(&self, surjection: &Surjection<Self::Key, V>) -> Result<Self::Output, SurjectionError> {
+    fn surject(&self, surjection: &IndexSurjection<Self::Key, V>) -> Result<Self::Output, SurjectionError> {
         let sigma = self.permutation.inverse().apply(surjection.sigma.clone()).map_err(|e| {
             assert_eq!(e, PermutationError::LengthMismatch);
             SurjectionError::LengthMismatch
         })?;
-        Surjection::try_from(sigma)
+        IndexSurjection::try_from(sigma)
     }
 }

@@ -6,7 +6,7 @@ use std::path::Path;
 use crate::stereo::Rank;
 use crate::strong::IndexBase;
 use crate::shapes::{Vertex, Name};
-use crate::strong::surjection::Surjection;
+use crate::strong::surjection::IndexSurjection;
 use crate::strong::matrix::Positions;
 use crate::quaternions::Matrix3N;
 
@@ -56,7 +56,7 @@ pub struct Site(usize);
 pub struct Ranking {
     // TODO this is definitely incomplete
     /// Site ranking: Mapping from site index to ranking index
-    pub site: Surjection<Site, Rank>
+    pub site: IndexSurjection<Site, Rank>
 }
 
 #[derive(Clone)]
@@ -67,7 +67,7 @@ pub struct NucStereo {
     /// Ranking information at the central nucleus
     ranking: Ranking,
     /// Shape vertex to site index mapping
-    configuration: Surjection<Vertex, Site>,
+    configuration: IndexSurjection<Vertex, Site>,
 }
 
 /// Atomic nucleus information

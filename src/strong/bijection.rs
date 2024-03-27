@@ -9,22 +9,22 @@ use std::convert::TryFrom;
 
 /// Struct representing a bijection between index spaces
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
-pub struct Bijection<T: Index, U: Index> {
+pub struct IndexBijection<T: Index, U: Index> {
     /// Underlying weakly index-typed Permutation 
     pub permutation: Permutation,
     key_type: PhantomData<T>,
     value_type: PhantomData<U>
 }
 
-impl<T: Index, U: Index> Bijection<T, U> {
+impl<T: Index, U: Index> IndexBijection<T, U> {
     /// Initialize by wrapping a Permutation
-    pub fn new(p: Permutation) -> Bijection<T, U> {
-        Bijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
+    pub fn new(p: Permutation) -> IndexBijection<T, U> {
+        IndexBijection {permutation: p, key_type: PhantomData, value_type: PhantomData}
     }
 
     /// Generates a random bijection (identity inclusive)
-    pub fn new_random(n: usize) -> Bijection<T, U> {
-        Bijection::new(Permutation::new_random(n))
+    pub fn new_random(n: usize) -> IndexBijection<T, U> {
+        IndexBijection::new(Permutation::new_random(n))
     }
 
     /// Initialize the `i`-th bijection by lexicographic order of size `n`
@@ -35,21 +35,21 @@ impl<T: Index, U: Index> Bijection<T, U> {
     ///
     /// If `i` is larger than the final position of all permutations of that
     /// size, i.e. $ i >= n! $, `None` is returned.
-    pub fn try_from_index(n: usize, i: usize) -> Option<Bijection<T, U>> {
-        Permutation::try_from_index(n, i).map(Bijection::new)
+    pub fn try_from_index(n: usize, i: usize) -> Option<IndexBijection<T, U>> {
+        Permutation::try_from_index(n, i).map(IndexBijection::new)
     }
 
     /// Initialize an identity bijection of specific size
     ///
     /// The identity bijection maps each number onto itself. It has index
     /// zero within the lexicographical order of bijections.
-    pub fn identity(n: usize) -> Bijection<T, U> {
-        Bijection::new(Permutation::identity(n))
+    pub fn identity(n: usize) -> IndexBijection<T, U> {
+        IndexBijection::new(Permutation::identity(n))
     }
 
     /// Invert the bijection
-    pub fn inverse(&self) -> Bijection<U, T> {
-        Bijection::new(self.permutation.inverse())
+    pub fn inverse(&self) -> IndexBijection<U, T> {
+        IndexBijection::new(self.permutation.inverse())
     }
 
     /// Apply the map to a key and find its corresponding value
@@ -71,11 +71,11 @@ impl<T: Index, U: Index> Bijection<T, U> {
     }
 
     /// Compose the bijection with another
-    pub fn compose<V: Index>(&self, other: &Bijection<U, V>) 
-    -> Result<Bijection<T, V>, PermutationError> 
+    pub fn compose<V: Index>(&self, other: &IndexBijection<U, V>) 
+    -> Result<IndexBijection<T, V>, PermutationError> 
     {
         let p = self.permutation.compose(&other.permutation)?;
-        Ok(Bijection::new(p))
+        Ok(IndexBijection::new(p))
     }
 
     delegate! {
@@ -102,20 +102,20 @@ impl<T: Index, U: Index> Bijection<T, U> {
     }
 }
 
-impl<T: Index, U: Index> std::fmt::Display for Bijection<T, U> {
+impl<T: Index, U: Index> std::fmt::Display for IndexBijection<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.permutation)
     }
 }
 
-impl<T: Index, U: Index> TryFrom<Vec<U>> for Bijection<T, U> {
+impl<T: Index, U: Index> TryFrom<Vec<U>> for IndexBijection<T, U> {
     type Error = PermutationError;
 
-    fn try_from(strong_vec: Vec<U>) -> Result<Bijection<T, U>, Self::Error> {
+    fn try_from(strong_vec: Vec<U>) -> Result<IndexBijection<T, U>, Self::Error> {
         let weak_vec: Vec<usize> = strong_vec.into_iter()
             .map(|v| v.get().to_usize().unwrap())
             .collect();
-        Permutation::try_from(weak_vec).map(|p| Bijection::new(p))
+        Permutation::try_from(weak_vec).map(|p| IndexBijection::new(p))
     }
 }
 
@@ -123,18 +123,18 @@ impl<T: Index, U: Index> TryFrom<Vec<U>> for Bijection<T, U> {
 ///
 /// See [`bijections`]
 pub struct BijectionsIterator<T: Index, U: Index> {
-    bijection: Bijection<T, U>,
+    bijection: IndexBijection<T, U>,
     increment: bool
 }
 
 impl<T: Index, U: Index> BijectionsIterator<T, U> {
-    fn new(bijection: Bijection<T, U>) -> BijectionsIterator<T, U> {
+    fn new(bijection: IndexBijection<T, U>) -> BijectionsIterator<T, U> {
         BijectionsIterator {bijection, increment: false}
     }
 }
 
 impl<T: Index, U: Index> Iterator for BijectionsIterator<T, U> {
-    type Item = Bijection<T, U>;
+    type Item = IndexBijection<T, U>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.increment && !self.bijection.permutation.next_permutation() {
@@ -154,7 +154,7 @@ impl<T: Index, U: Index> Iterator for BijectionsIterator<T, U> {
 
 /// Yields bijections in increasing lexicographic order
 pub fn bijections<T: Index, U: Index>(n: usize) -> BijectionsIterator<T, U> {
-    BijectionsIterator::<T, U>::new(Bijection::identity(n))
+    BijectionsIterator::<T, U>::new(IndexBijection::identity(n))
 }
 
 /// Trait indicating a type can be bijected
@@ -165,14 +165,14 @@ pub trait Bijectable<U: Index> {
     type Output;
 
     /// Perform the bijection
-    fn biject(&self, bijection: &Bijection<Self::T, U>) -> Result<Self::Output, PermutationError>;
+    fn biject(&self, bijection: &IndexBijection<Self::T, U>) -> Result<Self::Output, PermutationError>;
 }
 
 impl<T: Index, U: Index> Bijectable<U> for Vec<T> {
     type T = T;
     type Output = Vec<U>;
 
-    fn biject(&self, bijection: &Bijection<T, U>) -> Result<Self::Output, PermutationError> {
+    fn biject(&self, bijection: &IndexBijection<T, U>) -> Result<Self::Output, PermutationError> {
         let vec = Vec::from_iter(self.iter().filter_map(|item| bijection.get(item)));
         if vec.len() == self.len() {
             Ok(vec)
@@ -185,7 +185,7 @@ impl<T: Index, U: Index> Bijectable<U> for Vec<T> {
 #[cfg(test)]
 mod tests {
     use crate::permutation::Permutation;
-    use crate::strong::bijection::{Bijection, Bijectable};
+    use crate::strong::bijection::{IndexBijection, Bijectable};
     use crate::strong::IndexBase;
 
     #[derive(IndexBase, Debug, Copy, Clone, PartialEq)]
@@ -199,19 +199,19 @@ mod tests {
 
     #[test]
     fn basics() {
-        let f1 = Bijection::<Foo, Bar>::try_from_index(4, 3).expect("Valid index");
+        let f1 = IndexBijection::<Foo, Bar>::try_from_index(4, 3).expect("Valid index");
         let f1_at_two = Bar::from(f1.permutation[2]);
         assert_eq!(f1.get(&Foo(2)), Some(f1_at_two));
         assert_eq!(f1.inverse_of(&f1_at_two), Some(Foo::from(2)));
 
-        let f2 = Bijection::<Bar, Baz>::try_from_index(4, 3).expect("Valid index");
+        let f2 = IndexBijection::<Bar, Baz>::try_from_index(4, 3).expect("Valid index");
         let f3 = f1.compose(&f2).unwrap();
         assert_eq!(f3.permutation, f1.permutation.compose(&f2.permutation).unwrap());
 
         // expect compile error
         // let f4 = f1.compose(&f3);
 
-        let p1 = Bijection::<Bar, Bar>::new(Permutation::identity(4));
+        let p1 = IndexBijection::<Bar, Bar>::new(Permutation::identity(4));
         let f4 = f1.compose(&p1).unwrap();
         assert_eq!(f1.permutation, f4.permutation);
     }
@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn biject() {
         let foos = vec![Foo(4), Foo(2)];
-        let bijection = Bijection::<Foo, Bar>::try_from_index(5, 5).expect("Valid index");
+        let bijection = IndexBijection::<Foo, Bar>::try_from_index(5, 5).expect("Valid index");
         let bars = foos.biject(&bijection);
         assert!(bars.is_ok());
         let refoo = bars.unwrap().biject(&bijection.inverse());
