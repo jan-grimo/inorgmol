@@ -24,6 +24,9 @@ pub mod strong;
 /// Various lower-level geometric helper functions, e.g. signed angles and plane fits
 pub mod geometry;
 
+/// Traits and implementations for set functions (surjections and bijections)
+pub mod setfns;
+
 /// Distance Geometry module, for generating new 3D embeddings
 pub mod dg;
 

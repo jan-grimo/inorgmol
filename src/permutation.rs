@@ -660,6 +660,10 @@ where
 pub trait Iterable<T: PartialOrd>: AsRef<[T]> + AsMut<[T]> {
     /// Transform into the next permutation within the partial order of its set
     ///
+    /// Returns `true` if a lexicographically larger permutation existed. On incrementing the
+    /// lexicographically largest permutation, resets elements to the lowest permutation (which is
+    /// fully sorted) and returns `false`.
+    ///
     /// ```
     /// # use inorgmol::permutation::Permutation;
     /// let mut permutation = Permutation::try_from_index(6, 0).expect("Valid index");
@@ -673,6 +677,10 @@ pub trait Iterable<T: PartialOrd>: AsRef<[T]> + AsMut<[T]> {
     }
 
     /// Transform into the previous permutation within the partial order of its set
+    ///
+    /// Returns `true` if a lexicographically smaller permutation existed. On incrementing the
+    /// lexicographically smallest permutation, resets elements to the largest permutation (which is
+    /// fully reverse-sorted) and returns `false`.
     ///
     /// ```
     /// # use inorgmol::permutation::Permutation;
